@@ -1477,9 +1477,11 @@ export default function QuoteCalculator({
 
         {/* PIECE PARAMETERS EDITOR LAYOUT */}
         {session.activeSubTab !== 'summary' && activeRing && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start animate-fadeIn">
-            {/* COLUMN 1: Metal Attributes & Structural Spec */}
-            <div className="space-y-6 bg-white p-6 rounded-3xl border border-slate-200/60 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start animate-fadeIn">
+            {/* COLUMN 1: Metal Attributes, Sketches & Pricing Summary */}
+            <div className="space-y-6">
+              {/* Piece Specifications Card */}
+              <div className="space-y-6 bg-white p-6 rounded-3xl border border-slate-200/60 shadow-sm">
               {/* Header: Name Category */}
               <div className="flex justify-between items-center border-b border-brand-100 pb-3">
                 <h2 className="text-xs font-black text-brand-800 uppercase tracking-widest flex items-center gap-1.5">
@@ -2274,6 +2276,111 @@ export default function QuoteCalculator({
                   </div>
                 </div>
               )}
+              </div>
+
+              {/* Piece specific thumbnail sketches & controls */}
+              {activeRing && (
+                <div className="bg-white p-4 rounded-3xl border border-brand-100 shadow-sm space-y-3">
+                  <h3 className="text-[10px] font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2 flex items-center gap-1.5 justify-center">
+                    <Camera size={12} className="text-brand-gold" />
+                    Sketches & Reference Photo
+                  </h3>
+                  
+                  <div className="flex justify-center gap-4">
+                    {/* Sketch canvas click trigger */}
+                    <button
+                      type="button"
+                      onClick={() => onLaunchSketch('sketch')}
+                      className="group relative border border-brand-200 hover:border-brand-400 bg-brand-50/50 hover:bg-brand-50 rounded-2xl p-1.5 transition-all flex flex-col items-center justify-center w-24 h-24 shadow-sm cursor-pointer overflow-hidden text-center"
+                    >
+                      {activeRing.referenceSketch ? (
+                        <img src={activeRing.referenceSketch} alt="Sketch" className="w-full h-full object-cover rounded-xl" />
+                      ) : (
+                        <div className="py-2 space-y-1">
+                          <Sparkles size={16} className="text-brand-gold mx-auto group-hover:scale-110 transition-transform" />
+                          <span className="text-[9px] font-black text-brand-700 block leading-tight">Interactive Sketch</span>
+                        </div>
+                      )}
+                    </button>
+
+                    {/* photo uploader thumbnail trigger */}
+                    <button
+                      type="button"
+                      onClick={() => onLaunchSketch('photo')}
+                      className="group relative border border-brand-200 hover:border-brand-400 bg-brand-50/50 hover:bg-brand-50 rounded-2xl p-1.5 transition-all flex flex-col items-center justify-center w-24 h-24 shadow-sm cursor-pointer overflow-hidden text-center"
+                    >
+                      {activeRing.referencePhoto ? (
+                        <img src={activeRing.referencePhoto} alt="Photo reference" className="w-full h-full object-cover rounded-xl" />
+                      ) : (
+                        <div className="py-2 space-y-1">
+                          <Camera size={16} className="text-brand-gold mx-auto group-hover:scale-110 transition-transform" />
+                          <span className="text-[9px] font-black text-brand-700 block leading-tight">Photo Backdrop</span>
+                        </div>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-[8px] text-brand-400 italic text-center">Click thumbnails to open Sketchpad Suite</p>
+                </div>
+              )}
+
+              {/* Pricing Calculations Sheet Box */}
+              <div className="bg-white p-5 rounded-3xl border border-brand-100 shadow-lg flex flex-col justify-between space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                  {/* Left Side: Calculations Breakdown */}
+                  <div className="space-y-2 border-r border-brand-100 pr-4 font-mono text-[11px] text-brand-600">
+                    <p className="text-[9px] font-black text-brand-400 uppercase tracking-widest border-b border-brand-50 pb-1 mb-1">Active Piece Specs</p>
+                    <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans font-bold">
+                      <span>Category</span>
+                      <span className="text-brand-900">{activeRing.category === 'customRing' ? 'Engagement' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category === 'mensBand' ? "Men's Band" : activeRing.category === 'pendant' ? 'Pendant' : activeRing.category === 'earrings' ? 'Earrings' : 'Tennis'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans">
+                      <span>Material / Purity</span>
+                      <span className="font-bold text-brand-900">{activeRing.material === 'gold' ? `${activeRing.goldKarat}K ${activeRing.metalColor} Gold` : `${activeRing.metalColor} ${activeRing.material}`}</span>
+                    </div>
+                    {activeRing.goldGrams && (
+                      <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans">
+                        <span>Calculated Metal Wt</span>
+                        <span className="font-mono font-bold text-brand-900">{activeRing.goldGrams}g</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Side: Total Display */}
+                  <div className="text-center space-y-1">
+                    <p className="text-[9px] uppercase font-black tracking-widest text-brand-400">ESTIMATED TOTAL DUE</p>
+                    <h1 className="text-3xl font-serif font-black italic text-brand-950 tracking-tight">
+                      ${totals.grandTotal.toFixed(2)}
+                    </h1>
+                    <span className={`inline-block text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${isWholesale ? 'bg-green-100 text-green-700' : 'bg-brand-100 text-brand-800'}`}>
+                      {isWholesale ? 'Wholesale' : 'Retail'}
+                    </span>
+                    <p className="text-[8px] text-brand-400 font-mono">Calculated CAD valuation</p>
+                  </div>
+                </div>
+
+                {/* Piece Raw cost disclosure (for transparency) */}
+                {activeRing && !isWholesale && settings.showRawCostOnQuoteTab && (
+                  <div className="bg-amber-50 p-3 rounded-xl border border-amber-200/80 text-left text-[10px] text-amber-700 leading-relaxed flex items-start gap-1.5">
+                    <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold uppercase text-[8px] tracking-wider text-amber-800">Internal Manufacturing Raw Cost</p>
+                      <p className="font-mono mt-0.5 font-bold text-amber-900">
+                        Raw Cost CAD: ${calculateRawCost(activeRing, settings, spotPrices).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Save/Commit Action */}
+                <button
+                  type="button"
+                  onClick={onSaveQuote}
+                  className="w-full bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 border border-brand-800 mt-6 cursor-pointer"
+                >
+                  <CheckCircle size={14} />
+                  Commit Quote to Ledger
+                </button>
+              </div>
             </div>
 
             {/* COLUMN 2: Stone Sourcing, Addons & Reductions */}
@@ -2440,7 +2547,7 @@ export default function QuoteCalculator({
                   </div>
                   {activeRing.melee?.map((m, idx) => (
                     <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-brand-50/20 p-2.5 rounded-xl border border-brand-100">
-                      <div className="col-span-3">
+                      <div className="col-span-2">
                         <label className="text-[8px] text-brand-400 uppercase">Stones Qty</label>
                         <input
                           type="number"
@@ -2449,7 +2556,7 @@ export default function QuoteCalculator({
                           onChange={(e) => updateMelee(idx, 'qty', e.target.value)}
                         />
                       </div>
-                      <div className="col-span-4">
+                      <div className="col-span-5">
                         <label className="text-[8px] text-brand-400 uppercase">Size (mm)</label>
                         <select
                           className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
@@ -2504,7 +2611,7 @@ export default function QuoteCalculator({
                     const activeSize = sizes[f.sizeIdx] || { carat: 0 };
                     return (
                       <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-brand-50/20 p-2.5 rounded-xl border border-brand-100">
-                        <div className="col-span-3">
+                        <div className="col-span-2">
                           <label className="text-[8px] text-brand-400 uppercase">Stones Qty</label>
                           <input
                             type="number"
@@ -2513,7 +2620,7 @@ export default function QuoteCalculator({
                             onChange={(e) => updateFancy(idx, 'qty', e.target.value)}
                           />
                         </div>
-                        <div className="col-span-4">
+                        <div className="col-span-5">
                           <label className="text-[8px] text-brand-400 uppercase">Cut/Shape</label>
                           <select
                             className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
@@ -2566,7 +2673,7 @@ export default function QuoteCalculator({
                 </div>
                 {activeRing.clientStones?.map((c, idx) => (
                   <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-brand-50/20 p-2.5 rounded-xl border border-brand-100">
-                    <div className="col-span-3">
+                    <div className="col-span-2">
                       <label className="text-[8px] text-brand-400 uppercase">Stones Qty</label>
                       <input
                         type="number"
@@ -2575,7 +2682,7 @@ export default function QuoteCalculator({
                         onChange={(e) => updateClientStone(idx, 'qty', e.target.value)}
                       />
                     </div>
-                    <div className="col-span-4">
+                    <div className="col-span-5">
                       <label className="text-[8px] text-brand-400 uppercase">Stone Type Category</label>
                       <select
                         className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
@@ -2736,115 +2843,8 @@ export default function QuoteCalculator({
               </div>
             </div>
           </div>
-
-            {/* COLUMN 3: Pricing Summary Rail */}
-            <div className="space-y-6 md:col-span-2 lg:col-span-1">
-              {/* Piece specific thumbnail sketches & controls */}
-              {activeRing && (
-                <div className="bg-white p-3 rounded-2xl border border-brand-100 shadow-sm space-y-3">
-                  <h3 className="text-[10px] font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2 flex items-center gap-1.5 justify-center">
-                    <Camera size={12} className="text-brand-gold" />
-                    Sketches & Reference Photo
-                  </h3>
-                  
-                  <div className="flex justify-center gap-2">
-                    {/* Sketch canvas click trigger */}
-                    <button
-                      type="button"
-                      onClick={() => onLaunchSketch('sketch')}
-                      className="group relative border border-brand-200 hover:border-brand-400 bg-brand-50/50 hover:bg-brand-50 rounded-xl p-1.5 transition-all flex flex-col items-center justify-center w-20 h-20 shadow-sm cursor-pointer overflow-hidden text-center"
-                    >
-                      {activeRing.referenceSketch ? (
-                        <img src={activeRing.referenceSketch} alt="Sketch" className="w-full h-full object-cover rounded-lg" />
-                      ) : (
-                        <div className="py-1 space-y-1">
-                          <Sparkles size={14} className="text-brand-gold mx-auto group-hover:scale-110 transition-transform" />
-                          <span className="text-[8px] font-bold text-brand-700 block leading-tight">Interactive Sketch</span>
-                        </div>
-                      )}
-                    </button>
-
-                    {/* photo uploader thumbnail trigger */}
-                    <button
-                      type="button"
-                      onClick={() => onLaunchSketch('photo')}
-                      className="group relative border border-brand-200 hover:border-brand-400 bg-brand-50/50 hover:bg-brand-50 rounded-xl p-1.5 transition-all flex flex-col items-center justify-center w-20 h-20 shadow-sm cursor-pointer overflow-hidden text-center"
-                    >
-                      {activeRing.referencePhoto ? (
-                        <img src={activeRing.referencePhoto} alt="Photo reference" className="w-full h-full object-cover rounded-lg" />
-                      ) : (
-                        <div className="py-1 space-y-1">
-                          <Camera size={14} className="text-brand-gold mx-auto group-hover:scale-110 transition-transform" />
-                          <span className="text-[8px] font-bold text-brand-700 block leading-tight">Photo Backdrop</span>
-                        </div>
-                      )}
-                    </button>
-                  </div>
-                  <p className="text-[8px] text-brand-400 italic text-center">Click thumbnails to open Sketchpad Suite</p>
-                </div>
-              )}
-
-              {/* Pricing Calculations Sheet Box */}
-              <div className="bg-white p-5 rounded-3xl border border-brand-100 shadow-lg flex flex-col justify-between space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-                  {/* Left Side: Calculations Breakdown */}
-                  <div className="space-y-2 border-r border-brand-100 pr-4 font-mono text-[11px] text-brand-600">
-                    <p className="text-[9px] font-black text-brand-400 uppercase tracking-widest border-b border-brand-50 pb-1 mb-1">Active Piece Specs</p>
-                    <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans font-bold">
-                      <span>Category</span>
-                      <span className="text-brand-900">{activeRing.category === 'customRing' ? 'Engagement' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category === 'mensBand' ? "Men's Band" : activeRing.category === 'pendant' ? 'Pendant' : activeRing.category === 'earrings' ? 'Earrings' : 'Tennis'}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans">
-                      <span>Material / Purity</span>
-                      <span className="font-bold text-brand-900">{activeRing.material === 'gold' ? `${activeRing.goldKarat}K ${activeRing.metalColor} Gold` : `${activeRing.metalColor} ${activeRing.material}`}</span>
-                    </div>
-                    {activeRing.goldGrams && (
-                      <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans">
-                        <span>Calculated Metal Wt</span>
-                        <span className="font-mono font-bold text-brand-900">{activeRing.goldGrams}g</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Right Side: Total Display */}
-                  <div className="text-center space-y-1">
-                    <p className="text-[9px] uppercase font-black tracking-widest text-brand-400">ESTIMATED TOTAL DUE</p>
-                    <h1 className="text-3xl font-serif font-black italic text-brand-950 tracking-tight">
-                      ${totals.grandTotal.toFixed(2)}
-                    </h1>
-                    <span className={`inline-block text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${isWholesale ? 'bg-green-100 text-green-700' : 'bg-brand-100 text-brand-800'}`}>
-                      {isWholesale ? 'Wholesale' : 'Retail'}
-                    </span>
-                    <p className="text-[8px] text-brand-400 font-mono">Calculated CAD valuation</p>
-                  </div>
-                </div>
-
-                {/* Piece Raw cost disclosure (for transparency) */}
-                {activeRing && !isWholesale && settings.showRawCostOnQuoteTab && (
-                  <div className="bg-amber-50 p-3 rounded-xl border border-amber-200/80 text-left text-[10px] text-amber-700 leading-relaxed flex items-start gap-1.5">
-                    <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold uppercase text-[8px] tracking-wider text-amber-800">Internal Manufacturing Raw Cost</p>
-                      <p className="font-mono mt-0.5 font-bold text-amber-900">
-                        Raw Cost CAD: ${calculateRawCost(activeRing, settings, spotPrices).toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Save buttons */}
-                <button
-                  type="button"
-                  onClick={onSaveQuote}
-                  className="w-full bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 border border-brand-800 mt-6 cursor-pointer"
-                >
-                  <CheckCircle size={14} />
-                  Commit Quote to Ledger
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
+      )}
 
         {/* SUMMARY & TAX CONFIGURATION TAB */}
         {session.activeSubTab === 'summary' && (
