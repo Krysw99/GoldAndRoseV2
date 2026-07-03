@@ -96,7 +96,7 @@ export default function SpotPriceView({
       </div>
 
       {/* Matrices Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Gold Matrix */}
         <div className="bg-brand-50 p-5 rounded-2xl border border-brand-100 space-y-4">
           <h3 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-200 pb-2">
@@ -143,7 +143,7 @@ export default function SpotPriceView({
         </div>
 
         {/* Platinum Matrix */}
-        <div className="bg-brand-50 p-5 rounded-2xl border border-brand-100 space-y-4">
+        <div className="bg-brand-50 p-5 rounded-2xl border border-brand-100 space-y-4 md:col-span-2 lg:col-span-1">
           <h3 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-200 pb-2">
             Platinum Matrix (per gram)
           </h3>

@@ -87,9 +87,9 @@ export default function LedgerView({
   const activeTx = currentTxData();
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
+    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-fadeIn">
       {/* Search & Transaction Lists Column */}
-      <div className="lg:col-span-1 bg-white p-5 rounded-2xl border border-brand-100 shadow-sm flex flex-col h-[650px]">
+      <div className="md:col-span-5 lg:col-span-4 bg-white p-5 rounded-2xl border border-brand-100 shadow-sm flex flex-col h-[650px]">
         {/* Ledger Type Switchers */}
         <div className="flex gap-1.5 p-1 bg-brand-50 rounded-xl border border-brand-200/60 mb-4 shadow-inner">
           <button
@@ -222,7 +222,7 @@ export default function LedgerView({
       </div>
 
       {/* Invoice Receipt Viewer Column */}
-      <div className="lg:col-span-2 space-y-4">
+      <div className="md:col-span-7 lg:col-span-8 space-y-4">
         {selectedTx && activeTx ? (
           <div className="bg-white p-5 rounded-3xl border border-brand-100 shadow-lg flex flex-col justify-between min-h-[650px] relative">
             {/* Top Print Actions */}

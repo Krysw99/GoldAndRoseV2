@@ -1477,7 +1477,7 @@ export default function QuoteCalculator({
 
         {/* PIECE PARAMETERS EDITOR LAYOUT */}
         {session.activeSubTab !== 'summary' && activeRing && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-fadeIn">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start animate-fadeIn">
             {/* COLUMN 1: Metal Attributes & Structural Spec */}
             <div className="space-y-6 bg-white p-6 rounded-3xl border border-slate-200/60 shadow-sm">
               {/* Header: Name Category */}
@@ -2738,7 +2738,7 @@ export default function QuoteCalculator({
           </div>
 
             {/* COLUMN 3: Pricing Summary Rail */}
-            <div className="space-y-6">
+            <div className="space-y-6 md:col-span-2 lg:col-span-1">
               {/* Piece specific thumbnail sketches & controls */}
               {activeRing && (
                 <div className="bg-white p-3 rounded-2xl border border-brand-100 shadow-sm space-y-3">

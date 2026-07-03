@@ -320,10 +320,10 @@ export default function CubanBraceletBuilder({ spotPrices, settings }: CubanBrac
       </div>
 
       {/* 2. Interactive Simulator Workspace (Split Columns) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 items-stretch">
         
         {/* Left Area: Live Simulator and Sliders */}
-        <div className="lg:col-span-7 flex flex-col space-y-5">
+        <div className="md:col-span-1 lg:col-span-7 flex flex-col space-y-5">
           
           {/* Simulator Box Header */}
           <div className="flex justify-between items-center bg-brand-50/50 p-2.5 rounded-2xl border border-brand-100">
@@ -690,7 +690,7 @@ export default function CubanBraceletBuilder({ spotPrices, settings }: CubanBrac
         </div>
 
         {/* Right Area: Control panel, STL 3D Analyzer & Pricing calculator */}
-        <div className="lg:col-span-5 flex flex-col space-y-5">
+        <div className="md:col-span-1 lg:col-span-5 flex flex-col space-y-5">
 
 
           {/* Material & Style Configuration Box */}

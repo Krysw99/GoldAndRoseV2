@@ -434,12 +434,6 @@ const drawStencilMaster = (
   ctx.restore();
 };
 
-import { 
-  Pen, Highlighter, Eraser, Move, 
-  RotateCw, RefreshCw, X, Check, Camera, Sparkles, HelpCircle 
-} from 'lucide-react';
-import { CENTER_SHAPES } from '../constants';
-
 interface SketchpadProps {
   initialImage: string | null; // sketch or reference photo
   onSave: (dataUrl: string) => void;
