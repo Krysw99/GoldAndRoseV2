@@ -1,0 +1,6 @@
+{
+  "name": "Gold & Rose Executive Dashboard",
+  "description": "An executive calculator, scrap buyout ledger, custom design quoter, and sketchpad for Gold & Rose Jewellery Corp.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
