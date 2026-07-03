@@ -2307,9 +2307,9 @@ export default function QuoteCalculator({
                 <div className="space-y-3 p-4 bg-brand-50/50 rounded-2xl border border-brand-100">
                   <p className="text-[9px] font-black text-brand-700 uppercase tracking-wider mb-1">Center Diamond Details</p>
                   
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                  <div className="grid grid-cols-2 gap-3.5">
                     <div>
-                      <label className="text-[8px] font-bold text-brand-400 block mb-0.5">Carat Weight</label>
+                      <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Carat Weight</label>
                       <input
                         type="number"
                         placeholder="1.00"
@@ -2319,27 +2319,7 @@ export default function QuoteCalculator({
                       />
                     </div>
                     <div>
-                      <label className="text-[8px] font-bold text-brand-400 block mb-0.5">Shape</label>
-                      <select
-                        className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
-                        value={activeRing.centerStone.shape}
-                        onChange={(e) => updateCenterStone('shape', e.target.value)}
-                      >
-                        {CENTER_SHAPES.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[8px] font-bold text-brand-400 block mb-0.5">Setting Style</label>
-                      <select
-                        className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
-                        value={activeRing.centerStone.setting}
-                        onChange={(e) => updateCenterStone('setting', e.target.value)}
-                      >
-                        {SETTING_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[8px] font-bold text-brand-400 block mb-0.5">Stone Type</label>
+                      <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Stone Type</label>
                       <select
                         className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
                         value={activeRing.centerStone.type}
@@ -2349,7 +2329,27 @@ export default function QuoteCalculator({
                       </select>
                     </div>
                     <div>
-                      <label className="text-[8px] font-bold text-brand-400 block mb-0.5">Origin</label>
+                      <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Shape (Cut)</label>
+                      <select
+                        className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                        value={activeRing.centerStone.shape}
+                        onChange={(e) => updateCenterStone('shape', e.target.value)}
+                      >
+                        {CENTER_SHAPES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Setting Style</label>
+                      <select
+                        className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                        value={activeRing.centerStone.setting}
+                        onChange={(e) => updateCenterStone('setting', e.target.value)}
+                      >
+                        {SETTING_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Origin</label>
                       <select
                         className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
                         value={activeRing.centerStone.origin}
@@ -2365,9 +2365,9 @@ export default function QuoteCalculator({
                   {activeRing.category === 'earrings' && activeRing.centerStone2 && (
                     <div className="border-t border-brand-100 pt-3 mt-2 space-y-2">
                       <p className="text-[9px] font-black text-brand-700 uppercase tracking-wider">Earring Stone 2 Details (Symmetrical match)</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                      <div className="grid grid-cols-2 gap-3.5">
                         <div>
-                          <label className="text-[8px] font-bold text-brand-400 block mb-0.5">Carat Weight</label>
+                          <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Carat Weight</label>
                           <input
                             type="number"
                             placeholder="1.00"
@@ -2377,27 +2377,7 @@ export default function QuoteCalculator({
                           />
                         </div>
                         <div>
-                          <label className="text-[8px] font-bold text-brand-400 block mb-0.5">Shape</label>
-                          <select
-                            className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
-                            value={activeRing.centerStone2.shape}
-                            onChange={(e) => updateCenterStone2('shape', e.target.value)}
-                          >
-                            {CENTER_SHAPES.map(s => <option key={s} value={s}>{s}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-[8px] font-bold text-brand-400 block mb-0.5">Setting Style</label>
-                          <select
-                            className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
-                            value={activeRing.centerStone2.setting}
-                            onChange={(e) => updateCenterStone2('setting', e.target.value)}
-                          >
-                            {SETTING_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-[8px] font-bold text-brand-400 block mb-0.5">Stone Type</label>
+                          <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Stone Type</label>
                           <select
                             className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
                             value={activeRing.centerStone2.type}
@@ -2407,7 +2387,27 @@ export default function QuoteCalculator({
                           </select>
                         </div>
                         <div>
-                          <label className="text-[8px] font-bold text-brand-400 block mb-0.5">Origin</label>
+                          <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Shape (Cut)</label>
+                          <select
+                            className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                            value={activeRing.centerStone2.shape}
+                            onChange={(e) => updateCenterStone2('shape', e.target.value)}
+                          >
+                            {CENTER_SHAPES.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Setting Style</label>
+                          <select
+                            className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                            value={activeRing.centerStone2.setting}
+                            onChange={(e) => updateCenterStone2('setting', e.target.value)}
+                          >
+                            {SETTING_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                        <div className="col-span-2">
+                          <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Origin</label>
                           <select
                             className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
                             value={activeRing.centerStone2.origin}
