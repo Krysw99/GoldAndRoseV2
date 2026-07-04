@@ -107,7 +107,7 @@ export default function App() {
 
   // Fetch GoldAPI CAD Spot Indices
   const fetchLivePrices = async () => {
-    if (!goldApiKey || goldApiKey === 'INSERT_YOUR_NEW_KEY_HERE') {
+    if (!goldApiKey || goldApiKey === 'goldapi-472c240569490d4d25bde6da08749829-io') {
       alert("Please configure a valid GoldAPI.io Access Token in the Master Settings panel first.");
       return;
     }
