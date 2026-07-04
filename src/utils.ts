@@ -134,7 +134,6 @@ export function upgradeRingData(r: any): JewelryItem {
 }
 
 export function getEmptyQuoteSession(): QuoteSession {
-  const r1 = getEmptyRing('customRing');
   return {
     id: genId(),
     cName: '',
@@ -144,8 +143,8 @@ export function getEmptyQuoteSession(): QuoteSession {
     jobDesc: '',
     applyTax: false,
     notes: '',
-    activeSubTab: r1.id,
-    rings: [r1],
+    activeSubTab: '',
+    rings: [],
     scrapCredit: 0,
     signatureImg: null,
     referenceSketch: null,
@@ -404,13 +403,27 @@ export function calculateRingCost(r: JewelryItem, settings: AppSettings, spotPri
   const rSilverPrem = Number(settings.retailSilverPremium !== undefined ? settings.retailSilverPremium : 20);
   const rPlatPrem = Number(settings.retailPlatinumPremium !== undefined ? settings.retailPlatinumPremium : 100);
 
-  if (r.material === 'gold') {
-    const karat = Number(r.goldKarat) || 14;
-    cM = g * (((sPGold + rGoldPrem) / 31.1034768) * (karat / 24));
-  } else if (r.material === 'platinum') {
-    cM = g * (((sPPlat + rPlatPrem) / 31.1034768) * 0.95);
-  } else if (r.material === 'silver') {
-    cM = g * (((sPSilv + rSilverPrem) / 31.1034768) * 0.925);
+  if (r.category === 'mensBand') {
+    if (r.material === 'gold') {
+      const karat = Number(r.goldKarat) || 14;
+      const rate = Number(settings.goldPricesPerGram?.[karat] ?? (((sPGold + rGoldPrem) / 31.1034768) * (karat / 24)));
+      cM = g * rate;
+    } else if (r.material === 'platinum') {
+      const rate = Number(settings.platinumPricePerGram ?? (((sPPlat + rPlatPrem) / 31.1034768) * 0.95));
+      cM = g * rate;
+    } else if (r.material === 'silver') {
+      const rate = Number(settings.silverPricePerGram ?? (((sPSilv + rSilverPrem) / 31.1034768) * 0.925));
+      cM = g * rate;
+    }
+  } else {
+    if (r.material === 'gold') {
+      const karat = Number(r.goldKarat) || 14;
+      cM = g * (((sPGold + rGoldPrem) / 31.1034768) * (karat / 24));
+    } else if (r.material === 'platinum') {
+      cM = g * (((sPPlat + rPlatPrem) / 31.1034768) * 0.95);
+    } else if (r.material === 'silver') {
+      cM = g * (((sPSilv + rSilverPrem) / 31.1034768) * 0.925);
+    }
   }
 
   if (r.category === 'tennisBracelet') {

@@ -1252,23 +1252,14 @@ export default function QuoteCalculator({
 
   // Remove Entire Item Piece
   const handleRemoveItem = (id: string) => {
-    if (session.rings.length <= 1) {
-      const reset = getEmptyRing('customRing');
-      onChangeSession(prev => ({
+    onChangeSession(prev => {
+      const remaining = prev.rings.filter(r => r.id !== id);
+      return {
         ...prev,
-        rings: [reset],
-        activeSubTab: reset.id
-      }));
-    } else {
-      onChangeSession(prev => {
-        const remaining = prev.rings.filter(r => r.id !== id);
-        return {
-          ...prev,
-          rings: remaining,
-          activeSubTab: remaining[0].id
-        };
-      });
-    }
+        rings: remaining,
+        activeSubTab: remaining.length > 0 ? remaining[0].id : ''
+      };
+    });
   };
 
   const handleLinkLatestScrap = () => {
@@ -1642,7 +1633,7 @@ export default function QuoteCalculator({
               }`}
             >
               {label}
-              {session.rings.length > 1 && (
+              {session.rings.length >= 1 && (
                 <span 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -3227,6 +3218,31 @@ export default function QuoteCalculator({
         </div>
       )}
 
+      {/* EMPTY STATE FOR PIECE LIST */}
+      {session.activeSubTab !== 'summary' && session.rings.length === 0 && (
+        <div className="bg-white rounded-3xl border border-slate-200/60 p-12 text-center max-w-2xl mx-auto space-y-6 shadow-sm my-8 animate-fadeIn">
+          <div className="w-16 h-16 bg-brand-50 rounded-full flex items-center justify-center mx-auto text-brand-gold">
+            <Compass size={32} />
+          </div>
+          <div className="space-y-2">
+            <h2 className="font-serif text-2xl font-bold italic text-brand-900">Start Your Custom Quote</h2>
+            <p className="text-sm text-slate-500 max-w-md mx-auto">
+              No jewelry pieces have been added to this quote yet. Click below to add your first custom piece and begin designing.
+            </p>
+          </div>
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-brand-900 text-brand-gold hover:bg-brand-950 rounded-xl font-bold text-sm uppercase tracking-widest shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer"
+            >
+              <Plus size={16} />
+              Add Piece
+            </button>
+          </div>
+        </div>
+      )}
+
         {/* SUMMARY & TAX CONFIGURATION TAB */}
         {session.activeSubTab === 'summary' && (
           <div className="space-y-6 animate-fadeIn print:bg-white print:p-0">
@@ -3270,52 +3286,52 @@ export default function QuoteCalculator({
             </div>
 
             {!isDesignerMode ? (
-              <div className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none">
+              <div className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none print:space-y-3.5">
                 {/* Invoice Header */}
-                <div className="flex justify-between items-start border-b border-brand-200 pb-6">
+                <div className="flex justify-between items-start border-b border-brand-200 pb-6 print:pb-3">
                   <div>
-                    <h1 className="font-serif italic font-black text-3xl text-brand-900 tracking-tight">Gold & Rose</h1>
-                    <p className="text-[10px] text-brand-500 font-mono uppercase tracking-widest mt-1">Jewellery Corporation</p>
-                    <p className="text-xs text-brand-600 mt-2">Suite 120 - 4590 Kingsway, Burnaby, BC</p>
-                    <p className="text-xs text-brand-600">info@goldandrose.com | 604-555-0192</p>
+                    <h1 className="font-serif italic font-black text-3xl text-brand-900 tracking-tight print:text-2xl">Gold & Rose</h1>
+                    <p className="text-[10px] text-brand-500 font-mono uppercase tracking-widest mt-1 print:text-[8px]">Jewellery Corporation</p>
+                    <p className="text-xs text-brand-600 mt-2 print:text-[10px] print:mt-1">Suite 120 - 4590 Kingsway, Burnaby, BC</p>
+                    <p className="text-xs text-brand-600 print:text-[10px]">info@goldandrose.com | 604-555-0192</p>
                   </div>
                   <div className="text-right">
-                    <span className="bg-brand-900 text-brand-gold px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
+                    <span className="bg-brand-900 text-brand-gold px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md print:px-3 print:py-1 print:text-[8px]">
                       {isWholesale ? 'Wholesale Agreement' : 'Custom Retail Estimate'}
                     </span>
-                    <p className="text-xs text-brand-500 font-mono mt-3">Date: {new Date().toLocaleDateString()}</p>
-                    {session.jobNum && <p className="text-xs font-bold text-brand-800 mt-1">Job #: {session.jobNum}</p>}
+                    <p className="text-xs text-brand-500 font-mono mt-3 print:mt-1.5 print:text-[9px]">Date: {new Date().toLocaleDateString()}</p>
+                    {session.jobNum && <p className="text-xs font-bold text-brand-800 mt-1 print:mt-0.5 print:text-[9px]">Job #: {session.jobNum}</p>}
                   </div>
                 </div>
 
                 {/* Client Credentials & Brief Summary Info */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-brand-50 p-5 rounded-2xl border border-brand-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-brand-50 p-5 rounded-2xl border border-brand-200 print:gap-3 print:p-3 print:rounded-xl">
                   <div>
-                    <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2">Customer Details</h3>
-                    <p className="text-sm font-bold text-brand-950">{session.cName || 'Unnamed Customer'}</p>
-                    {session.cPhone && <p className="text-xs text-brand-600 mt-1">Phone: {session.cPhone}</p>}
-                    {session.cEmail && <p className="text-xs text-brand-600">Email: {session.cEmail}</p>}
+                    <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2 print:mb-0.5 print:text-[8px]">Customer Details</h3>
+                    <p className="text-sm font-bold text-brand-950 print:text-xs">{session.cName || 'Unnamed Customer'}</p>
+                    {session.cPhone && <p className="text-xs text-brand-600 mt-1 print:mt-0 print:text-[10px]">Phone: {session.cPhone}</p>}
+                    {session.cEmail && <p className="text-xs text-brand-600 print:text-[10px]">Email: {session.cEmail}</p>}
                   </div>
                   {session.jobDesc && (
                     <div>
-                      <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2">Design Description</h3>
-                      <p className="text-xs text-brand-700 leading-relaxed italic">"{session.jobDesc}"</p>
+                      <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2 print:mb-0.5 print:text-[8px]">Design Description</h3>
+                      <p className="text-xs text-brand-700 leading-relaxed italic print:text-[10px] print:leading-snug">"{session.jobDesc}"</p>
                     </div>
                   )}
                 </div>
 
                 {/* Items Table */}
-                <div className="space-y-4">
-                  <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest pl-1">Jewelry Specifications Breakdown</h3>
-                  <div className="border border-brand-200 rounded-2xl overflow-hidden shadow-sm">
-                    <table className="w-full text-left border-collapse text-xs">
+                <div className="space-y-4 print:space-y-2">
+                  <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest pl-1 print:text-[8px]">Jewelry Specifications Breakdown</h3>
+                  <div className="border border-brand-200 rounded-2xl overflow-hidden shadow-sm print:rounded-xl">
+                    <table className="w-full text-left border-collapse text-xs print:text-[11px]">
                       <thead>
                         <tr className="bg-brand-900 text-brand-gold border-b border-brand-800 uppercase text-[9px] tracking-wider font-black">
-                          <th className="p-3 pl-4">Piece</th>
-                          <th className="p-3">Metal / Material</th>
-                          <th className="p-3">Gems & Stones</th>
-                          <th className="p-3">Special Addons / Notes</th>
-                          <th className="p-3 pr-4 text-right">Price</th>
+                          <th className="p-3 pl-4 print:p-2 print:pl-3">Piece</th>
+                          <th className="p-3 print:p-2">Metal / Material</th>
+                          <th className="p-3 print:p-2">Gems & Stones</th>
+                          <th className="p-3 print:p-2">Special Addons / Notes</th>
+                          <th className="p-3 pr-4 text-right print:p-2 print:pr-3">Price</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-brand-100">
@@ -3327,40 +3343,40 @@ export default function QuoteCalculator({
 
                           return (
                             <tr key={r.id} className="hover:bg-brand-50/50 transition-colors">
-                              <td className="p-3 pl-4 font-bold text-brand-900">
+                              <td className="p-3 pl-4 font-bold text-brand-900 print:p-2 print:pl-3">
                                 #{ri + 1} {r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis'}
                               </td>
-                              <td className="p-3">
-                                <span className="font-semibold block">{r.goldKarat ? `${r.goldKarat}K` : ''} {r.metalColor} {r.material}</span>
-                                <span className="text-[10px] text-brand-500 font-mono">{r.goldGrams || '0.0'}g</span>
+                              <td className="p-3 print:p-2">
+                                <span className="font-semibold block print:text-[11px]">{r.goldKarat ? `${r.goldKarat}K` : ''} {r.metalColor} {r.material}</span>
+                                <span className="text-[10px] text-brand-500 font-mono print:text-[9px]">{r.goldGrams || '0.0'}g</span>
                               </td>
-                              <td className="p-3 space-y-1">
+                              <td className="p-3 space-y-1 print:p-2 print:space-y-0.5">
                                 {r.centerStone?.carats && (
-                                  <span className="block text-[11px]">
+                                  <span className="block text-[11px] print:text-[10px]">
                                     Center: {r.centerStone.carats}ct {r.centerStone.shape} {r.centerStone.type} ({r.centerStone.origin})
                                   </span>
                                 )}
                                 {r.centerStone2?.carats && (
-                                  <span className="block text-[11px]">
+                                  <span className="block text-[11px] print:text-[10px]">
                                     Stone 2: {r.centerStone2.carats}ct {r.centerStone2.shape} {r.centerStone2.type} ({r.centerStone2.origin})
                                   </span>
                                 )}
                                 {r.melee.some(m => m.qty) && (
-                                  <span className="block text-[10px] text-brand-600 font-mono">
+                                  <span className="block text-[10px] text-brand-600 font-mono print:text-[9px]">
                                     Melee: {r.melee.reduce((acc, m) => acc + (parseInt(m.qty) || 0), 0)} st ({r.melee.reduce((acc, m) => acc + ((parseInt(m.qty) || 0) * (parseFloat(m.carat) || 0)), 0).toFixed(2)}ctw)
                                   </span>
                                 )}
                                 {r.fancy.some(f => f.qty) && (
-                                  <span className="block text-[10px] text-brand-600 font-mono">
+                                  <span className="block text-[10px] text-brand-600 font-mono print:text-[9px]">
                                     Fancy: {r.fancy.reduce((acc, f) => acc + (parseInt(f.qty) || 0), 0)} st
                                   </span>
                                 )}
                               </td>
-                              <td className="p-3 space-y-1">
-                                {r.engravingText && <span className="block text-xs font-semibold italic" style={{ fontFamily: r.engravingFont }}>"Engraved: {r.engravingText}"</span>}
-                                {r.designNotes.map((n, ni) => <span key={ni} className="block text-[10px] text-brand-500 leading-tight">• {n.text}</span>)}
+                              <td className="p-3 space-y-1 print:p-2 print:space-y-0.5">
+                                {r.engravingText && <span className="block text-xs font-semibold italic print:text-[10px]" style={{ fontFamily: r.engravingFont }}>"Engraved: {r.engravingText}"</span>}
+                                {r.designNotes.map((n, ni) => <span key={ni} className="block text-[10px] text-brand-500 leading-tight print:text-[9px]">• {n.text}</span>)}
                               </td>
-                              <td className="p-3 pr-4 text-right font-mono font-bold text-brand-950">
+                              <td className="p-3 pr-4 text-right font-mono font-bold text-brand-950 print:p-2 print:pr-3 print:text-[11px]">
                                 ${finalPieceCost.toFixed(2)}
                               </td>
                             </tr>
@@ -3373,29 +3389,29 @@ export default function QuoteCalculator({
 
                 {/* Dynamic Mockups Thumbnail Anchors side-by-side inside the Invoice */}
                 {session.rings.some(r => r.referenceSketch || r.referencePhoto || (Array.isArray(r.referenceSketches) && r.referenceSketches.length > 0) || (Array.isArray(r.referencePhotos) && r.referencePhotos.length > 0)) && (
-                  <div className="border-t border-brand-100 pt-6 space-y-4">
-                    <h4 className="text-[10px] font-black text-brand-800 uppercase tracking-widest text-center">Reference Sketches & Photos</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="border-t border-brand-100 pt-6 space-y-4 print:pt-3 print:space-y-1.5">
+                    <h4 className="text-[10px] font-black text-brand-800 uppercase tracking-widest text-center print:text-[8px]">Reference Sketches & Photos</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:gap-2">
                       {session.rings.map((r, ri) => {
                         const rSketches = Array.isArray(r.referenceSketches) ? r.referenceSketches : (r.referenceSketch ? [r.referenceSketch] : []);
                         const rPhotos = Array.isArray(r.referencePhotos) ? r.referencePhotos : (r.referencePhoto ? [r.referencePhoto] : []);
                         if (rSketches.length === 0 && rPhotos.length === 0) return null;
                         return (
-                          <div key={r.id} className="border border-brand-100 bg-brand-50/20 rounded-2xl p-3 space-y-3">
-                            <p className="text-[10px] font-black uppercase text-brand-600 tracking-wider">
+                          <div key={r.id} className="border border-brand-100 bg-brand-50/20 rounded-2xl p-3 space-y-3 print:p-1.5 print:space-y-1.5 print:rounded-xl">
+                            <p className="text-[10px] font-black uppercase text-brand-600 tracking-wider print:text-[8px]">
                               Piece {ri + 1}: {r.category === 'customRing' ? 'Custom Ring' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis'}
                             </p>
                             <div className="grid grid-cols-2 gap-2">
                               {rSketches.map((sk, skIdx) => (
-                                <div key={`sk-${skIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center">
-                                  <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1">Sketch {skIdx + 1}</span>
-                                  <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-28 w-full object-contain rounded" />
+                                <div key={`sk-${skIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center print:p-1 print:rounded-lg">
+                                  <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1 print:mb-0.5 print:text-[7px]">Sketch {skIdx + 1}</span>
+                                  <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-28 w-full object-contain rounded print:h-16" />
                                 </div>
                               ))}
                               {rPhotos.map((ph, phIdx) => (
-                                <div key={`ph-${phIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center">
-                                  <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1">Photo {phIdx + 1}</span>
-                                  <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-28 w-full object-contain rounded" />
+                                <div key={`ph-${phIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center print:p-1 print:rounded-lg">
+                                  <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1 print:mb-0.5 print:text-[7px]">Photo {phIdx + 1}</span>
+                                  <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-28 w-full object-contain rounded print:h-16" />
                                 </div>
                               ))}
                             </div>
@@ -3407,11 +3423,11 @@ export default function QuoteCalculator({
                 )}
 
                 {/* Pricing Math calculations details */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-brand-200 pt-6">
-                  <div className="text-xs text-brand-600 leading-relaxed font-mono">
-                    <p className="font-sans text-brand-700 font-bold uppercase text-[10px] tracking-wider mb-2">Transaction Ledger Notes</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-brand-200 pt-6 print:pt-3 print:gap-4">
+                  <div className="text-xs text-brand-600 leading-relaxed font-mono print:text-[9px]">
+                    <p className="font-sans text-brand-700 font-bold uppercase text-[10px] tracking-wider mb-2 print:mb-0.5 print:text-[8px]">Transaction Ledger Notes</p>
                     <p className="text-brand-500 leading-relaxed italic">Estimates are based on dynamic spot valuations in CAD.</p>
-                    <div className="flex items-center gap-3 mt-3 pt-3 border-t border-brand-100">
+                    <div className="flex items-center gap-3 mt-3 pt-3 border-t border-brand-100 print:hidden">
                       <span className="text-xs font-bold text-brand-700">Charge BC Sales Tax (12%)</span>
                       <input
                         type="checkbox"
@@ -3421,77 +3437,77 @@ export default function QuoteCalculator({
                       />
                     </div>
                   </div>
-                  <div className="space-y-2 text-xs font-mono text-brand-700">
+                  <div className="space-y-2 text-xs font-mono text-brand-700 print:space-y-1 print:text-[10px]">
                     <div className="flex justify-between"><span>Gross Total Cost:</span><span>${totals.grossTotal.toFixed(2)}</span></div>
                     {totals.totalDiscount > 0 && <div className="flex justify-between text-red-600"><span>Client Deduction Reductions:</span><span>-${totals.totalDiscount.toFixed(2)}</span></div>}
                     {Number(session.scrapCredit) > 0 && <div className="flex justify-between text-green-600"><span>Connected Scrap Payout Credit:</span><span>-${Number(session.scrapCredit).toFixed(2)}</span></div>}
-                    <div className="border-t border-brand-200 my-1"></div>
+                    <div className="border-t border-brand-200 my-1 print:my-0.5"></div>
                     <div className="flex justify-between"><span>Subtotal Value:</span><span>${totals.subtotal.toFixed(2)}</span></div>
                     {session.applyTax && <div className="flex justify-between"><span>BC Taxes & GST (12%):</span><span>+${totals.tax.toFixed(2)}</span></div>}
-                    <div className="border-t-2 border-brand-900 my-1"></div>
-                    <div className="flex justify-between font-bold text-sm text-brand-950 font-sans">
+                    <div className="border-t-2 border-brand-900 my-1 print:my-0.5"></div>
+                    <div className="flex justify-between font-bold text-sm text-brand-950 font-sans print:text-xs">
                       <span>FINAL BALANCE DUE:</span>
-                      <span className="text-lg font-black text-brand-900">${totals.grandTotal.toFixed(2)}</span>
+                      <span className="text-lg font-black text-brand-900 print:text-sm">${totals.grandTotal.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Authorisation Sign-off block inside PDF */}
-                <div className="border-t border-brand-200 pt-6">
-                  <h4 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2">Agreement Authorization Signature</h4>
-                  <div className="flex flex-col sm:flex-row justify-between items-center bg-brand-50/50 p-4 rounded-2xl border border-brand-200 gap-4">
-                    <p className="text-[11px] text-brand-600 italic leading-relaxed max-w-md">
+                <div className="border-t border-brand-200 pt-6 print:pt-3">
+                  <h4 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2 print:mb-1 print:text-[8px]">Agreement Authorization Signature</h4>
+                  <div className="flex flex-col sm:flex-row justify-between items-center bg-brand-50/50 p-4 rounded-2xl border border-brand-200 gap-4 print:p-2.5 print:rounded-xl print:gap-2">
+                    <p className="text-[11px] text-brand-600 italic leading-relaxed max-w-md print:text-[9px] print:leading-snug">
                       "I hereby authorize Gold & Rose Jewellery Corp to proceed with CAD engineering models and wax prints for the custom styles breakdown above."
                     </p>
                     {session.signatureImg ? (
-                      <div className="bg-white border rounded-xl p-1.5 shadow-sm">
-                        <img src={session.signatureImg} alt="Client Authorization Signature" className="h-12 w-44 object-contain" />
+                      <div className="bg-white border rounded-xl p-1.5 shadow-sm print:p-1 print:rounded-lg">
+                        <img src={session.signatureImg} alt="Client Authorization Signature" className="h-12 w-44 object-contain print:h-8 print:w-32" />
                       </div>
                     ) : (
-                      <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider bg-red-50 border border-red-200 px-3 py-2 rounded-xl">Pending Client Signature Below</span>
+                      <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider bg-red-50 border border-red-200 px-3 py-2 rounded-xl print:px-2 print:py-1 print:text-[8px] print:rounded-lg">Pending Client Signature Below</span>
                     )}
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none">
+              <div className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none print:space-y-3.5">
                 {/* CAD Specs Header */}
-                <div className="flex justify-between items-start border-b border-brand-200 pb-6">
+                <div className="flex justify-between items-start border-b border-brand-200 pb-6 print:pb-3">
                   <div>
-                    <h1 className="font-serif italic font-black text-2xl text-brand-900 tracking-tight flex items-center gap-2">
+                    <h1 className="font-serif italic font-black text-2xl text-brand-900 tracking-tight flex items-center gap-2 print:text-xl">
                       Gold & Rose
                     </h1>
-                    <p className="text-[10px] text-brand-500 font-mono uppercase tracking-widest mt-1">Jewellery Corporation</p>
-                    <p className="text-xs text-brand-700 mt-2 font-bold uppercase tracking-wider text-slate-500">🛠️ CAD PRODUCTION BLUEPRINT & SPEC SHEET</p>
+                    <p className="text-[10px] text-brand-500 font-mono uppercase tracking-widest mt-1 print:text-[8px]">Jewellery Corporation</p>
+                    <p className="text-xs text-brand-700 mt-2 font-bold uppercase tracking-wider text-slate-500 print:text-[10px] print:mt-1">🛠️ CAD PRODUCTION BLUEPRINT & SPEC SHEET</p>
                   </div>
                   <div className="text-right">
-                    <span className="bg-brand-950 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
+                    <span className="bg-brand-950 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md print:px-3 print:py-1 print:text-[8px]">
                       CAD Specifications
                     </span>
-                    <p className="text-xs text-brand-500 font-mono mt-3">Date: {new Date().toLocaleDateString()}</p>
-                    {session.jobNum && <p className="text-xs font-bold text-brand-800 mt-1">Job #: {session.jobNum}</p>}
+                    <p className="text-xs text-brand-500 font-mono mt-3 print:mt-1.5 print:text-[9px]">Date: {new Date().toLocaleDateString()}</p>
+                    {session.jobNum && <p className="text-xs font-bold text-brand-800 mt-1 print:mt-0.5 print:text-[9px]">Job #: {session.jobNum}</p>}
                   </div>
                 </div>
 
                 {/* Client & Description */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-5 rounded-2xl border border-slate-200 print:gap-3 print:p-3 print:rounded-xl">
                   <div>
-                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Customer / Reference</h3>
-                    <p className="text-sm font-bold text-brand-950">{session.cName || 'Unnamed Customer'}</p>
-                    {session.cPhone && <p className="text-xs text-brand-600 mt-0.5">Phone: {session.cPhone}</p>}
-                    {session.cEmail && <p className="text-xs text-brand-600">Email: {session.cEmail}</p>}
+                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 print:mb-0.5 print:text-[8px]">Customer / Reference</h3>
+                    <p className="text-sm font-bold text-brand-950 print:text-xs">{session.cName || 'Unnamed Customer'}</p>
+                    {session.cPhone && <p className="text-xs text-brand-600 mt-0.5 print:text-[10px]">Phone: {session.cPhone}</p>}
+                    {session.cEmail && <p className="text-xs text-brand-600 print:text-[10px]">Email: {session.cEmail}</p>}
                   </div>
                   {session.jobDesc && (
                     <div>
-                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Design Overview Notes</h3>
-                      <p className="text-xs text-brand-700 leading-relaxed italic">"{session.jobDesc}"</p>
+                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 print:mb-0.5 print:text-[8px]">Design Overview Notes</h3>
+                      <p className="text-xs text-brand-700 leading-relaxed italic print:text-[10px] print:leading-snug">"{session.jobDesc}"</p>
                     </div>
                   )}
                 </div>
 
                 {/* CAD Items Specs Breakdown */}
-                <div className="space-y-8">
-                  <h3 className="text-xs font-black text-brand-900 uppercase tracking-widest pl-1 border-b border-brand-200 pb-2">
+                <div className="space-y-8 print:space-y-3">
+                  <h3 className="text-xs font-black text-brand-900 uppercase tracking-widest pl-1 border-b border-brand-200 pb-2 print:pb-1 print:text-[10px]">
                     Custom Piece Engineering Specifications
                   </h3>
                   
@@ -3500,29 +3516,29 @@ export default function QuoteCalculator({
                     const rPhotos = Array.isArray(r.referencePhotos) ? r.referencePhotos : (r.referencePhoto ? [r.referencePhoto] : []);
 
                     return (
-                      <div key={r.id} className="border border-slate-200 rounded-2xl bg-slate-50/20 p-5 space-y-5 page-break-inside-avoid">
+                      <div key={r.id} className="border border-slate-200 rounded-2xl bg-slate-50/20 p-5 space-y-5 page-break-inside-avoid print:p-3 print:space-y-3 print:rounded-xl">
                         {/* Piece Title & Basic Classification */}
-                        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                          <h4 className="text-sm font-black text-brand-900 uppercase tracking-wider">
+                        <div className="flex justify-between items-center border-b border-slate-100 pb-3 print:pb-1.5">
+                          <h4 className="text-sm font-black text-brand-900 uppercase tracking-wider print:text-xs">
                             Piece #{ri + 1}: {r.category === 'customRing' ? 'Engagement Ring' : r.category === 'weddingBand' ? 'Wedding Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis Bracelet'}
                           </h4>
-                          <span className="text-[10px] font-black uppercase bg-slate-200 text-slate-700 px-3 py-1 rounded-md">
+                          <span className="text-[10px] font-black uppercase bg-slate-200 text-slate-700 px-3 py-1 rounded-md print:px-2 print:py-0.5 print:text-[8px]">
                             {r.material.toUpperCase()} ({r.goldKarat ? `${r.goldKarat}K` : 'N/A'}) - {r.metalColor}
                           </span>
                         </div>
 
                         {/* Dimensions & Target Specs Grid */}
-                        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 space-y-4 shadow-sm">
-                          <span className="text-[10px] font-black text-brand-900 uppercase tracking-widest block border-b border-slate-100 pb-2 flex items-center gap-1.5">
+                        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 space-y-4 shadow-sm print:p-3 print:space-y-2 print:rounded-xl">
+                          <span className="text-[10px] font-black text-brand-900 uppercase tracking-widest block border-b border-slate-100 pb-2 flex items-center gap-1.5 print:pb-1 print:text-[8px]">
                             <Compass size={13} className="text-brand-gold" />
                             CAD Engineering Specifications & Blueprint Parameters
                           </span>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                            <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100">
-                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs print:gap-2">
+                            <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100 print:p-2 print:rounded-lg">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1 print:text-[8px]">
                                 {r.category === 'pendant' ? 'Pendant Dimensions' : r.category === 'tennisBracelet' ? 'Bracelet Length' : r.category === 'earrings' ? 'Backing Type' : 'Finger Size'}
                               </span>
-                              <span className="font-bold text-brand-950 text-sm">
+                              <span className="font-bold text-brand-950 text-sm print:text-xs">
                                 {r.category === 'mensBand' 
                                   ? (r.mbSize || 'Not set') 
                                   : (r.category === 'customRing' || r.category === 'weddingBand') 
@@ -3537,9 +3553,9 @@ export default function QuoteCalculator({
                               </span>
                             </div>
 
-                            <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100">
-                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">Band Width</span>
-                              <span className="font-bold text-brand-950 text-sm">
+                            <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100 print:p-2 print:rounded-lg">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1 print:text-[8px]">Band Width</span>
+                              <span className="font-bold text-brand-950 text-sm print:text-xs">
                                 {r.category === 'mensBand' 
                                   ? (r.mbWidth ? `${r.mbWidth} mm` : 'N/A') 
                                   : (r.category === 'customRing' || r.category === 'weddingBand') 
@@ -3548,9 +3564,9 @@ export default function QuoteCalculator({
                               </span>
                             </div>
 
-                            <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100">
-                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">Band Thickness</span>
-                              <span className="font-bold text-brand-950 text-sm">
+                            <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100 print:p-2 print:rounded-lg">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1 print:text-[8px]">Band Thickness</span>
+                              <span className="font-bold text-brand-950 text-sm print:text-xs">
                                 {r.category === 'mensBand' 
                                   ? (r.mbThickness ? `${r.mbThickness} mm` : 'N/A') 
                                   : (r.category === 'customRing' || r.category === 'weddingBand') 
@@ -3559,31 +3575,31 @@ export default function QuoteCalculator({
                               </span>
                             </div>
 
-                            <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100">
-                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">Target Metal Weight</span>
-                              <span className="font-mono font-bold text-brand-950 text-sm">
+                            <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100 print:p-2 print:rounded-lg">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1 print:text-[8px]">Target Metal Weight</span>
+                              <span className="font-mono font-bold text-brand-950 text-sm print:text-xs">
                                 {r.goldGrams || 'N/A'} grams
                               </span>
                             </div>
                           </div>
 
                           {/* Extra Specific Details */}
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
-                            <div className="bg-slate-50/30 p-2.5 rounded-xl border border-slate-100">
-                              <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Metal Alloy / Color</span>
-                              <span className="font-bold text-brand-900 block">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1 print:gap-2 print:pt-0">
+                            <div className="bg-slate-50/30 p-2.5 rounded-xl border border-slate-100 print:p-2 print:rounded-lg">
+                              <span className="text-[8px] font-black text-slate-400 uppercase block mb-1 print:text-[7px]">Metal Alloy / Color</span>
+                              <span className="font-bold text-brand-900 block print:text-[11px]">
                                 {r.goldKarat ? `${r.goldKarat}K` : ''} {r.metalColor} {r.material.toUpperCase()}
                               </span>
                             </div>
-                            <div className="bg-slate-50/30 p-2.5 rounded-xl border border-slate-100">
-                              <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Band Profile / Finish Style</span>
-                              <span className="font-bold text-brand-900 block">
+                            <div className="bg-slate-50/30 p-2.5 rounded-xl border border-slate-100 print:p-2 print:rounded-lg">
+                              <span className="text-[8px] font-black text-slate-400 uppercase block mb-1 print:text-[7px]">Band Profile / Finish Style</span>
+                              <span className="font-bold text-brand-900 block print:text-[11px]">
                                 {r.category === 'mensBand' ? (r.mbProfile || 'Step Edge Beveled') : (r.bandStyle || 'Solid plain shank / standard')}
                               </span>
                             </div>
-                            <div className="bg-slate-50/30 p-2.5 rounded-xl border border-slate-100">
-                              <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Stone Procurement Source</span>
-                              <span className={`font-black text-[10px] block ${r.stoneSource === 'customer' ? 'text-amber-600 font-bold' : 'text-emerald-600 font-bold'}`}>
+                            <div className="bg-slate-50/30 p-2.5 rounded-xl border border-slate-100 print:p-2 print:rounded-lg">
+                              <span className="text-[8px] font-black text-slate-400 uppercase block mb-1 print:text-[7px]">Stone Procurement Source</span>
+                              <span className={`font-black text-[10px] block print:text-[9px] ${r.stoneSource === 'customer' ? 'text-amber-600 font-bold' : 'text-emerald-600 font-bold'}`}>
                                 {r.stoneSource === 'customer' ? '⚠️ Client Supplied Stones' : '🏢 Company Inventory'}
                               </span>
                             </div>
@@ -3591,42 +3607,42 @@ export default function QuoteCalculator({
                         </div>
 
                         {/* Detailed Stones Specification Table */}
-                        <div className="space-y-2">
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block pl-1">Stones & Gemstones Configuration</span>
-                          <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-                            <table className="w-full text-left border-collapse text-xs font-mono">
+                        <div className="space-y-2 print:space-y-1">
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block pl-1 print:text-[8px]">Stones & Gemstones Configuration</span>
+                          <div className="border border-slate-200 rounded-xl overflow-hidden bg-white print:rounded-lg">
+                            <table className="w-full text-left border-collapse text-xs font-mono print:text-[10px]">
                               <thead>
                                 <tr className="bg-slate-100 text-slate-700 uppercase text-[8px] tracking-wider font-black border-b border-slate-200">
-                                  <th className="p-2.5 pl-3">Stone Type</th>
-                                  <th className="p-2.5">Shape / Cut</th>
-                                  <th className="p-2.5">Qty</th>
-                                  <th className="p-2.5">Size (mm)</th>
-                                  <th className="p-2.5">Total Ct Weight</th>
-                                  <th className="p-2.5 pr-3">Procurement Source</th>
+                                  <th className="p-2.5 pl-3 print:py-1 print:px-2 print:pl-2.5">Stone Type</th>
+                                  <th className="p-2.5 print:py-1 print:px-2">Shape / Cut</th>
+                                  <th className="p-2.5 print:py-1 print:px-2">Qty</th>
+                                  <th className="p-2.5 print:py-1 print:px-2">Size (mm)</th>
+                                  <th className="p-2.5 print:py-1 print:px-2">Total Ct Weight</th>
+                                  <th className="p-2.5 pr-3 print:py-1 print:px-2 print:pr-2.5">Procurement Source</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
                                 {/* Center Stone 1 */}
                                 {r.centerStone?.carats && (
                                   <tr>
-                                    <td className="p-2.5 pl-3 font-bold font-sans text-brand-950">Center Stone</td>
-                                    <td className="p-2.5 font-bold font-sans">{r.centerStone.shape}</td>
-                                    <td className="p-2.5">1</td>
-                                    <td className="p-2.5">--</td>
-                                    <td className="p-2.5 font-bold">{r.centerStone.carats} ct</td>
-                                    <td className="p-2.5 font-sans">{r.stoneSource === 'customer' ? 'Client' : `${r.centerStone.type} (${r.centerStone.origin})`}</td>
+                                    <td className="p-2.5 pl-3 font-bold font-sans text-brand-950 print:py-1 print:px-2 print:pl-2.5">Center Stone</td>
+                                    <td className="p-2.5 font-bold font-sans print:py-1 print:px-2">{r.centerStone.shape}</td>
+                                    <td className="p-2.5 print:py-1 print:px-2">1</td>
+                                    <td className="p-2.5 print:py-1 print:px-2">--</td>
+                                    <td className="p-2.5 font-bold print:py-1 print:px-2">{r.centerStone.carats} ct</td>
+                                    <td className="p-2.5 font-sans print:py-1 print:px-2">{r.stoneSource === 'customer' ? 'Client' : `${r.centerStone.type} (${r.centerStone.origin})`}</td>
                                   </tr>
                                 )}
 
                                 {/* Center Stone 2 for earrings */}
                                 {r.centerStone2?.carats && (
                                   <tr>
-                                    <td className="p-2.5 pl-3 font-bold font-sans text-brand-950">Center Stone 2 (Pair)</td>
-                                    <td className="p-2.5 font-bold font-sans">{r.centerStone2.shape}</td>
-                                    <td className="p-2.5">1</td>
-                                    <td className="p-2.5">--</td>
-                                    <td className="p-2.5 font-bold">{r.centerStone2.carats} ct</td>
-                                    <td className="p-2.5 font-sans">{r.stoneSource === 'customer' ? 'Client' : `${r.centerStone2.type} (${r.centerStone2.origin})`}</td>
+                                    <td className="p-2.5 pl-3 font-bold font-sans text-brand-950 print:py-1 print:px-2 print:pl-2.5">Center Stone 2 (Pair)</td>
+                                    <td className="p-2.5 font-bold font-sans print:py-1 print:px-2">{r.centerStone2.shape}</td>
+                                    <td className="p-2.5 print:py-1 print:px-2">1</td>
+                                    <td className="p-2.5 print:py-1 print:px-2">--</td>
+                                    <td className="p-2.5 font-bold print:py-1 print:px-2">{r.centerStone2.carats} ct</td>
+                                    <td className="p-2.5 font-sans print:py-1 print:px-2">{r.stoneSource === 'customer' ? 'Client' : `${r.centerStone2.type} (${r.centerStone2.origin})`}</td>
                                   </tr>
                                 )}
 
@@ -3637,12 +3653,12 @@ export default function QuoteCalculator({
                                   const totalCarats = count * singleCarat;
                                   return (
                                     <tr key={`m-${mIdx}`}>
-                                      <td className="p-2.5 pl-3 font-sans">Melee Accent ({mIdx + 1})</td>
-                                      <td className="p-2.5">Round Brilliant</td>
-                                      <td className="p-2.5">{count}</td>
-                                      <td className="p-2.5">{m.size ? `${m.size}mm` : 'N/A'}</td>
-                                      <td className="p-2.5 font-bold">{totalCarats.toFixed(2)} ctw</td>
-                                      <td className="p-2.5 font-sans">Company Inventory</td>
+                                      <td className="p-2.5 pl-3 font-sans print:py-1 print:px-2 print:pl-2.5">Melee Accent ({mIdx + 1})</td>
+                                      <td className="p-2.5 print:py-1 print:px-2">Round Brilliant</td>
+                                      <td className="p-2.5 print:py-1 print:px-2">{count}</td>
+                                      <td className="p-2.5 print:py-1 print:px-2">{m.size ? `${m.size}mm` : 'N/A'}</td>
+                                      <td className="p-2.5 font-bold print:py-1 print:px-2">{totalCarats.toFixed(2)} ctw</td>
+                                      <td className="p-2.5 font-sans print:py-1 print:px-2">Company Inventory</td>
                                     </tr>
                                   );
                                 })}
@@ -3652,12 +3668,12 @@ export default function QuoteCalculator({
                                   const count = parseInt(f.qty) || 0;
                                   return (
                                     <tr key={`f-${fIdx}`}>
-                                      <td className="p-2.5 pl-3 font-sans">Fancy Accent ({fIdx + 1})</td>
-                                      <td className="p-2.5 font-sans font-bold">{f.shape}</td>
-                                      <td className="p-2.5">{count}</td>
-                                      <td className="p-2.5">--</td>
-                                      <td className="p-2.5">--</td>
-                                      <td className="p-2.5 font-sans">Company Inventory</td>
+                                      <td className="p-2.5 pl-3 font-sans print:py-1 print:px-2 print:pl-2.5">Fancy Accent ({fIdx + 1})</td>
+                                      <td className="p-2.5 font-sans font-bold print:py-1 print:px-2">{f.shape}</td>
+                                      <td className="p-2.5 print:py-1 print:px-2">{count}</td>
+                                      <td className="p-2.5 print:py-1 print:px-2">--</td>
+                                      <td className="p-2.5 print:py-1 print:px-2">--</td>
+                                      <td className="p-2.5 font-sans print:py-1 print:px-2">Company Inventory</td>
                                     </tr>
                                   );
                                 })}
@@ -3665,19 +3681,19 @@ export default function QuoteCalculator({
                                 {/* Client Provided Custom Stones list if custom sources exist */}
                                 {Array.isArray(r.clientStones) && r.clientStones.filter(cs => parseInt(cs.qty) > 0).map((cs, csIdx) => (
                                   <tr key={`cs-${csIdx}`} className="bg-amber-50/50">
-                                    <td className="p-2.5 pl-3 font-bold font-sans text-amber-900">Client Supplied ({cs.type})</td>
-                                    <td className="p-2.5 font-sans font-bold text-amber-800">--</td>
-                                    <td className="p-2.5 text-amber-900">{cs.qty}</td>
-                                    <td className="p-2.5 text-amber-900">{cs.size || '--'}</td>
-                                    <td className="p-2.5 font-bold text-amber-900">{cs.carats || '--'} ct</td>
-                                    <td className="p-2.5 font-sans font-bold text-amber-800">Client Provided</td>
+                                    <td className="p-2.5 pl-3 font-bold font-sans text-amber-900 print:py-1 print:px-2 print:pl-2.5">Client Supplied ({cs.type})</td>
+                                    <td className="p-2.5 font-sans font-bold text-amber-800 print:py-1 print:px-2">--</td>
+                                    <td className="p-2.5 text-amber-900 print:py-1 print:px-2">{cs.qty}</td>
+                                    <td className="p-2.5 text-amber-900 print:py-1 print:px-2">{cs.size || '--'}</td>
+                                    <td className="p-2.5 font-bold text-amber-900 print:py-1 print:px-2">{cs.carats || '--'} ct</td>
+                                    <td className="p-2.5 font-sans font-bold text-amber-800 print:py-1 print:px-2">Client Provided</td>
                                   </tr>
                                 ))}
 
                                 {/* If no stones whatsoever */}
                                 {!r.centerStone?.carats && !r.centerStone2?.carats && !r.melee.some(m => parseInt(m.qty) > 0) && !r.fancy.some(f => parseInt(f.qty) > 0) && (!Array.isArray(r.clientStones) || r.clientStones.filter(cs => parseInt(cs.qty) > 0).length === 0) && (
                                   <tr>
-                                    <td colSpan={6} className="p-4 text-center font-sans text-slate-400 italic">
+                                    <td colSpan={6} className="p-4 text-center font-sans text-slate-400 italic print:py-2">
                                       No stones / gemstones specified. Plain metal band / design.
                                     </td>
                                   </tr>
@@ -3689,22 +3705,22 @@ export default function QuoteCalculator({
 
                         {/* Special Instructions & Engraving */}
                         {(r.showEngraving || r.designNotes?.length > 0) && (
-                          <div className="bg-white p-4 rounded-xl border border-slate-100 text-xs space-y-3">
+                          <div className="bg-white p-4 rounded-xl border border-slate-100 text-xs space-y-3 print:p-2.5 print:space-y-1.5 print:rounded-lg">
                             {r.showEngraving && r.engravingText && (
-                              <div className="border-b border-slate-100 pb-2.5">
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">Inside Shank Laser Engraving</span>
-                                <span className="block font-bold text-brand-900 italic" style={{ fontFamily: r.engravingFont }}>
-                                  " {r.engravingText} " <span className="font-sans text-[10px] text-slate-400 font-normal"> (Font: {r.engravingFont})</span>
+                              <div className="border-b border-slate-100 pb-2.5 print:pb-1">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1 print:text-[8px] print:mb-0.5">Inside Shank Laser Engraving</span>
+                                <span className="block font-bold text-brand-900 italic print:text-[10px]" style={{ fontFamily: r.engravingFont }}>
+                                  " {r.engravingText} " <span className="font-sans text-[10px] text-slate-400 font-normal print:text-[8px]"> (Font: {r.engravingFont})</span>
                                 </span>
                               </div>
                             )}
                             {r.designNotes?.length > 0 && (
                               <div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">CAD Designer Notes & Blueprint Instructions</span>
-                                <div className="space-y-1.5 pl-2">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1.5 print:text-[8px] print:mb-0.5">CAD Designer Notes & Blueprint Instructions</span>
+                                <div className="space-y-1.5 pl-2 print:space-y-0.5">
                                   {r.designNotes.map((n, ni) => (
-                                    <p key={ni} className="text-xs text-slate-700 leading-relaxed font-sans flex items-start gap-1.5">
-                                      <span className="text-brand-gold font-bold mt-0.5">•</span>
+                                    <p key={ni} className="text-xs text-slate-700 leading-relaxed font-sans flex items-start gap-1.5 print:text-[10px]">
+                                      <span className="text-brand-gold font-bold mt-0.5 print:mt-0">•</span>
                                       {n.text}
                                     </p>
                                   ))}
@@ -3716,19 +3732,19 @@ export default function QuoteCalculator({
 
                         {/* Visual References: Sketches & Photos rendered directly inside the specific piece's specs sheet */}
                         {(rSketches.length > 0 || rPhotos.length > 0) && (
-                          <div className="space-y-3 pt-2">
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block pl-1">Visual Mockup References</span>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="space-y-3 pt-2 print:space-y-1 print:pt-1">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block pl-1 print:text-[8px]">Visual Mockup References</span>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 print:gap-2">
                               {rSketches.map((sk, skIdx) => (
-                                <div key={`sk-${skIdx}`} className="border border-slate-200 rounded-xl p-2 bg-white flex flex-col items-center">
-                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-1.5">Reference Sketch {skIdx + 1}</span>
-                                  <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-44 w-full object-contain rounded-lg" />
+                                <div key={`sk-${skIdx}`} className="border border-slate-200 rounded-xl p-2 bg-white flex flex-col items-center print:p-1 print:rounded-lg">
+                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-1.5 print:mb-0.5 print:text-[7px]">Sketch {skIdx + 1}</span>
+                                  <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-44 w-full object-contain rounded-lg print:h-20 print:rounded" />
                                 </div>
                               ))}
                               {rPhotos.map((ph, phIdx) => (
-                                <div key={`ph-${phIdx}`} className="border border-slate-200 rounded-xl p-2 bg-white flex flex-col items-center">
-                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-1.5">Reference Photo {phIdx + 1}</span>
-                                  <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-44 w-full object-contain rounded-lg" />
+                                <div key={`ph-${phIdx}`} className="border border-slate-200 rounded-xl p-2 bg-white flex flex-col items-center print:p-1 print:rounded-lg">
+                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-1.5 print:mb-0.5 print:text-[7px]">Photo {phIdx + 1}</span>
+                                  <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-44 w-full object-contain rounded-lg print:h-20 print:rounded" />
                                 </div>
                               ))}
                             </div>
@@ -3740,13 +3756,13 @@ export default function QuoteCalculator({
                 </div>
 
                 {/* Signature / Approval block for CAD Designer */}
-                <div className="border-t border-brand-200 pt-6">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">CAD Model Verification Sign-off</h4>
-                  <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-50 p-5 rounded-2xl border border-slate-200 gap-4">
-                    <p className="text-[11px] text-slate-500 italic leading-relaxed max-w-md">
+                <div className="border-t border-brand-200 pt-6 print:pt-3">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 print:mb-1 print:text-[8px]">CAD Model Verification Sign-off</h4>
+                  <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-50 p-5 rounded-2xl border border-slate-200 gap-4 print:p-3 print:rounded-xl print:gap-2">
+                    <p className="text-[11px] text-slate-500 italic leading-relaxed max-w-md print:text-[9px] print:leading-snug">
                       "I hereby certify that these digital specifications, measurements, and references have been cross-checked and approved for CAD modeling & 3D prototyping."
                     </p>
-                    <div className="border-2 border-dashed border-slate-300 w-44 h-16 rounded-xl flex items-center justify-center bg-white text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                    <div className="border-2 border-dashed border-slate-300 w-44 h-16 rounded-xl flex items-center justify-center bg-white text-[9px] font-black text-slate-400 uppercase tracking-widest print:w-32 print:h-10 print:text-[8px]">
                       Designer Initial / Date
                     </div>
                   </div>
