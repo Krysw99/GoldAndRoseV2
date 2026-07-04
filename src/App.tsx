@@ -15,7 +15,7 @@ import {
   ScrapItem, JewelryItem 
 } from './types';
 import { DEFAULT_SETTINGS, TROY_ONCE_GRAMS, FANCY_SHAPES, ROUND_MELEE } from './constants';
-import { getEmptyQuoteSession, upgradeRingData, calculateRingCost } from './utils';
+import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession } from './utils';
 
 // Modular Components
 import ScrapCalculator from './components/ScrapCalculator';
@@ -64,7 +64,37 @@ export default function App() {
       if (st) setScrapTransactions(JSON.parse(st));
 
       const rt = localStorage.getItem('gr_quote_ledger');
-      if (rt) setRingQuoteTransactions(JSON.parse(rt));
+      if (rt) {
+        setRingQuoteTransactions(JSON.parse(rt));
+      } else {
+        // Seed with custom demo 3-piece wedding set
+        const demoSession = getDemoQuoteSession();
+        let gT = 0;
+        let tD = 0;
+        demoSession.rings.forEach(r => {
+          const cost = calculateRingCost(r, DEFAULT_SETTINGS, { gold: 2350, silver: 30, platinum: 1050 }, 'retail', demoSession.overridePrices);
+          gT += cost;
+          const val = parseFloat(r.discount) || 0;
+          tD += r.discountType === '%' ? cost * (val / 100) : val;
+        });
+        const sub = Math.max(0, gT - tD - Number(demoSession.scrapCredit));
+        const finalInvoiceAmount = sub + (demoSession.applyTax ? sub * 0.12 : 0);
+        const demoTotal = `$${finalInvoiceAmount.toFixed(2)}`;
+
+        const demoTx: QuoteTransaction = {
+          id: demoSession.id,
+          date: new Date().toLocaleString(),
+          name: demoSession.cName,
+          phone: demoSession.cPhone,
+          summary: "Ring: 4.8g | Band: 3.5g | Men's: 7.2g",
+          total: demoTotal,
+          fullData: demoSession,
+          isWholesale: false
+        };
+
+        setRingQuoteTransactions([demoTx]);
+        localStorage.setItem('gr_quote_ledger', JSON.stringify([demoTx]));
+      }
 
       const wt = localStorage.getItem('gr_wholesale_ledger');
       if (wt) setWholesaleTransactions(JSON.parse(wt));
@@ -107,7 +137,7 @@ export default function App() {
 
   // Fetch GoldAPI CAD Spot Indices
   const fetchLivePrices = async () => {
-    if (!goldApiKey || goldApiKey === 'goldapi-472c240569490d4d25bde6da08749829-io') {
+    if (!goldApiKey || goldApiKey === 'INSERT_YOUR_NEW_KEY_HERE') {
       alert("Please configure a valid GoldAPI.io Access Token in the Master Settings panel first.");
       return;
     }
@@ -428,6 +458,47 @@ export default function App() {
     }
   };
 
+  const handleCreateDemoTransaction = () => {
+    const demoSession = getDemoQuoteSession();
+    
+    // If already exists, regenerate with fresh ID to allow multiple test lines if desired, or select/alert
+    const hasExisting = ringQuoteTransactions.some(q => q.id === demoSession.id);
+    if (hasExisting) {
+      demoSession.id = `demo-set-wedding-quote-${Math.random().toString(36).substring(2, 6)}`;
+    }
+
+    let gT = 0;
+    let tD = 0;
+    demoSession.rings.forEach(r => {
+      const cost = calculateRingCost(r, settings, spotPrices, 'retail', demoSession.overridePrices);
+      gT += cost;
+      const val = parseFloat(r.discount) || 0;
+      tD += r.discountType === '%' ? cost * (val / 100) : val;
+    });
+    const sub = Math.max(0, gT - tD - Number(demoSession.scrapCredit));
+    const finalInvoiceAmount = sub + (demoSession.applyTax ? sub * 0.12 : 0);
+    const demoTotal = `$${finalInvoiceAmount.toFixed(2)}`;
+
+    const demoTx: QuoteTransaction = {
+      id: demoSession.id,
+      date: new Date().toLocaleString(),
+      name: demoSession.cName,
+      phone: demoSession.cPhone,
+      summary: "Ring: 4.8g | Band: 3.5g | Men's: 7.2g",
+      total: demoTotal,
+      fullData: demoSession,
+      isWholesale: false
+    };
+
+    setRingQuoteTransactions(prev => {
+      const updated = [demoTx, ...prev];
+      localStorage.setItem('gr_quote_ledger', JSON.stringify(updated));
+      return updated;
+    });
+
+    alert("Success! Added custom wedding set demo quote with Engagement, Band, and Men's Bevel Band to your Retail Ledger.");
+  };
+
   // Sketchpad trigger handlers
   const handleSketchSave = (dataUrl: string) => {
     const isWholesale = activeTab === 'wholesale';
@@ -485,7 +556,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-100 text-brand-800 flex flex-col font-sans selection:bg-brand-gold selection:text-brand-900 pb-12">
       
       {/* 1. TOP BRANDING NAV HEADER */}
-      <header className="bg-brand-900 text-white shadow-md border-b border-brand-800 py-4 px-6 sticky top-0 z-50">
+      <header className="bg-brand-900 text-white shadow-md border-b border-brand-800 py-4 px-6 sticky top-0 z-50 print:hidden">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3 w-full md:w-auto">
             <div className="bg-brand-gold text-brand-900 p-2 rounded-xl shadow-md rotate-3 font-serif italic text-lg font-black">
@@ -537,7 +608,7 @@ export default function App() {
         
         {/* Floating Quick spot weight metal calculator desk */}
         {activeTab === 'scrap' && (
-          <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm flex flex-wrap gap-4 items-center justify-between">
+          <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm flex flex-wrap gap-4 items-center justify-between print:hidden">
             <div className="flex items-center gap-2 text-brand-700">
               <Scale size={16} className="text-brand-gold" />
               <span className="text-xs font-black uppercase tracking-wider">Quick Spot Weight Estimator</span>
@@ -575,7 +646,7 @@ export default function App() {
         )}
 
         {/* Global tab rails */}
-        <div className="flex overflow-x-auto hide-scrollbar whitespace-nowrap gap-1.5 border-b border-brand-200 pb-2">
+        <div className="flex overflow-x-auto hide-scrollbar whitespace-nowrap gap-1.5 border-b border-brand-200 pb-2 print:hidden">
           <button
             type="button"
             onClick={() => setActiveTab('scrap')}
@@ -694,6 +765,7 @@ export default function App() {
               onDeleteTransaction={handleDeleteLedgerItem}
               onLoadIntoEditor={handleLoadQuote}
               settings={settings}
+              onAddDemoTransaction={handleCreateDemoTransaction}
             />
           )}
 

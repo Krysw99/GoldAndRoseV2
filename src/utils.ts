@@ -587,3 +587,140 @@ export function calculateScrapTotal(scrapItems: ScrapItem[], spotPrices: { gold:
   const payout = scrapItems.reduce((total, item) => total + calculateScrapItemValue(item, spotPrices), 0);
   return Math.max(0, payout - (Number(stoneRemovalQty || 0) * 5));
 }
+
+export function getDemoQuoteSession(): QuoteSession {
+  const engId = genId();
+  const wedId = genId();
+  const menId = genId();
+
+  // 1. Engagement Ring
+  const engagementRing: JewelryItem = {
+    id: engId,
+    category: 'customRing',
+    stoneSource: 'our',
+    custCenterCt: '1.50',
+    custMeleeCount: '16',
+    material: 'gold',
+    metalColor: 'White',
+    goldKarat: 18,
+    goldGrams: '4.8',
+    cRingSize: '6.5',
+    cBandWidth: '2.2',
+    cBandThickness: '1.8',
+    bandStyle: 'Pavé Accent Shank (6 Claw Solitaire)',
+    fancy: [],
+    melee: [{ qty: '16', carat: '0.015', size: '1.5' }],
+    clientStones: [],
+    addons: [{ fee: '250', desc: 'Custom 3D CAD modeling and wax printing fee' }],
+    showEngraving: true,
+    engravingText: 'Forever Yours',
+    engravingFont: "'Times New Roman', Times, serif",
+    designNotes: [
+      { text: 'Center: 1.50ct Round Lab Diamond (Excellent cut, VVS2, E colour).' },
+      { text: 'Setting: Extra secure 6-claw wire basket prongs, low-profile.' },
+      { text: 'Ensure perfect contour match with companion wedding band.' }
+    ],
+    discount: '',
+    discountType: '$',
+    applyDesignFee: true,
+    referenceSketches: [
+      `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%25" height="100%25" style="background:%230b0f19"><circle cx="100" cy="115" r="45" fill="none" stroke="%2338bdf8" stroke-width="2" stroke-dasharray="3,3" opacity="0.6"/><circle cx="100" cy="115" r="40" fill="none" stroke="%23e2e8f0" stroke-width="4"/><path d="M100 75 L85 45 L100 25 L115 45 Z" fill="none" stroke="%23fbbf24" stroke-width="2"/><line x1="85" y1="45" x2="115" y2="45" stroke="%23fbbf24" stroke-width="1"/><line x1="100" y1="75" x2="100" y2="25" stroke="%2338bdf8" stroke-width="1" stroke-dasharray="2,2"/><circle cx="100" cy="115" r="4" fill="none" stroke="%23f43f5e" stroke-width="1.5"/><text x="100" y="180" fill="%2364748b" font-size="10" font-family="monospace" text-anchor="middle">CAD: ORTHO_FRONT_1</text></svg>`
+    ],
+    referencePhotos: [
+      `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%25" height="100%25" style="background:%230f172a"><circle cx="100" cy="115" r="42" fill="none" stroke="%23475569" stroke-width="6"/><circle cx="100" cy="115" r="39" fill="none" stroke="%23f8fafc" stroke-width="1.5"/><path d="M100 73 L90 52 L100 35 L110 52 Z" fill="%23f8fafc" stroke="%2338bdf8" stroke-width="1"/><circle cx="100" cy="115" r="5" fill="%23f43f5e" opacity="0.5"/><text x="100" y="180" fill="%23e2e8f0" font-size="9" font-family="sans-serif" text-anchor="middle">3D RENDERING: MODEL_V1</text></svg>`
+    ],
+    centerStone: { carats: '1.50', shape: 'Round', setting: 'Round Prongs', type: 'Diamond', origin: 'Lab' }
+  };
+
+  // 2. Wedding Band
+  const weddingBand: JewelryItem = {
+    id: wedId,
+    category: 'weddingBand',
+    stoneSource: 'our',
+    custCenterCt: '',
+    custMeleeCount: '20',
+    material: 'gold',
+    metalColor: 'White',
+    goldKarat: 18,
+    goldGrams: '3.5',
+    cRingSize: '6.5',
+    cBandWidth: '2.0',
+    cBandThickness: '1.6',
+    bandStyle: 'Contoured Curved Eternity (Half-Loop)',
+    fancy: [],
+    melee: [{ qty: '20', carat: '0.01', size: '1.3' }],
+    clientStones: [],
+    addons: [],
+    showEngraving: true,
+    engravingText: '04.07.2026',
+    engravingFont: "'Times New Roman', Times, serif",
+    designNotes: [
+      { text: 'Contoured slight bend of 1.2mm depth in center to nest neatly under engagement ring basket.' },
+      { text: 'U-cut micro-pave setting on the accent stones.' },
+      { text: 'Ensure heights match perfectly with Engagement shank.' }
+    ],
+    discount: '',
+    discountType: '$',
+    applyDesignFee: false,
+    referenceSketches: [
+      `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%25" height="100%25" style="background:%230b0f19"><path d="M50 115 C50 115 100 135 150 115" fill="none" stroke="%23e2e8f0" stroke-width="4"/><path d="M48 114 C48 114 100 137 152 114" fill="none" stroke="%2338bdf8" stroke-width="1.5" stroke-dasharray="2,2"/><circle cx="100" cy="126" r="3" fill="%23fbbf24"/><circle cx="85" cy="124" r="2.5" fill="%23fbbf24"/><circle cx="115" cy="124" r="2.5" fill="%23fbbf24"/><circle cx="70" cy="121" r="2.5" fill="%23fbbf24"/><circle cx="130" cy="121" r="2.5" fill="%23fbbf24"/><text x="100" y="180" fill="%2364748b" font-size="10" font-family="monospace" text-anchor="middle">CAD: MATCHING_BAND</text></svg>`
+    ],
+    referencePhotos: [],
+    centerStone: { carats: '', shape: 'Round', setting: 'Round Prongs', type: 'Diamond', origin: 'Lab' }
+  };
+
+  // 3. Men's Beveled Band
+  const mensBand: JewelryItem = {
+    id: menId,
+    category: 'mensBand',
+    stoneSource: 'our',
+    custCenterCt: '',
+    custMeleeCount: '',
+    material: 'gold',
+    metalColor: 'Yellow',
+    goldKarat: 14,
+    goldGrams: '7.2',
+    mbSize: '10.0',
+    mbWidth: '6.0',
+    mbThickness: '2.0',
+    mbProfile: 'Beveled',
+    bandStyle: 'Step Edge Beveled - Comfort Fit Dual Finish',
+    fancy: [],
+    melee: [],
+    clientStones: [],
+    addons: [],
+    showEngraving: true,
+    engravingText: 'A.R. & J.L. Forever',
+    engravingFont: "'Times New Roman', Times, serif",
+    designNotes: [
+      { text: 'Dual finish style: high-polished beveled edges with heavy sandblast matte center portion.' },
+      { text: 'Shank interior must be Comfort-Fit with generous rounded corners.' },
+      { text: 'Inner engraving centered on back of shank.' }
+    ],
+    discount: '',
+    discountType: '$',
+    applyDesignFee: false,
+    referenceSketches: [
+      `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%25" height="100%25" style="background:%230b0f19"><rect x="50" y="80" width="100" height="40" rx="3" fill="none" stroke="%2338bdf8" stroke-width="1.5" stroke-dasharray="2,2"/><path d="M50 84 L150 84 M50 116 L150 116" stroke="%23fbbf24" stroke-width="1.5"/><rect x="55" y="88" width="90" height="24" fill="%231e293b" opacity="0.8"/><text x="100" y="103" fill="%2394a3b8" font-size="8" font-family="sans-serif" text-anchor="middle" letter-spacing="1">MATTE CENTER</text><text x="100" y="180" fill="%2364748b" font-size="10" font-family="monospace" text-anchor="middle">CAD: MENS_BEVEL_6MM</text></svg>`
+    ],
+    referencePhotos: [],
+    centerStone: { carats: '', shape: 'Round', setting: 'Round Prongs', type: 'Diamond', origin: 'Lab' }
+  };
+
+  return {
+    id: 'demo-set-wedding-quote',
+    cName: 'Alexander Ross',
+    cPhone: '604-555-0145',
+    cEmail: 'alexander.ross@gmail.com',
+    jobNum: 'GR-2026-904',
+    jobDesc: 'Custom 3-Piece Wedding Set: 1.5ct Solitaire Engagement Ring, Matching Contoured Wave Wedding Band & Men\'s Comfort Bevel Step Band',
+    applyTax: true,
+    notes: 'Premium custom order. Specially prepared for CAD production blueprint evaluation.',
+    activeSubTab: engId,
+    rings: [engagementRing, weddingBand, mensBand],
+    scrapCredit: 0,
+    signatureImg: null,
+    referenceSketch: null,
+    referencePhoto: null
+  };
+}

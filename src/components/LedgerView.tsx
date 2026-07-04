@@ -21,6 +21,7 @@ interface LedgerViewProps {
   onDeleteTransaction: (type: 'scrap' | 'retail' | 'wholesale', id: string) => void;
   onLoadIntoEditor: (id: string, isWholesale: boolean) => void;
   settings: AppSettings;
+  onAddDemoTransaction?: () => void;
 }
 
 export default function LedgerView({
@@ -29,7 +30,8 @@ export default function LedgerView({
   wholesaleTransactions,
   onDeleteTransaction,
   onLoadIntoEditor,
-  settings
+  settings,
+  onAddDemoTransaction
 }: LedgerViewProps) {
   const [activeLedger, setActiveLedger] = useState<'scrap' | 'retail' | 'wholesale'>('retail');
   const [search, setSearch] = useState('');
@@ -130,10 +132,23 @@ export default function LedgerView({
         {/* Transactions list queue */}
         <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 hide-scrollbar">
           {activeLedger === 'retail' && (
-            filteredRetail.length === 0 ? (
-              <p className="text-center text-xs text-brand-400 py-10 italic">No retail ledger lines found</p>
-            ) : (
-              filteredRetail.map(tx => (
+            <>
+              {onAddDemoTransaction && (
+                <div className="mb-3">
+                  <button
+                    type="button"
+                    onClick={onAddDemoTransaction}
+                    className="w-full py-2.5 px-3 bg-brand-900 hover:bg-brand-gold text-brand-gold hover:text-brand-900 border border-brand-800 hover:border-brand-gold/50 rounded-xl text-[11px] font-black tracking-wider uppercase shadow-sm transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <Sparkles size={12} />
+                    Generate Wedding Set Demo Quote
+                  </button>
+                </div>
+              )}
+              {filteredRetail.length === 0 ? (
+                <p className="text-center text-xs text-brand-400 py-10 italic">No retail ledger lines found</p>
+              ) : (
+                filteredRetail.map(tx => (
                 <div
                   key={tx.id}
                   onClick={() => setSelectedTx({ type: 'retail', id: tx.id })}
@@ -156,7 +171,8 @@ export default function LedgerView({
                   </div>
                 </div>
               ))
-            )
+            )}
+            </>
           )}
 
           {activeLedger === 'wholesale' && (

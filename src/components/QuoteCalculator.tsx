@@ -1046,6 +1046,7 @@ export default function QuoteCalculator({
   const [showAddModal, setShowAddModal] = useState(false);
   const [activeCADStyle, setActiveCADStyle] = useState<string | null>(null);
   const [simViewMode, setSimViewMode] = useState<'realistic' | 'blueprint'>('realistic');
+  const [isDesignerMode, setIsDesignerMode] = useState(false);
 
   // Active ring being edited in the subtab
   const activeRing = session.rings.find(r => r.id === session.activeSubTab);
@@ -1324,7 +1325,7 @@ export default function QuoteCalculator({
     <div className="space-y-6 max-w-7xl mx-auto animate-fadeIn">
       {/* 1. Client Intake Form */}
       {!isWholesale ? (
-        <div className="bg-[#f8fafc] rounded-2xl border border-slate-200/60 p-5 shadow-sm">
+        <div className="bg-[#f8fafc] rounded-2xl border border-slate-200/60 p-5 shadow-sm print:hidden">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4">Client Intake</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
@@ -1360,7 +1361,7 @@ export default function QuoteCalculator({
           </div>
         </div>
       ) : (
-        <div className="bg-[#f0fdf4] rounded-2xl border border-emerald-100 p-5 shadow-sm space-y-4">
+        <div className="bg-[#f0fdf4] rounded-2xl border border-emerald-100 p-5 shadow-sm space-y-4 print:hidden">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Wholesale Account Intake</h3>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div>
@@ -1464,7 +1465,7 @@ export default function QuoteCalculator({
 
       {/* 2. Grand Total / Session Breakdown Banner */}
       {!isWholesale ? (
-        <div className="bg-[#0f172a] text-white rounded-3xl p-6 shadow-md relative overflow-hidden">
+        <div className="bg-[#0f172a] text-white rounded-3xl p-6 shadow-md relative overflow-hidden print:hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-[#1e293b] to-slate-900 opacity-50"></div>
           <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
             {/* Left Side: Piece Breakdown */}
@@ -1529,7 +1530,7 @@ export default function QuoteCalculator({
           </div>
         </div>
       ) : (
-        <div className="bg-[#0f2d24] text-white rounded-3xl p-6 shadow-md relative overflow-hidden">
+        <div className="bg-[#0f2d24] text-white rounded-3xl p-6 shadow-md relative overflow-hidden print:hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-[#061f18] via-[#0d2d22] to-[#061f18] opacity-50"></div>
           <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
             {/* Left Side: Breakdown list */}
@@ -1620,7 +1621,7 @@ export default function QuoteCalculator({
       )}
 
       {/* 3. Capsule Tabs Bar */}
-      <div className="flex overflow-x-auto hide-scrollbar whitespace-nowrap items-center gap-2 border-b border-slate-100 pb-3">
+      <div className="flex overflow-x-auto hide-scrollbar whitespace-nowrap items-center gap-2 border-b border-slate-100 pb-3 print:hidden">
         {session.rings.map((r, idx) => {
           const isSelected = session.activeSubTab === r.id;
           const label = r.category === 'customRing' ? 'Engagement' 
@@ -3229,190 +3230,542 @@ export default function QuoteCalculator({
         {/* SUMMARY & TAX CONFIGURATION TAB */}
         {session.activeSubTab === 'summary' && (
           <div className="space-y-6 animate-fadeIn print:bg-white print:p-0">
-            {/* Beautiful Printable Invoice View */}
-            <div className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none">
-              {/* Invoice Header */}
-              <div className="flex justify-between items-start border-b border-brand-200 pb-6">
-                <div>
-                  <h1 className="font-serif italic font-black text-3xl text-brand-900 tracking-tight">Gold & Rose</h1>
-                  <p className="text-[10px] text-brand-500 font-mono uppercase tracking-widest mt-1">Jewellery Corporation</p>
-                  <p className="text-xs text-brand-600 mt-2">Suite 120 - 4590 Kingsway, Burnaby, BC</p>
-                  <p className="text-xs text-brand-600">info@goldandrose.com | 604-555-0192</p>
-                </div>
-                <div className="text-right">
-                  <span className="bg-brand-900 text-brand-gold px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
-                    {isWholesale ? 'Wholesale Agreement' : 'Custom Retail Estimate'}
-                  </span>
-                  <p className="text-xs text-brand-500 font-mono mt-3">Date: {new Date().toLocaleDateString()}</p>
-                  {session.jobNum && <p className="text-xs font-bold text-brand-800 mt-1">Job #: {session.jobNum}</p>}
-                </div>
+            {/* Print Mode Selector Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-brand-200 shadow-sm flex flex-wrap gap-4 items-center justify-between print:hidden">
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-widest text-brand-900 flex items-center gap-1.5">
+                  <FileText size={14} className="text-brand-gold" />
+                  Print & PDF Configuration
+                </h3>
+                <p className="text-[10px] text-brand-500 mt-0.5">
+                  Choose between the Customer Invoice copy or a CAD Designer's Blueprint specification sheet.
+                </p>
               </div>
-
-              {/* Client Credentials & Brief Summary Info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-brand-50 p-5 rounded-2xl border border-brand-200">
-                <div>
-                  <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2">Customer Details</h3>
-                  <p className="text-sm font-bold text-brand-950">{session.cName || 'Unnamed Customer'}</p>
-                  {session.cPhone && <p className="text-xs text-brand-600 mt-1">Phone: {session.cPhone}</p>}
-                  {session.cEmail && <p className="text-xs text-brand-600">Email: {session.cEmail}</p>}
-                </div>
-                {session.jobDesc && (
-                  <div>
-                    <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2">Design Description</h3>
-                    <p className="text-xs text-brand-700 leading-relaxed italic">"{session.jobDesc}"</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Items Table */}
-              <div className="space-y-4">
-                <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest pl-1">Jewelry Specifications Breakdown</h3>
-                <div className="border border-brand-200 rounded-2xl overflow-hidden shadow-sm">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-brand-900 text-brand-gold border-b border-brand-800 uppercase text-[9px] tracking-wider font-black">
-                        <th className="p-3 pl-4">Piece</th>
-                        <th className="p-3">Metal / Material</th>
-                        <th className="p-3">Gems & Stones</th>
-                        <th className="p-3">Special Addons / Notes</th>
-                        <th className="p-3 pr-4 text-right">Price</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-brand-100">
-                      {session.rings.filter(r => hasRingData(r)).map((r, ri) => {
-                        const cost = calculateRingCost(r, settings, spotPrices, isWholesale ? 'wholesale' : 'retail', session.overridePrices);
-                        const discVal = parseFloat(r.discount) || 0;
-                        const discDeduction = r.discountType === '%' ? cost * (discVal / 100) : discVal;
-                        const finalPieceCost = Math.max(0, cost - discDeduction);
-
-                        return (
-                          <tr key={r.id} className="hover:bg-brand-50/50 transition-colors">
-                            <td className="p-3 pl-4 font-bold text-brand-900">
-                              #{ri + 1} {r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis'}
-                            </td>
-                            <td className="p-3">
-                              <span className="font-semibold block">{r.goldKarat ? `${r.goldKarat}K` : ''} {r.metalColor} {r.material}</span>
-                              <span className="text-[10px] text-brand-500 font-mono">{r.goldGrams || '0.0'}g</span>
-                            </td>
-                            <td className="p-3 space-y-1">
-                              {r.centerStone?.carats && (
-                                <span className="block text-[11px]">
-                                  Center: {r.centerStone.carats}ct {r.centerStone.shape} {r.centerStone.type} ({r.centerStone.origin})
-                                </span>
-                              )}
-                              {r.centerStone2?.carats && (
-                                <span className="block text-[11px]">
-                                  Stone 2: {r.centerStone2.carats}ct {r.centerStone2.shape} {r.centerStone2.type} ({r.centerStone2.origin})
-                                </span>
-                              )}
-                              {r.melee.some(m => m.qty) && (
-                                <span className="block text-[10px] text-brand-600 font-mono">
-                                  Melee: {r.melee.reduce((acc, m) => acc + (parseInt(m.qty) || 0), 0)} st ({r.melee.reduce((acc, m) => acc + ((parseInt(m.qty) || 0) * (parseFloat(m.carat) || 0)), 0).toFixed(2)}ctw)
-                                </span>
-                              )}
-                              {r.fancy.some(f => f.qty) && (
-                                <span className="block text-[10px] text-brand-600 font-mono">
-                                  Fancy: {r.fancy.reduce((acc, f) => acc + (parseInt(f.qty) || 0), 0)} st
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-3 space-y-1">
-                              {r.engravingText && <span className="block text-xs font-semibold italic" style={{ fontFamily: r.engravingFont }}>"Engraved: {r.engravingText}"</span>}
-                              {r.designNotes.map((n, ni) => <span key={ni} className="block text-[10px] text-brand-500 leading-tight">• {n.text}</span>)}
-                            </td>
-                            <td className="p-3 pr-4 text-right font-mono font-bold text-brand-950">
-                              ${finalPieceCost.toFixed(2)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Dynamic Mockups Thumbnail Anchors side-by-side inside the Invoice */}
-              {session.rings.some(r => r.referenceSketch || r.referencePhoto || (Array.isArray(r.referenceSketches) && r.referenceSketches.length > 0) || (Array.isArray(r.referencePhotos) && r.referencePhotos.length > 0)) && (
-                <div className="border-t border-brand-100 pt-6 space-y-4">
-                  <h4 className="text-[10px] font-black text-brand-800 uppercase tracking-widest text-center">Reference Sketches & Photos</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {session.rings.map((r, ri) => {
-                      const rSketches = Array.isArray(r.referenceSketches) ? r.referenceSketches : (r.referenceSketch ? [r.referenceSketch] : []);
-                      const rPhotos = Array.isArray(r.referencePhotos) ? r.referencePhotos : (r.referencePhoto ? [r.referencePhoto] : []);
-                      if (rSketches.length === 0 && rPhotos.length === 0) return null;
-                      return (
-                        <div key={r.id} className="border border-brand-100 bg-brand-50/20 rounded-2xl p-3 space-y-3">
-                          <p className="text-[10px] font-black uppercase text-brand-600 tracking-wider">
-                            Piece {ri + 1}: {r.category === 'customRing' ? 'Custom Ring' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis'}
-                          </p>
-                          <div className="grid grid-cols-2 gap-2">
-                            {rSketches.map((sk, skIdx) => (
-                              <div key={`sk-${skIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center">
-                                <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1">Sketch {skIdx + 1}</span>
-                                <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-28 w-full object-contain rounded" />
-                              </div>
-                            ))}
-                            {rPhotos.map((ph, phIdx) => (
-                              <div key={`ph-${phIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center">
-                                <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1">Photo {phIdx + 1}</span>
-                                <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-28 w-full object-contain rounded" />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Pricing Math calculations details */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-brand-200 pt-6">
-                <div className="text-xs text-brand-600 leading-relaxed font-mono">
-                  <p className="font-sans text-brand-700 font-bold uppercase text-[10px] tracking-wider mb-2">Transaction Ledger Notes</p>
-                  <p className="text-brand-500 leading-relaxed italic">Estimates are based on dynamic spot valuations in CAD.</p>
-                  <div className="flex items-center gap-3 mt-3 pt-3 border-t border-brand-100">
-                    <span className="text-xs font-bold text-brand-700">Charge BC Sales Tax (12%)</span>
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 text-brand-gold bg-brand-100 border-brand-300 rounded focus:ring-brand-gold focus:ring-2 accent-brand-gold"
-                      checked={session.applyTax}
-                      onChange={(e) => onChangeSession(prev => ({ ...prev, applyTax: e.target.checked }))}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2 text-xs font-mono text-brand-700">
-                  <div className="flex justify-between"><span>Gross Total Cost:</span><span>${totals.grossTotal.toFixed(2)}</span></div>
-                  {totals.totalDiscount > 0 && <div className="flex justify-between text-red-600"><span>Client Deduction Reductions:</span><span>-${totals.totalDiscount.toFixed(2)}</span></div>}
-                  {Number(session.scrapCredit) > 0 && <div className="flex justify-between text-green-600"><span>Connected Scrap Payout Credit:</span><span>-${Number(session.scrapCredit).toFixed(2)}</span></div>}
-                  <div className="border-t border-brand-200 my-1"></div>
-                  <div className="flex justify-between"><span>Subtotal Value:</span><span>${totals.subtotal.toFixed(2)}</span></div>
-                  {session.applyTax && <div className="flex justify-between"><span>BC Taxes & GST (12%):</span><span>+${totals.tax.toFixed(2)}</span></div>}
-                  <div className="border-t-2 border-brand-900 my-1"></div>
-                  <div className="flex justify-between font-bold text-sm text-brand-950 font-sans">
-                    <span>FINAL BALANCE DUE:</span>
-                    <span className="text-lg font-black text-brand-900">${totals.grandTotal.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Authorisation Sign-off block inside PDF */}
-              <div className="border-t border-brand-200 pt-6">
-                <h4 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2">Agreement Authorization Signature</h4>
-                <div className="flex flex-col sm:flex-row justify-between items-center bg-brand-50/50 p-4 rounded-2xl border border-brand-200 gap-4">
-                  <p className="text-[11px] text-brand-600 italic leading-relaxed max-w-md">
-                    "I hereby authorize Gold & Rose Jewellery Corp to proceed with CAD engineering models and wax prints for the custom styles breakdown above."
-                  </p>
-                  {session.signatureImg ? (
-                    <div className="bg-white border rounded-xl p-1.5 shadow-sm">
-                      <img src={session.signatureImg} alt="Client Authorization Signature" className="h-12 w-44 object-contain" />
-                    </div>
-                  ) : (
-                    <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider bg-red-50 border border-red-200 px-3 py-2 rounded-xl">Pending Client Signature Below</span>
-                  )}
-                </div>
+              <div className="flex bg-brand-50 p-1 rounded-xl border border-brand-100">
+                <button
+                  type="button"
+                  onClick={() => setIsDesignerMode(false)}
+                  className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                    !isDesignerMode
+                      ? 'bg-brand-900 text-brand-gold shadow-sm'
+                      : 'text-brand-600 hover:text-brand-900'
+                  }`}
+                >
+                  <UserCheck size={13} />
+                  Customer Invoice
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsDesignerMode(true)}
+                  className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                    isDesignerMode
+                      ? 'bg-brand-900 text-brand-gold shadow-sm'
+                      : 'text-brand-600 hover:text-brand-900'
+                  }`}
+                >
+                  <Compass size={13} />
+                  CAD Designer Specs
+                </button>
               </div>
             </div>
+
+            {!isDesignerMode ? (
+              <div className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none">
+                {/* Invoice Header */}
+                <div className="flex justify-between items-start border-b border-brand-200 pb-6">
+                  <div>
+                    <h1 className="font-serif italic font-black text-3xl text-brand-900 tracking-tight">Gold & Rose</h1>
+                    <p className="text-[10px] text-brand-500 font-mono uppercase tracking-widest mt-1">Jewellery Corporation</p>
+                    <p className="text-xs text-brand-600 mt-2">Suite 120 - 4590 Kingsway, Burnaby, BC</p>
+                    <p className="text-xs text-brand-600">info@goldandrose.com | 604-555-0192</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="bg-brand-900 text-brand-gold px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
+                      {isWholesale ? 'Wholesale Agreement' : 'Custom Retail Estimate'}
+                    </span>
+                    <p className="text-xs text-brand-500 font-mono mt-3">Date: {new Date().toLocaleDateString()}</p>
+                    {session.jobNum && <p className="text-xs font-bold text-brand-800 mt-1">Job #: {session.jobNum}</p>}
+                  </div>
+                </div>
+
+                {/* Client Credentials & Brief Summary Info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-brand-50 p-5 rounded-2xl border border-brand-200">
+                  <div>
+                    <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2">Customer Details</h3>
+                    <p className="text-sm font-bold text-brand-950">{session.cName || 'Unnamed Customer'}</p>
+                    {session.cPhone && <p className="text-xs text-brand-600 mt-1">Phone: {session.cPhone}</p>}
+                    {session.cEmail && <p className="text-xs text-brand-600">Email: {session.cEmail}</p>}
+                  </div>
+                  {session.jobDesc && (
+                    <div>
+                      <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2">Design Description</h3>
+                      <p className="text-xs text-brand-700 leading-relaxed italic">"{session.jobDesc}"</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Items Table */}
+                <div className="space-y-4">
+                  <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest pl-1">Jewelry Specifications Breakdown</h3>
+                  <div className="border border-brand-200 rounded-2xl overflow-hidden shadow-sm">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-brand-900 text-brand-gold border-b border-brand-800 uppercase text-[9px] tracking-wider font-black">
+                          <th className="p-3 pl-4">Piece</th>
+                          <th className="p-3">Metal / Material</th>
+                          <th className="p-3">Gems & Stones</th>
+                          <th className="p-3">Special Addons / Notes</th>
+                          <th className="p-3 pr-4 text-right">Price</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-brand-100">
+                        {session.rings.filter(r => hasRingData(r)).map((r, ri) => {
+                          const cost = calculateRingCost(r, settings, spotPrices, isWholesale ? 'wholesale' : 'retail', session.overridePrices);
+                          const discVal = parseFloat(r.discount) || 0;
+                          const discDeduction = r.discountType === '%' ? cost * (discVal / 100) : discVal;
+                          const finalPieceCost = Math.max(0, cost - discDeduction);
+
+                          return (
+                            <tr key={r.id} className="hover:bg-brand-50/50 transition-colors">
+                              <td className="p-3 pl-4 font-bold text-brand-900">
+                                #{ri + 1} {r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis'}
+                              </td>
+                              <td className="p-3">
+                                <span className="font-semibold block">{r.goldKarat ? `${r.goldKarat}K` : ''} {r.metalColor} {r.material}</span>
+                                <span className="text-[10px] text-brand-500 font-mono">{r.goldGrams || '0.0'}g</span>
+                              </td>
+                              <td className="p-3 space-y-1">
+                                {r.centerStone?.carats && (
+                                  <span className="block text-[11px]">
+                                    Center: {r.centerStone.carats}ct {r.centerStone.shape} {r.centerStone.type} ({r.centerStone.origin})
+                                  </span>
+                                )}
+                                {r.centerStone2?.carats && (
+                                  <span className="block text-[11px]">
+                                    Stone 2: {r.centerStone2.carats}ct {r.centerStone2.shape} {r.centerStone2.type} ({r.centerStone2.origin})
+                                  </span>
+                                )}
+                                {r.melee.some(m => m.qty) && (
+                                  <span className="block text-[10px] text-brand-600 font-mono">
+                                    Melee: {r.melee.reduce((acc, m) => acc + (parseInt(m.qty) || 0), 0)} st ({r.melee.reduce((acc, m) => acc + ((parseInt(m.qty) || 0) * (parseFloat(m.carat) || 0)), 0).toFixed(2)}ctw)
+                                  </span>
+                                )}
+                                {r.fancy.some(f => f.qty) && (
+                                  <span className="block text-[10px] text-brand-600 font-mono">
+                                    Fancy: {r.fancy.reduce((acc, f) => acc + (parseInt(f.qty) || 0), 0)} st
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-3 space-y-1">
+                                {r.engravingText && <span className="block text-xs font-semibold italic" style={{ fontFamily: r.engravingFont }}>"Engraved: {r.engravingText}"</span>}
+                                {r.designNotes.map((n, ni) => <span key={ni} className="block text-[10px] text-brand-500 leading-tight">• {n.text}</span>)}
+                              </td>
+                              <td className="p-3 pr-4 text-right font-mono font-bold text-brand-950">
+                                ${finalPieceCost.toFixed(2)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Dynamic Mockups Thumbnail Anchors side-by-side inside the Invoice */}
+                {session.rings.some(r => r.referenceSketch || r.referencePhoto || (Array.isArray(r.referenceSketches) && r.referenceSketches.length > 0) || (Array.isArray(r.referencePhotos) && r.referencePhotos.length > 0)) && (
+                  <div className="border-t border-brand-100 pt-6 space-y-4">
+                    <h4 className="text-[10px] font-black text-brand-800 uppercase tracking-widest text-center">Reference Sketches & Photos</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {session.rings.map((r, ri) => {
+                        const rSketches = Array.isArray(r.referenceSketches) ? r.referenceSketches : (r.referenceSketch ? [r.referenceSketch] : []);
+                        const rPhotos = Array.isArray(r.referencePhotos) ? r.referencePhotos : (r.referencePhoto ? [r.referencePhoto] : []);
+                        if (rSketches.length === 0 && rPhotos.length === 0) return null;
+                        return (
+                          <div key={r.id} className="border border-brand-100 bg-brand-50/20 rounded-2xl p-3 space-y-3">
+                            <p className="text-[10px] font-black uppercase text-brand-600 tracking-wider">
+                              Piece {ri + 1}: {r.category === 'customRing' ? 'Custom Ring' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis'}
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {rSketches.map((sk, skIdx) => (
+                                <div key={`sk-${skIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center">
+                                  <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1">Sketch {skIdx + 1}</span>
+                                  <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-28 w-full object-contain rounded" />
+                                </div>
+                              ))}
+                              {rPhotos.map((ph, phIdx) => (
+                                <div key={`ph-${phIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center">
+                                  <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1">Photo {phIdx + 1}</span>
+                                  <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-28 w-full object-contain rounded" />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Pricing Math calculations details */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-brand-200 pt-6">
+                  <div className="text-xs text-brand-600 leading-relaxed font-mono">
+                    <p className="font-sans text-brand-700 font-bold uppercase text-[10px] tracking-wider mb-2">Transaction Ledger Notes</p>
+                    <p className="text-brand-500 leading-relaxed italic">Estimates are based on dynamic spot valuations in CAD.</p>
+                    <div className="flex items-center gap-3 mt-3 pt-3 border-t border-brand-100">
+                      <span className="text-xs font-bold text-brand-700">Charge BC Sales Tax (12%)</span>
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 text-brand-gold bg-brand-100 border-brand-300 rounded focus:ring-brand-gold focus:ring-2 accent-brand-gold"
+                        checked={session.applyTax}
+                        onChange={(e) => onChangeSession(prev => ({ ...prev, applyTax: e.target.checked }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-xs font-mono text-brand-700">
+                    <div className="flex justify-between"><span>Gross Total Cost:</span><span>${totals.grossTotal.toFixed(2)}</span></div>
+                    {totals.totalDiscount > 0 && <div className="flex justify-between text-red-600"><span>Client Deduction Reductions:</span><span>-${totals.totalDiscount.toFixed(2)}</span></div>}
+                    {Number(session.scrapCredit) > 0 && <div className="flex justify-between text-green-600"><span>Connected Scrap Payout Credit:</span><span>-${Number(session.scrapCredit).toFixed(2)}</span></div>}
+                    <div className="border-t border-brand-200 my-1"></div>
+                    <div className="flex justify-between"><span>Subtotal Value:</span><span>${totals.subtotal.toFixed(2)}</span></div>
+                    {session.applyTax && <div className="flex justify-between"><span>BC Taxes & GST (12%):</span><span>+${totals.tax.toFixed(2)}</span></div>}
+                    <div className="border-t-2 border-brand-900 my-1"></div>
+                    <div className="flex justify-between font-bold text-sm text-brand-950 font-sans">
+                      <span>FINAL BALANCE DUE:</span>
+                      <span className="text-lg font-black text-brand-900">${totals.grandTotal.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Authorisation Sign-off block inside PDF */}
+                <div className="border-t border-brand-200 pt-6">
+                  <h4 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2">Agreement Authorization Signature</h4>
+                  <div className="flex flex-col sm:flex-row justify-between items-center bg-brand-50/50 p-4 rounded-2xl border border-brand-200 gap-4">
+                    <p className="text-[11px] text-brand-600 italic leading-relaxed max-w-md">
+                      "I hereby authorize Gold & Rose Jewellery Corp to proceed with CAD engineering models and wax prints for the custom styles breakdown above."
+                    </p>
+                    {session.signatureImg ? (
+                      <div className="bg-white border rounded-xl p-1.5 shadow-sm">
+                        <img src={session.signatureImg} alt="Client Authorization Signature" className="h-12 w-44 object-contain" />
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider bg-red-50 border border-red-200 px-3 py-2 rounded-xl">Pending Client Signature Below</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none">
+                {/* CAD Specs Header */}
+                <div className="flex justify-between items-start border-b border-brand-200 pb-6">
+                  <div>
+                    <h1 className="font-serif italic font-black text-2xl text-brand-900 tracking-tight flex items-center gap-2">
+                      Gold & Rose
+                    </h1>
+                    <p className="text-[10px] text-brand-500 font-mono uppercase tracking-widest mt-1">Jewellery Corporation</p>
+                    <p className="text-xs text-brand-700 mt-2 font-bold uppercase tracking-wider text-slate-500">🛠️ CAD PRODUCTION BLUEPRINT & SPEC SHEET</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="bg-brand-950 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
+                      CAD Specifications
+                    </span>
+                    <p className="text-xs text-brand-500 font-mono mt-3">Date: {new Date().toLocaleDateString()}</p>
+                    {session.jobNum && <p className="text-xs font-bold text-brand-800 mt-1">Job #: {session.jobNum}</p>}
+                  </div>
+                </div>
+
+                {/* Client & Description */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                  <div>
+                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Customer / Reference</h3>
+                    <p className="text-sm font-bold text-brand-950">{session.cName || 'Unnamed Customer'}</p>
+                    {session.cPhone && <p className="text-xs text-brand-600 mt-0.5">Phone: {session.cPhone}</p>}
+                    {session.cEmail && <p className="text-xs text-brand-600">Email: {session.cEmail}</p>}
+                  </div>
+                  {session.jobDesc && (
+                    <div>
+                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Design Overview Notes</h3>
+                      <p className="text-xs text-brand-700 leading-relaxed italic">"{session.jobDesc}"</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* CAD Items Specs Breakdown */}
+                <div className="space-y-8">
+                  <h3 className="text-xs font-black text-brand-900 uppercase tracking-widest pl-1 border-b border-brand-200 pb-2">
+                    Custom Piece Engineering Specifications
+                  </h3>
+                  
+                  {session.rings.filter(r => hasRingData(r)).map((r, ri) => {
+                    const rSketches = Array.isArray(r.referenceSketches) ? r.referenceSketches : (r.referenceSketch ? [r.referenceSketch] : []);
+                    const rPhotos = Array.isArray(r.referencePhotos) ? r.referencePhotos : (r.referencePhoto ? [r.referencePhoto] : []);
+
+                    return (
+                      <div key={r.id} className="border border-slate-200 rounded-2xl bg-slate-50/20 p-5 space-y-5 page-break-inside-avoid">
+                        {/* Piece Title & Basic Classification */}
+                        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                          <h4 className="text-sm font-black text-brand-900 uppercase tracking-wider">
+                            Piece #{ri + 1}: {r.category === 'customRing' ? 'Engagement Ring' : r.category === 'weddingBand' ? 'Wedding Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis Bracelet'}
+                          </h4>
+                          <span className="text-[10px] font-black uppercase bg-slate-200 text-slate-700 px-3 py-1 rounded-md">
+                            {r.material.toUpperCase()} ({r.goldKarat ? `${r.goldKarat}K` : 'N/A'}) - {r.metalColor}
+                          </span>
+                        </div>
+
+                        {/* Dimensions & Target Specs Grid */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                          <div>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Metal/Material</span>
+                            <span className="font-bold text-brand-950">{r.goldKarat ? `${r.goldKarat}K` : ''} {r.metalColor} {r.material.toUpperCase()}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Target Metal Weight</span>
+                            <span className="font-mono font-bold text-brand-950">{r.goldGrams || 'N/A'} grams</span>
+                          </div>
+                          
+                          {/* Dimensions fields */}
+                          {(r.category === 'customRing' || r.category === 'weddingBand') && (
+                            <>
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Finger Size</span>
+                                <span className="font-bold text-brand-950">{r.cRingSize || 'Not set'}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Band Width / Thickness</span>
+                                <span className="font-bold text-brand-950">{r.cBandWidth ? `${r.cBandWidth}mm` : 'N/A'} / {r.cBandThickness ? `${r.cBandThickness}mm` : 'N/A'}</span>
+                              </div>
+                            </>
+                          )}
+
+                          {r.category === 'mensBand' && (
+                            <>
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Finger Size / Profile</span>
+                                <span className="font-bold text-brand-950">{r.mbSize || 'Not set'} / {r.mbProfile || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Band Width / Thickness</span>
+                                <span className="font-bold text-brand-950">{r.mbWidth ? `${r.mbWidth}mm` : 'N/A'} / {r.mbThickness ? `${r.mbThickness}mm` : 'N/A'}</span>
+                              </div>
+                            </>
+                          )}
+
+                          {r.category === 'pendant' && (
+                            <>
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Pendant Dimensions</span>
+                                <span className="font-bold text-brand-950">{r.pDimensions || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Hanger / Bail Style</span>
+                                <span className="font-bold text-brand-950">Integrated</span>
+                              </div>
+                            </>
+                          )}
+
+                          {r.category === 'earrings' && (
+                            <>
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Backing / Closure Type</span>
+                                <span className="font-bold text-brand-950">{r.backingType || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Style Layout</span>
+                                <span className="font-bold text-brand-950">Matching Pair (Left & Right)</span>
+                              </div>
+                            </>
+                          )}
+
+                          {r.category === 'tennisBracelet' && (
+                            <>
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Bracelet Length</span>
+                                <span className="font-bold text-brand-950">{r.tbLength ? `${r.tbLength}"` : 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Clasp / Safety Lock</span>
+                                <span className="font-bold text-brand-950">Double-Safety Box Clasp</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Settings & Band Details */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-white p-4 rounded-xl border border-slate-100">
+                          <div>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">Band Style / Design Pattern</span>
+                            <span className="font-bold text-brand-900">{r.bandStyle || 'Solid plain shank / standard'}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">Stone Procurement Source</span>
+                            <span className={`font-black uppercase tracking-wider text-[10px] px-2 py-0.5 rounded inline-block ${r.stoneSource === 'customer' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                              {r.stoneSource === 'customer' ? '⚠️ Customer Supplied Stones (Measure First!)' : '🏢 Company Inventory (Select from Stock)'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Detailed Stones Specification Table */}
+                        <div className="space-y-2">
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block pl-1">Stones & Gemstones Configuration</span>
+                          <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                            <table className="w-full text-left border-collapse text-xs font-mono">
+                              <thead>
+                                <tr className="bg-slate-100 text-slate-700 uppercase text-[8px] tracking-wider font-black border-b border-slate-200">
+                                  <th className="p-2.5 pl-3">Stone Type</th>
+                                  <th className="p-2.5">Shape / Cut</th>
+                                  <th className="p-2.5">Qty</th>
+                                  <th className="p-2.5">Size (mm)</th>
+                                  <th className="p-2.5">Total Ct Weight</th>
+                                  <th className="p-2.5 pr-3">Procurement Source</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {/* Center Stone 1 */}
+                                {r.centerStone?.carats && (
+                                  <tr>
+                                    <td className="p-2.5 pl-3 font-bold font-sans text-brand-950">Center Stone</td>
+                                    <td className="p-2.5 font-bold font-sans">{r.centerStone.shape}</td>
+                                    <td className="p-2.5">1</td>
+                                    <td className="p-2.5">--</td>
+                                    <td className="p-2.5 font-bold">{r.centerStone.carats} ct</td>
+                                    <td className="p-2.5 font-sans">{r.stoneSource === 'customer' ? 'Client' : `${r.centerStone.type} (${r.centerStone.origin})`}</td>
+                                  </tr>
+                                )}
+
+                                {/* Center Stone 2 for earrings */}
+                                {r.centerStone2?.carats && (
+                                  <tr>
+                                    <td className="p-2.5 pl-3 font-bold font-sans text-brand-950">Center Stone 2 (Pair)</td>
+                                    <td className="p-2.5 font-bold font-sans">{r.centerStone2.shape}</td>
+                                    <td className="p-2.5">1</td>
+                                    <td className="p-2.5">--</td>
+                                    <td className="p-2.5 font-bold">{r.centerStone2.carats} ct</td>
+                                    <td className="p-2.5 font-sans">{r.stoneSource === 'customer' ? 'Client' : `${r.centerStone2.type} (${r.centerStone2.origin})`}</td>
+                                  </tr>
+                                )}
+
+                                {/* Melee Stones */}
+                                {r.melee.filter(m => parseInt(m.qty) > 0).map((m, mIdx) => {
+                                  const count = parseInt(m.qty) || 0;
+                                  const singleCarat = parseFloat(m.carat) || 0;
+                                  const totalCarats = count * singleCarat;
+                                  return (
+                                    <tr key={`m-${mIdx}`}>
+                                      <td className="p-2.5 pl-3 font-sans">Melee Accent ({mIdx + 1})</td>
+                                      <td className="p-2.5">Round Brilliant</td>
+                                      <td className="p-2.5">{count}</td>
+                                      <td className="p-2.5">{m.size ? `${m.size}mm` : 'N/A'}</td>
+                                      <td className="p-2.5 font-bold">{totalCarats.toFixed(2)} ctw</td>
+                                      <td className="p-2.5 font-sans">Company Inventory</td>
+                                    </tr>
+                                  );
+                                })}
+
+                                {/* Fancy Stones */}
+                                {r.fancy.filter(f => parseInt(f.qty) > 0).map((f, fIdx) => {
+                                  const count = parseInt(f.qty) || 0;
+                                  return (
+                                    <tr key={`f-${fIdx}`}>
+                                      <td className="p-2.5 pl-3 font-sans">Fancy Accent ({fIdx + 1})</td>
+                                      <td className="p-2.5 font-sans font-bold">{f.shape}</td>
+                                      <td className="p-2.5">{count}</td>
+                                      <td className="p-2.5">--</td>
+                                      <td className="p-2.5">--</td>
+                                      <td className="p-2.5 font-sans">Company Inventory</td>
+                                    </tr>
+                                  );
+                                })}
+
+                                {/* Client Provided Custom Stones list if custom sources exist */}
+                                {Array.isArray(r.clientStones) && r.clientStones.filter(cs => parseInt(cs.qty) > 0).map((cs, csIdx) => (
+                                  <tr key={`cs-${csIdx}`} className="bg-amber-50/50">
+                                    <td className="p-2.5 pl-3 font-bold font-sans text-amber-900">Client Supplied ({cs.type})</td>
+                                    <td className="p-2.5 font-sans font-bold text-amber-800">--</td>
+                                    <td className="p-2.5 text-amber-900">{cs.qty}</td>
+                                    <td className="p-2.5 text-amber-900">{cs.size || '--'}</td>
+                                    <td className="p-2.5 font-bold text-amber-900">{cs.carats || '--'} ct</td>
+                                    <td className="p-2.5 font-sans font-bold text-amber-800">Client Provided</td>
+                                  </tr>
+                                ))}
+
+                                {/* If no stones whatsoever */}
+                                {!r.centerStone?.carats && !r.centerStone2?.carats && !r.melee.some(m => parseInt(m.qty) > 0) && !r.fancy.some(f => parseInt(f.qty) > 0) && (!Array.isArray(r.clientStones) || r.clientStones.filter(cs => parseInt(cs.qty) > 0).length === 0) && (
+                                  <tr>
+                                    <td colSpan={6} className="p-4 text-center font-sans text-slate-400 italic">
+                                      No stones / gemstones specified. Plain metal band / design.
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* Special Instructions & Engraving */}
+                        {(r.showEngraving || r.designNotes?.length > 0) && (
+                          <div className="bg-white p-4 rounded-xl border border-slate-100 text-xs space-y-3">
+                            {r.showEngraving && r.engravingText && (
+                              <div className="border-b border-slate-100 pb-2.5">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">Inside Shank Laser Engraving</span>
+                                <span className="block font-bold text-brand-900 italic" style={{ fontFamily: r.engravingFont }}>
+                                  " {r.engravingText} " <span className="font-sans text-[10px] text-slate-400 font-normal"> (Font: {r.engravingFont})</span>
+                                </span>
+                              </div>
+                            )}
+                            {r.designNotes?.length > 0 && (
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">CAD Designer Notes & Blueprint Instructions</span>
+                                <div className="space-y-1.5 pl-2">
+                                  {r.designNotes.map((n, ni) => (
+                                    <p key={ni} className="text-xs text-slate-700 leading-relaxed font-sans flex items-start gap-1.5">
+                                      <span className="text-brand-gold font-bold mt-0.5">•</span>
+                                      {n.text}
+                                    </p>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Visual References: Sketches & Photos rendered directly inside the specific piece's specs sheet */}
+                        {(rSketches.length > 0 || rPhotos.length > 0) && (
+                          <div className="space-y-3 pt-2">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block pl-1">Visual Mockup References</span>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              {rSketches.map((sk, skIdx) => (
+                                <div key={`sk-${skIdx}`} className="border border-slate-200 rounded-xl p-2 bg-white flex flex-col items-center">
+                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-1.5">Reference Sketch {skIdx + 1}</span>
+                                  <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-44 w-full object-contain rounded-lg" />
+                                </div>
+                              ))}
+                              {rPhotos.map((ph, phIdx) => (
+                                <div key={`ph-${phIdx}`} className="border border-slate-200 rounded-xl p-2 bg-white flex flex-col items-center">
+                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-1.5">Reference Photo {phIdx + 1}</span>
+                                  <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-44 w-full object-contain rounded-lg" />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Signature / Approval block for CAD Designer */}
+                <div className="border-t border-brand-200 pt-6">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">CAD Model Verification Sign-off</h4>
+                  <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-50 p-5 rounded-2xl border border-slate-200 gap-4">
+                    <p className="text-[11px] text-slate-500 italic leading-relaxed max-w-md">
+                      "I hereby certify that these digital specifications, measurements, and references have been cross-checked and approved for CAD modeling & 3D prototyping."
+                    </p>
+                    <div className="border-2 border-dashed border-slate-300 w-44 h-16 rounded-xl flex items-center justify-center bg-white text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                      Designer Initial / Date
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Contract terms client signatures canvas */}
             <div className="bg-white p-6 rounded-3xl border border-brand-100 shadow-md space-y-4 print:hidden">
