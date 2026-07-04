@@ -403,7 +403,7 @@ export function calculateRingCost(r: JewelryItem, settings: AppSettings, spotPri
   const rSilverPrem = Number(settings.retailSilverPremium !== undefined ? settings.retailSilverPremium : 20);
   const rPlatPrem = Number(settings.retailPlatinumPremium !== undefined ? settings.retailPlatinumPremium : 100);
 
-  if (r.category === 'mensBand') {
+  if (['mensBand', 'customRing', 'weddingBand', 'pendant'].includes(r.category)) {
     if (r.material === 'gold') {
       const karat = Number(r.goldKarat) || 14;
       const rate = Number(settings.goldPricesPerGram?.[karat] ?? (((sPGold + rGoldPrem) / 31.1034768) * (karat / 24)));
