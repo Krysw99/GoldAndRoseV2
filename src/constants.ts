@@ -170,7 +170,25 @@ export const DEFAULT_SETTINGS = {
   tennisSilverPricePerGram: 110,
   tennisMeleePricePerCtRaw: 350,
   tennisFancyPricePerCtRaw: 420,
+  tennisDiamondPricePerCt: 600,
+  tennisMultipliers: [
+    { minWidth: 1.0, maxWidth: 1.9, multiplier: 1.6 },
+    { minWidth: 2.0, maxWidth: 4.0, multiplier: 1.4 }
+  ],
   showRawCostOnQuoteTab: false,
+  
+  retailGoldPremium: 100,
+  retailSilverPremium: 20,
+  retailPlatinumPremium: 100,
+  
+  rawMeleeRates: {},
+  rawFancyRates: {},
+  cubanMultipliers: [
+    { minWidth: 5, maxWidth: 7.9, multiplier: 1.8 },
+    { minWidth: 8, maxWidth: 10.9, multiplier: 1.6 },
+    { minWidth: 11, maxWidth: 13.9, multiplier: 1.5 },
+    { minWidth: 14, maxWidth: 24, multiplier: 1.4 }
+  ],
   
   wholesale: {
     goldSpotPremium: 100,

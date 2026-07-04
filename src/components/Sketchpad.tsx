@@ -6,9 +6,129 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { 
   Pen, Highlighter, Eraser, Move, 
-  RotateCw, RefreshCw, X, Check, Camera, Sparkles, HelpCircle 
+  RotateCw, RefreshCw, X, Check, Camera, Sparkles, HelpCircle,
+  Undo2, Redo2, Ruler, Grid3X3
 } from 'lucide-react';
 import { CENTER_SHAPES } from '../constants';
+
+// --- Visual Jewelry Cut Stamp Icons Helper ---
+const StampIcon = ({ shape, className = "w-5 h-5" }: { shape: string; className?: string }) => {
+  const strokeColor = "currentColor";
+  
+  if (shape === 'Ring Rail') {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="9" stroke={strokeColor} strokeWidth="1.5" />
+        <circle cx="12" cy="12" r="7" stroke={strokeColor} strokeWidth="1" strokeDasharray="2 1" />
+      </svg>
+    );
+  }
+  
+  if (shape === 'Round') {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="9" stroke={strokeColor} strokeWidth="1.5" />
+        <circle cx="12" cy="12" r="5" stroke={strokeColor} strokeWidth="1" />
+        <path d="M12 3 L12 21 M3 12 L21 12 M5.6 5.6 L18.4 18.4 M5.6 18.4 L18.4 5.6" stroke={strokeColor} strokeWidth="1" opacity="0.6" />
+      </svg>
+    );
+  }
+  
+  if (shape === 'Princess') {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="3" width="18" height="18" rx="1" stroke={strokeColor} strokeWidth="1.5" />
+        <rect x="7" y="7" width="10" height="10" stroke={strokeColor} strokeWidth="1" />
+        <path d="M3 3 L21 21 M21 3 L3 21" stroke={strokeColor} strokeWidth="1" opacity="0.6" />
+      </svg>
+    );
+  }
+  
+  if (shape === 'Oval') {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="12" cy="12" rx="6" ry="9" stroke={strokeColor} strokeWidth="1.5" />
+        <ellipse cx="12" cy="12" rx="3" ry="5.5" stroke={strokeColor} strokeWidth="1" />
+        <path d="M12 3 L12 21 M6 12 L18 12 M7.8 5.6 L16.2 18.4 M7.8 18.4 L16.2 5.6" stroke={strokeColor} strokeWidth="1" opacity="0.5" />
+      </svg>
+    );
+  }
+  
+  if (shape === 'Pear') {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 3 C16.5 9, 18 15, 12 21 C6 15, 7.5 9, 12 3 Z" stroke={strokeColor} strokeWidth="1.5" />
+        <path d="M12 7 C14.5 11, 15.5 15, 12 19 C8.5 15, 9.5 11, 12 7 Z" stroke={strokeColor} strokeWidth="1" />
+        <path d="M12 3 L12 21 M12 12 L6.5 14 M12 12 L17.5 14 M12 12 L9 18.5 M12 12 L15 18.5" stroke={strokeColor} strokeWidth="1" opacity="0.5" />
+      </svg>
+    );
+  }
+  
+  if (shape === 'Emerald') {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M7 3 H17 L21 7 V17 L17 21 H7 L3 17 V7 Z" stroke={strokeColor} strokeWidth="1.5" />
+        <path d="M9.5 6 H14.5 L17 8.5 V15.5 L14.5 18 H9.5 L7 15.5 V8.5 Z" stroke={strokeColor} strokeWidth="1" />
+        <path d="M3 7 L7 9.5 M21 7 L17 8.5 M3 17 L7 15.5 M21 17 L17 15.5" stroke={strokeColor} strokeWidth="1" opacity="0.6" />
+      </svg>
+    );
+  }
+  
+  if (shape === 'Marquise') {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2 C17 8, 17 16, 12 22 C7 16, 7 8, 12 2 Z" stroke={strokeColor} strokeWidth="1.5" />
+        <path d="M12 6 C15 10, 15 14, 12 18 C9 14, 9 10, 12 6 Z" stroke={strokeColor} strokeWidth="1" />
+        <path d="M12 2 L12 22 M12 12 L7 12 M12 12 L17 12" stroke={strokeColor} strokeWidth="1" opacity="0.5" />
+      </svg>
+    );
+  }
+  
+  if (shape === 'Cushion') {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M5 3 H19 C21 5, 21 19, 19 21 H5 C3 19, 3 5, 5 3 Z" stroke={strokeColor} strokeWidth="1.5" />
+        <path d="M8 6.5 H16 C17.3 7.8, 17.3 16.2, 16 17.5 H8 C6.7 16.2, 6.7 7.8, 8 6.5 Z" stroke={strokeColor} strokeWidth="1" />
+        <path d="M3 5 L8 6.5 M21 5 L16 6.5 M3 19 L8 17.5 M21 19 L16 17.5" stroke={strokeColor} strokeWidth="1" opacity="0.5" />
+      </svg>
+    );
+  }
+  
+  if (shape === 'Radiant') {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M7 3 H17 L21 7 V17 L17 21 H7 L3 17 V7 Z" stroke={strokeColor} strokeWidth="1.5" />
+        <path d="M3 3 L21 21 M21 3 L3 21" stroke={strokeColor} strokeWidth="1" opacity="0.4" />
+      </svg>
+    );
+  }
+  
+  if (shape.endsWith('Side')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* Table top */}
+        <path d="M7 6 H17" stroke={strokeColor} strokeWidth="1.5" />
+        {/* Crown angled facets */}
+        <path d="M7 6 L3 11 M17 6 L21 11" stroke={strokeColor} strokeWidth="1.5" />
+        {/* Girdle horizontal */}
+        <path d="M2 11 H22" stroke={strokeColor} strokeWidth="1.5" />
+        <path d="M2 13 H22" stroke={strokeColor} strokeWidth="1" opacity="0.7" />
+        {/* Pavilion pointed bottom */}
+        <path d="M2 13 L12 21 L22 13" stroke={strokeColor} strokeWidth="1.5" />
+        {/* Pavilion facets */}
+        <path d="M8 13 L12 21 L16 13" stroke={strokeColor} strokeWidth="1" opacity="0.6" />
+        {/* Crown facet lines */}
+        <path d="M10 6 L8 11 M14 6 L16 11" stroke={strokeColor} strokeWidth="1" opacity="0.6" />
+      </svg>
+    );
+  }
+  
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="12" r="9" stroke={strokeColor} strokeWidth="1.5" />
+    </svg>
+  );
+};
 
 // --- Jewelry Overlay Stencil Drawer Helpers ---
 const drawSolitaireStencil = (ctx: CanvasRenderingContext2D, size: number) => {
@@ -457,10 +577,28 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Drawing tool state
-  const [tool, setTool] = useState<'pen' | 'highlighter' | 'eraser' | 'transform' | 'stamp'>('pen');
+  const [tool, setTool] = useState<'pen' | 'highlighter' | 'eraser' | 'transform' | 'stamp' | 'ruler'>('pen');
   const [color, setColor] = useState('#1e293b'); // Slate dark
   const [thickness, setThickness] = useState(3.0);
   const [stampShape, setStampShape] = useState<string>('');
+
+  // Symmetry, Grid, Ruler & Undo/Redo states
+  const [symmetryMode, setSymmetryMode] = useState<'none' | 'vertical' | 'horizontal' | 'quad'>('none');
+  const [isGridEnabled, setIsGridEnabled] = useState<boolean>(false);
+  const [gridCellSize, setGridCellSize] = useState<number>(30); // 30px = 2mm
+  const [includeGridAndRulersInExport, setIncludeGridAndRulersInExport] = useState<boolean>(false);
+
+  // Undo/Redo state history stacks
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+
+  // Ruler tape state
+  const [rulerStart, setRulerStart] = useState<{ x: number; y: number } | null>(null);
+  const [rulerEnd, setRulerEnd] = useState<{ x: number; y: number } | null>(null);
+  const [isMeasuring, setIsMeasuring] = useState<boolean>(false);
+  const [rulerMeasurements, setRulerMeasurements] = useState<Array<{ start: { x: number; y: number }; end: { x: number; y: number } }>>([]);
+
+  const lastPosRef = useRef<{ x: number; y: number } | null>(null);
 
   // Stencil states
   const [stencilType, setStencilType] = useState<string>('none');
@@ -497,14 +635,39 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
 
   // Instant Stamp parameters
   const [stampSize, setStampSize] = useState<number>(45);
+  const [stampAngle, setStampAngle] = useState<number>(0);
   const [pointerPos, setPointerPos] = useState<{ x: number; y: number } | null>(null);
 
+  // Pinch-to-zoom & pan states for tablet/mobile sketchpad navigation
+  const [zoom, setZoom] = useState<number>(1);
+  const [panX, setPanX] = useState<number>(0);
+  const [panY, setPanY] = useState<number>(0);
+
+  // References for tracking multi-touch / pinch gestures
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const initialPinchDistanceRef = useRef<number | null>(null);
+  const initialZoomRef = useRef<number>(1);
+  const initialPinchMidpointRef = useRef<{ x: number; y: number } | null>(null);
+  const initialPanRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const wasGesturingRef = useRef<boolean>(false);
+
+  // Click & hold / Drag-to-resize stamp states
+  const [isStamping, setIsStamping] = useState<boolean>(false);
+  const stampStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const initialStampSizeRef = useRef<number>(45);
+  const dragThresholdMetRef = useRef<boolean>(false);
+
   // Tool UI indicators
-  const colorOptions = [
-    { id: 'slate', val: '#1e293b', bgClass: 'bg-slate-800' },
-    { id: 'gold', val: '#d4af37', bgClass: 'bg-amber-500' },
-    { id: 'red', val: '#dc2626', bgClass: 'bg-red-600' },
-    { id: 'green', val: '#16a34a', bgClass: 'bg-green-600' }
+  const jewelryColors = [
+    { name: 'Slate Gray', val: '#1e293b', bgClass: 'bg-slate-800' },
+    { name: 'Yellow Gold', val: '#E5C453', bgClass: 'bg-yellow-500' },
+    { name: 'Rose Gold', val: '#E0A899', bgClass: 'bg-rose-300' },
+    { name: 'Platinum / White Gold', val: '#D1D5DB', bgClass: 'bg-gray-300' },
+    { name: 'Onyx Black', val: '#0f172a', bgClass: 'bg-black' },
+    { name: 'Diamond Blue', val: '#38BDF8', bgClass: 'bg-sky-400' },
+    { name: 'Ruby Red', val: '#DC2626', bgClass: 'bg-red-600' },
+    { name: 'Emerald Green', val: '#059669', bgClass: 'bg-emerald-600' },
+    { name: 'Sapphire Blue', val: '#2563EB', bgClass: 'bg-blue-600' }
   ];
 
   const thicknessOptions = [
@@ -572,6 +735,15 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
         ctx.lineJoin = 'round';
         // Restore contents
         ctx.drawImage(tempCanvas, 0, 0);
+
+        // Populate initial canvas state in history if empty
+        setHistory(prev => {
+          if (prev.length === 0) {
+            setHistoryIndex(0);
+            return [canvas.toDataURL()];
+          }
+          return prev;
+        });
       }
     };
 
@@ -581,25 +753,154 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Redraw Stencil Canvas dynamically whenever stencil properties change
+  // Redraw Overlay Canvas (Stencil, Grid, Symmetry, Rulers)
   useEffect(() => {
     const canvas = stencilCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    drawStencilMaster(
-      ctx,
-      canvas.width,
-      canvas.height,
-      stencilType,
-      stencilSize,
-      stencilOpacity,
-      stencilRotate,
-      stencilOffsetX,
-      stencilOffsetY
-    );
-  }, [stencilType, stencilSize, stencilOpacity, stencilRotate, stencilOffsetX, stencilOffsetY]);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 1. Draw Millimeter Grid if enabled
+    if (isGridEnabled) {
+      ctx.save();
+      const pxPerCell = gridCellSize; // 30px = 2mm
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // Vertical lines
+      for (let x = 0; x < w; x += pxPerCell) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        if (Math.round(x / pxPerCell) % 5 === 0) {
+          ctx.strokeStyle = 'rgba(212, 175, 55, 0.28)'; // Darker gold for 10mm major lines
+          ctx.lineWidth = 1.0;
+        } else {
+          ctx.strokeStyle = 'rgba(212, 175, 55, 0.12)'; // Soft gold for 2mm minor lines
+          ctx.lineWidth = 0.5;
+        }
+        ctx.stroke();
+      }
+
+      // Horizontal lines
+      for (let y = 0; y < h; y += pxPerCell) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        if (Math.round(y / pxPerCell) % 5 === 0) {
+          ctx.strokeStyle = 'rgba(212, 175, 55, 0.28)';
+          ctx.lineWidth = 1.0;
+        } else {
+          ctx.strokeStyle = 'rgba(212, 175, 55, 0.12)';
+          ctx.lineWidth = 0.5;
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 2. Draw Stencil Overlay
+    if (stencilType !== 'none') {
+      drawStencilMaster(
+        ctx,
+        canvas.width,
+        canvas.height,
+        stencilType,
+        stencilSize,
+        stencilOpacity,
+        stencilRotate,
+        stencilOffsetX,
+        stencilOffsetY
+      );
+    }
+
+    // 3. Draw Symmetry Guideline Axis
+    if (symmetryMode !== 'none') {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)'; // Red dashed guidelines
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 5]);
+
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+
+      if (symmetryMode === 'vertical' || symmetryMode === 'quad') {
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, canvas.height);
+        ctx.stroke();
+      }
+      if (symmetryMode === 'horizontal' || symmetryMode === 'quad') {
+        ctx.beginPath();
+        ctx.moveTo(0, cy);
+        ctx.lineTo(canvas.width, cy);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 4. Draw Ruler Measurements (placed + live active ruler)
+    const allRulers = [...rulerMeasurements];
+    if (isMeasuring && rulerStart && rulerEnd) {
+      allRulers.push({ start: rulerStart, end: rulerEnd });
+    }
+
+    allRulers.forEach((r) => {
+      ctx.save();
+      const dx = r.end.x - r.start.x;
+      const dy = r.end.y - r.start.y;
+      const distPx = Math.sqrt(dx * dx + dy * dy);
+      const distMm = distPx / 15; // 15px = 1mm
+
+      // Draw golden ruler line
+      ctx.strokeStyle = '#d4af37';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(r.start.x, r.start.y);
+      ctx.lineTo(r.end.x, r.end.y);
+      ctx.stroke();
+
+      // Draw end ticks / calipers
+      const angle = Math.atan2(dy, dx);
+      const tickLen = 6;
+      ctx.beginPath();
+      ctx.moveTo(r.start.x - Math.sin(angle) * tickLen, r.start.y + Math.cos(angle) * tickLen);
+      ctx.lineTo(r.start.x + Math.sin(angle) * tickLen, r.start.y - Math.cos(angle) * tickLen);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(r.end.x - Math.sin(angle) * tickLen, r.end.y + Math.cos(angle) * tickLen);
+      ctx.lineTo(r.end.x + Math.sin(angle) * tickLen, r.end.y - Math.cos(angle) * tickLen);
+      ctx.stroke();
+
+      // Text background pill
+      const mx = (r.start.x + r.end.x) / 2;
+      const my = (r.start.y + r.end.y) / 2;
+      const label = `${distMm.toFixed(1)} mm`;
+
+      ctx.font = 'bold 9px monospace';
+      const textWidth = ctx.measureText(label).width;
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)'; // Slate-900 transparent pill
+      ctx.beginPath();
+      ctx.roundRect(mx - textWidth / 2 - 4, my - 7, textWidth + 8, 14, 4);
+      ctx.fill();
+
+      // Draw label text
+      ctx.fillStyle = '#fbbf24'; // Golden amber text
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, mx, my);
+
+      ctx.restore();
+    });
+
+  }, [
+    stencilType, stencilSize, stencilOpacity, stencilRotate, stencilOffsetX, stencilOffsetY,
+    isGridEnabled, gridCellSize, symmetryMode, rulerMeasurements, isMeasuring, rulerStart, rulerEnd
+  ]);
 
   // Update canvas context styles based on active tool
   const getCanvasContext = () => {
@@ -784,51 +1085,53 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       ctx.moveTo(r, r * 0.05); ctx.lineTo(r * 0.7, r * 0.4);
       ctx.lineTo(r * 0.35, r * 0.7); ctx.lineTo(r * 0.15, r * 0.9);
     } else if (shape === 'Pear Side') {
-      // Pear Side
+      // Pear Side (Elongated horizontally for jewelers side view)
       // Table (asymmetric left-shifted)
-      ctx.moveTo(-r * 0.4, -r * 0.6);
-      ctx.lineTo(r * 0.4, -r * 0.6);
+      ctx.moveTo(-r * 0.45, -r * 0.6);
+      ctx.lineTo(r * 0.7, -r * 0.6);
       // Girdle top line (elongated to right)
-      ctx.moveTo(-r, -r * 0.1);
-      ctx.lineTo(r * 1.2, -r * 0.1);
+      ctx.moveTo(-r * 1.25, -r * 0.1);
+      ctx.lineTo(r * 2.3, -r * 0.1);
       // Girdle bottom line (elongated to right)
-      ctx.moveTo(-r, r * 0.05);
-      ctx.lineTo(r * 1.2, r * 0.05);
+      ctx.moveTo(-r * 1.25, r * 0.05);
+      ctx.lineTo(r * 2.3, r * 0.05);
       // Girdle sides
-      ctx.moveTo(-r, -r * 0.1); ctx.lineTo(-r, r * 0.05);
-      ctx.moveTo(r * 1.2, -r * 0.1); ctx.lineTo(r * 1.2, r * 0.05);
+      ctx.moveTo(-r * 1.25, -r * 0.1); ctx.lineTo(-r * 1.25, r * 0.05);
+      ctx.moveTo(r * 2.3, -r * 0.1); ctx.lineTo(r * 2.3, r * 0.05);
       // Crown connections
-      ctx.moveTo(-r * 0.4, -r * 0.6); ctx.lineTo(-r, -r * 0.1);
-      ctx.moveTo(r * 0.4, -r * 0.6); ctx.lineTo(r * 1.2, -r * 0.1);
-      ctx.moveTo(-r * 0.1, -r * 0.6); ctx.lineTo(-r * 0.4, -r * 0.1);
-      ctx.moveTo(r * 0.1, -r * 0.6); ctx.lineTo(r * 0.5, -r * 0.1);
+      ctx.moveTo(-r * 0.45, -r * 0.6); ctx.lineTo(-r * 1.25, -r * 0.1);
+      ctx.moveTo(r * 0.7, -r * 0.6); ctx.lineTo(r * 2.3, -r * 0.1);
+      ctx.moveTo(-r * 0.1, -r * 0.6); ctx.lineTo(-r * 0.65, -r * 0.1);
+      ctx.moveTo(r * 0.25, -r * 0.6); ctx.lineTo(r * 1.1, -r * 0.1);
       // Pavilion to culet (asymmetric culet at x = -r * 0.1)
-      ctx.moveTo(-r, r * 0.05); ctx.lineTo(-r * 0.1, r * 0.9);
-      ctx.moveTo(r * 1.2, r * 0.05); ctx.lineTo(-r * 0.1, r * 0.9);
-      ctx.moveTo(-r * 0.5, r * 0.05); ctx.lineTo(-r * 0.1, r * 0.9);
-      ctx.moveTo(r * 0.5, r * 0.05); ctx.lineTo(-r * 0.1, r * 0.9);
+      ctx.moveTo(-r * 1.25, r * 0.05); ctx.lineTo(-r * 0.1, r * 0.9);
+      ctx.moveTo(r * 2.3, r * 0.05); ctx.lineTo(-r * 0.1, r * 0.9);
+      ctx.moveTo(-r * 0.7, r * 0.05); ctx.lineTo(-r * 0.1, r * 0.9);
+      ctx.moveTo(r * 1.15, r * 0.05); ctx.lineTo(-r * 0.1, r * 0.9);
     } else if (shape === 'Marquise Side') {
-      // Marquise Side
+      // Marquise Side (Elongated horizontally for elegant Marquise navette profile)
       // Table
-      ctx.moveTo(-r * 0.4, -r * 0.6);
-      ctx.lineTo(r * 0.4, -r * 0.6);
-      // Girdle top line (pointed both sides)
-      ctx.moveTo(-r * 1.2, -r * 0.1);
-      ctx.lineTo(r * 1.2, -r * 0.1);
+      ctx.moveTo(-r * 0.75, -r * 0.6);
+      ctx.lineTo(r * 0.75, -r * 0.6);
+      // Girdle top line (pointed both sides, significantly elongated)
+      ctx.moveTo(-r * 2.45, -r * 0.1);
+      ctx.lineTo(r * 2.45, -r * 0.1);
       // Girdle bottom line (pointed both sides)
-      ctx.moveTo(-r * 1.2, r * 0.05);
-      ctx.lineTo(r * 1.2, r * 0.05);
+      ctx.moveTo(-r * 2.45, r * 0.05);
+      ctx.lineTo(r * 2.45, r * 0.05);
       // Girdle sides (pointed tips)
-      ctx.moveTo(-r * 1.2, -r * 0.1); ctx.lineTo(-r * 1.2, r * 0.05);
-      ctx.moveTo(r * 1.2, -r * 0.1); ctx.lineTo(r * 1.2, r * 0.05);
+      ctx.moveTo(-r * 2.45, -r * 0.1); ctx.lineTo(-r * 2.45, r * 0.05);
+      ctx.moveTo(r * 2.45, -r * 0.1); ctx.lineTo(r * 2.45, r * 0.05);
       // Crown connections
-      ctx.moveTo(-r * 0.4, -r * 0.6); ctx.lineTo(-r * 1.2, -r * 0.1);
-      ctx.moveTo(r * 0.4, -r * 0.6); ctx.lineTo(r * 1.2, -r * 0.1);
+      ctx.moveTo(-r * 0.75, -r * 0.6); ctx.lineTo(-r * 2.45, -r * 0.1);
+      ctx.moveTo(r * 0.75, -r * 0.6); ctx.lineTo(r * 2.45, -r * 0.1);
+      ctx.moveTo(-r * 0.35, -r * 0.6); ctx.lineTo(-r * 1.25, -r * 0.1);
+      ctx.moveTo(r * 0.35, -r * 0.6); ctx.lineTo(r * 1.25, -r * 0.1);
       // Pavilion to centered culet
-      ctx.moveTo(-r * 1.2, r * 0.05); ctx.lineTo(0, r * 0.9);
-      ctx.moveTo(r * 1.2, r * 0.05); ctx.lineTo(0, r * 0.9);
-      ctx.moveTo(-r * 0.5, r * 0.05); ctx.lineTo(0, r * 0.9);
-      ctx.moveTo(r * 0.5, r * 0.05); ctx.lineTo(0, r * 0.9);
+      ctx.moveTo(-r * 2.45, r * 0.05); ctx.lineTo(0, r * 0.9);
+      ctx.moveTo(r * 2.45, r * 0.05); ctx.lineTo(0, r * 0.9);
+      ctx.moveTo(-r * 1.25, r * 0.05); ctx.lineTo(0, r * 0.9);
+      ctx.moveTo(r * 1.25, r * 0.05); ctx.lineTo(0, r * 0.9);
     } else if (shape === 'Ring Rail') {
       // Circular ring rail guide single circle
       ctx.arc(0, 0, r, 0, 2 * Math.PI);
@@ -851,61 +1154,257 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     }
   };
 
+  // Ensure we always have savedCanvasData when the canvas is ready or when tool is selected
+  useEffect(() => {
+    if (tool === 'stamp' && !savedCanvasData) {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (ctx && canvas) {
+        setSavedCanvasData(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      }
+    }
+  }, [tool, savedCanvasData]);
+
+  // Symmetrical segment drawing helper
+  const drawSegment = (x1: number, y1: number, x2: number, y2: number, ctx: CanvasRenderingContext2D, width: number, height: number) => {
+    // 1. Main stroke segment
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    // 2. Symmetric mirror strokes
+    if (symmetryMode === 'vertical') {
+      ctx.beginPath();
+      ctx.moveTo(width - x1, y1);
+      ctx.lineTo(width - x2, y2);
+      ctx.stroke();
+    } else if (symmetryMode === 'horizontal') {
+      ctx.beginPath();
+      ctx.moveTo(x1, height - y1);
+      ctx.lineTo(x2, height - y2);
+      ctx.stroke();
+    } else if (symmetryMode === 'quad') {
+      // vertical mirror
+      ctx.beginPath();
+      ctx.moveTo(width - x1, y1);
+      ctx.lineTo(width - x2, y2);
+      ctx.stroke();
+
+      // horizontal mirror
+      ctx.beginPath();
+      ctx.moveTo(x1, height - y1);
+      ctx.lineTo(x2, height - y2);
+      ctx.stroke();
+
+      // diagonal (both) mirror
+      ctx.beginPath();
+      ctx.moveTo(width - x1, height - y1);
+      ctx.lineTo(width - x2, height - y2);
+      ctx.stroke();
+    }
+  };
+
+  // Push Canvas to Undo/Redo history stack
+  const pushToHistory = (customDataUrl?: string) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const url = customDataUrl || canvas.toDataURL();
+    setHistory(prev => {
+      const newHistory = prev.slice(0, historyIndex + 1);
+      return [...newHistory, url];
+    });
+    setHistoryIndex(prev => prev + 1);
+  };
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const prevIndex = historyIndex - 1;
+      setHistoryIndex(prevIndex);
+      const dataUrl = history[prevIndex];
+      loadCanvasFromDataUrl(dataUrl);
+    } else if (historyIndex === 0) {
+      setHistoryIndex(-1);
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (canvas && ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        setSavedCanvasData(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      }
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const nextIndex = historyIndex + 1;
+      setHistoryIndex(nextIndex);
+      const dataUrl = history[nextIndex];
+      loadCanvasFromDataUrl(dataUrl);
+    }
+  };
+
+  const loadCanvasFromDataUrl = (dataUrl: string) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      setSavedCanvasData(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    };
+    img.src = dataUrl;
+  };
+
+  // Helper to map screen coordinates to the actual internal coordinate system of the drawing canvas
+  const getCanvasCoords = (clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const x = rect.width > 0 ? (clientX - rect.left) * (canvas.width / rect.width) : clientX - rect.left;
+    const y = rect.height > 0 ? (clientY - rect.top) * (canvas.height / rect.height) : clientY - rect.top;
+    return { x, y };
+  };
+
   // Drawing event handlers
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (tool === 'transform') return;
 
+    // Track active pointer for multi-touch pinch-to-zoom
+    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    // Handle multi-touch gesture start
+    if (activePointersRef.current.size >= 2) {
+      // Abort any active drawing/stamping/measuring state cleanly
+      if (tool === 'stamp' && isStamping && savedCanvasData) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.putImageData(savedCanvasData, 0, 0);
+      }
+      setIsDrawing(false);
+      setIsStamping(false);
+      setIsMeasuring(false);
+
+      const pointers = Array.from(activePointersRef.current.values()) as { x: number; y: number }[];
+      const p1 = pointers[0];
+      const p2 = pointers[1];
+
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      initialPinchDistanceRef.current = Math.sqrt(dx * dx + dy * dy);
+      initialZoomRef.current = zoom;
+
+      const container = containerRef.current;
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        const midX = (p1.x + p2.x) / 2 - rect.left;
+        const midY = (p1.y + p2.y) / 2 - rect.top;
+        initialPinchMidpointRef.current = { x: midX, y: midY };
+      }
+      initialPanRef.current = { x: panX, y: panY };
+      wasGesturingRef.current = true;
+      return;
+    }
+
+    const { x, y } = getCanvasCoords(e.clientX, e.clientY);
 
     const ctx = getCanvasContext();
     if (!ctx) return;
 
     if (tool === 'stamp' && stampShape) {
-      // First, restore the clean canvas state to discard the preview before drawing permanently
-      if (savedCanvasData) {
-        ctx.putImageData(savedCanvasData, 0, 0);
-      }
-
-      // Draw the shape permanently at 100% opacity
-      ctx.save();
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = color;
-      ctx.lineWidth = thickness;
-      ctx.globalAlpha = 1.0;
-      drawDiamondShape(ctx, x, y, stampSize, stampShape, 0);
-      ctx.restore();
-
-      // Capture the updated permanent state of the canvas
-      const cleanState = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      setSavedCanvasData(cleanState);
-      
-      // Keep showing the preview at the clicked position
+      canvas.setPointerCapture(e.pointerId);
+      stampStartPosRef.current = { x, y };
+      initialStampSizeRef.current = stampSize;
+      dragThresholdMetRef.current = false;
+      setIsStamping(true);
+      setStampAngle(0); // Reset rotation angle at start of stamp interaction
       setPointerPos({ x, y });
+    } else if (tool === 'ruler') {
+      canvas.setPointerCapture(e.pointerId);
+      setRulerStart({ x, y });
+      setRulerEnd({ x, y });
+      setIsMeasuring(true);
     } else {
       setIsDrawing(true);
       canvas.setPointerCapture(e.pointerId);
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x, y);
-      ctx.stroke();
+      lastPosRef.current = { x, y };
+      drawSegment(x, y, x, y, ctx, canvas.width, canvas.height);
     }
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // Track pointer movement
+    if (activePointersRef.current.has(e.pointerId)) {
+      activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    // Handle active pinch-to-zoom multi-touch gesture
+    if (activePointersRef.current.size >= 2) {
+      const pointers = Array.from(activePointersRef.current.values()) as { x: number; y: number }[];
+      const p1 = pointers[0];
+      const p2 = pointers[1];
+
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const currentDist = Math.sqrt(dx * dx + dy * dy);
+
+      if (initialPinchDistanceRef.current && initialPinchMidpointRef.current) {
+        const scaleFactor = currentDist / initialPinchDistanceRef.current;
+        const newZoom = Math.max(0.5, Math.min(6, initialZoomRef.current * scaleFactor));
+
+        const container = containerRef.current;
+        if (container) {
+          const rect = container.getBoundingClientRect();
+          const currentMidX = (p1.x + p2.x) / 2 - rect.left;
+          const currentMidY = (p1.y + p2.y) / 2 - rect.top;
+
+          const deltaX = currentMidX - initialPinchMidpointRef.current.x;
+          const deltaY = currentMidY - initialPinchMidpointRef.current.y;
+
+          const midX = initialPinchMidpointRef.current.x;
+          const midY = initialPinchMidpointRef.current.y;
+
+          const nextPanX = midX - (midX - initialPanRef.current.x) * (newZoom / initialZoomRef.current) + deltaX;
+          const nextPanY = midY - (midY - initialPanRef.current.y) * (newZoom / initialZoomRef.current) + deltaY;
+
+          setZoom(newZoom);
+          setPanX(nextPanX);
+          setPanY(nextPanY);
+        }
+      }
+      wasGesturingRef.current = true;
+      return;
+    }
+
+    const { x, y } = getCanvasCoords(e.clientX, e.clientY);
 
     if (tool === 'stamp' && stampShape) {
       setPointerPos({ x, y });
+      if (isStamping && stampStartPosRef.current) {
+        const dx = x - stampStartPosRef.current.x;
+        const dy = y - stampStartPosRef.current.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist >= 5) {
+          dragThresholdMetRef.current = true;
+          setStampSize(Math.max(5, Math.round(dist)));
+          
+          // Rotate based on drag direction vector relative to the center
+          const angle = Math.atan2(dy, dx);
+          setStampAngle(angle);
+        }
+      }
+      return;
+    }
+
+    if (tool === 'ruler') {
+      if (isMeasuring) {
+        setRulerEnd({ x, y });
+      }
       return;
     }
 
@@ -914,8 +1413,10 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     const ctx = getCanvasContext();
     if (!ctx) return;
 
-    ctx.lineTo(x, y);
-    ctx.stroke();
+    if (lastPosRef.current) {
+      drawSegment(lastPosRef.current.x, lastPosRef.current.y, x, y, ctx, canvas.width, canvas.height);
+      lastPosRef.current = { x, y };
+    }
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -924,18 +1425,111 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       canvas.releasePointerCapture(e.pointerId);
     }
 
+    activePointersRef.current.delete(e.pointerId);
+
+    const hadGesture = wasGesturingRef.current;
+    if (activePointersRef.current.size === 0) {
+      wasGesturingRef.current = false;
+    }
+
+    if (activePointersRef.current.size < 2) {
+      initialPinchDistanceRef.current = null;
+      initialPinchMidpointRef.current = null;
+    }
+
+    if (hadGesture) {
+      // Suppress any normal drawing, stamping, or measuring triggers on pointer up
+      setIsDrawing(false);
+      setIsStamping(false);
+      setIsMeasuring(false);
+      return;
+    }
+
+    if (tool === 'stamp' && stampShape && isStamping) {
+      const ctx = getCanvasContext();
+      if (ctx && canvas) {
+        if (savedCanvasData) {
+          ctx.putImageData(savedCanvasData, 0, 0);
+        }
+
+        const centerPos = stampStartPosRef.current || getCanvasCoords(e.clientX, e.clientY);
+        const finalSize = dragThresholdMetRef.current ? stampSize : initialStampSizeRef.current;
+        const finalAngle = dragThresholdMetRef.current ? stampAngle : 0;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = thickness;
+        ctx.globalAlpha = 1.0;
+
+        const drawStampWithSymmetry = (cx: number, cy: number) => {
+          drawDiamondShape(ctx, cx, cy, finalSize, stampShape, finalAngle);
+          
+          if (symmetryMode === 'vertical') {
+            drawDiamondShape(ctx, canvas.width - cx, cy, finalSize, stampShape, finalAngle);
+          } else if (symmetryMode === 'horizontal') {
+            drawDiamondShape(ctx, cx, canvas.height - cy, finalSize, stampShape, finalAngle);
+          } else if (symmetryMode === 'quad') {
+            drawDiamondShape(ctx, canvas.width - cx, cy, finalSize, stampShape, finalAngle);
+            drawDiamondShape(ctx, cx, canvas.height - cy, finalSize, stampShape, finalAngle);
+            drawDiamondShape(ctx, canvas.width - cx, canvas.height - cy, finalSize, stampShape, finalAngle);
+          }
+        };
+
+        drawStampWithSymmetry(centerPos.x, centerPos.y);
+        ctx.restore();
+
+        const cleanState = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        setSavedCanvasData(cleanState);
+
+        pushToHistory(canvas.toDataURL());
+      }
+      setIsStamping(false);
+      stampStartPosRef.current = null;
+
+      const { x, y } = getCanvasCoords(e.clientX, e.clientY);
+      setPointerPos({ x, y });
+      return;
+    }
+
+    if (tool === 'ruler') {
+      if (isMeasuring && rulerStart && rulerEnd) {
+        const dx = rulerEnd.x - rulerStart.x;
+        const dy = rulerEnd.y - rulerStart.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 5) {
+          setRulerMeasurements(prev => [...prev, { start: rulerStart, end: rulerEnd }]);
+        }
+      }
+      setIsMeasuring(false);
+      setRulerStart(null);
+      setRulerEnd(null);
+      return;
+    }
+
     if (!isDrawing) return;
     setIsDrawing(false);
+    lastPosRef.current = null;
 
-    // After finishing pen/highlighter/eraser drawing, capture the clean state
     const ctx = getCanvasContext();
     if (ctx && canvas) {
       const cleanState = ctx.getImageData(0, 0, canvas.width, canvas.height);
       setSavedCanvasData(cleanState);
+      pushToHistory(canvas.toDataURL());
     }
   };
 
-  const handlePointerLeave = () => {
+  const handlePointerLeave = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size < 2) {
+      initialPinchDistanceRef.current = null;
+      initialPinchMidpointRef.current = null;
+    }
+    if (activePointersRef.current.size === 0) {
+      wasGesturingRef.current = false;
+    }
+
+    if (isStamping) return; // Prevent clearing preview state while scaling in mid-drag
     if (tool === 'stamp' && savedCanvasData) {
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext('2d');
@@ -955,6 +1549,23 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
         // First restore the clean canvas state to erase the previous preview
         ctx.putImageData(savedCanvasData, 0, 0);
 
+        // Lock the preview center to the start click position if dragging/stamping, otherwise follow hover pointer
+        const cx = isStamping && stampStartPosRef.current ? stampStartPosRef.current.x : pointerPos.x;
+        const cy = isStamping && stampStartPosRef.current ? stampStartPosRef.current.y : pointerPos.y;
+
+        // Draw dashed drag guide line if actively dragging/scaling/rotating
+        if (isStamping && stampStartPosRef.current) {
+          ctx.save();
+          ctx.strokeStyle = '#f59e0b'; // golden amber
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(pointerPos.x, pointerPos.y);
+          ctx.stroke();
+          ctx.restore();
+        }
+
         // Draw the preview shape with 0.5 opacity
         ctx.save();
         ctx.globalCompositeOperation = 'source-over';
@@ -962,11 +1573,11 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
         ctx.lineWidth = thickness;
         ctx.globalAlpha = 0.5;
 
-        drawDiamondShape(ctx, pointerPos.x, pointerPos.y, stampSize, stampShape, 0);
+        drawDiamondShape(ctx, cx, cy, stampSize, stampShape, stampAngle);
         ctx.restore();
       }
     }
-  }, [pointerPos, stampSize, savedCanvasData, tool, stampShape, color, thickness]);
+  }, [pointerPos, stampSize, stampAngle, savedCanvasData, tool, stampShape, color, thickness, isStamping]);
 
   // Switch drawing tools safely, clearing any outstanding preview
   const selectTool = (t: 'pen' | 'highlighter' | 'eraser' | 'transform') => {
@@ -1162,6 +1773,96 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       ctx.restore();
     }
 
+    // 1.25. Draw grid and rulers on virtual canvas if selected for export
+    if (includeGridAndRulersInExport) {
+      // Draw grid
+      if (isGridEnabled) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(212, 175, 55, 0.12)';
+        ctx.lineWidth = 0.5;
+
+        const pxPerCell = gridCellSize;
+        const width = virtualCanvas.width;
+        const height = virtualCanvas.height;
+
+        for (let x = 0; x < width; x += pxPerCell) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          if (Math.round(x / pxPerCell) % 5 === 0) {
+            ctx.strokeStyle = 'rgba(212, 175, 55, 0.28)';
+            ctx.lineWidth = 1.0;
+          } else {
+            ctx.strokeStyle = 'rgba(212, 175, 55, 0.12)';
+            ctx.lineWidth = 0.5;
+          }
+          ctx.stroke();
+        }
+
+        for (let y = 0; y < height; y += pxPerCell) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          if (Math.round(y / pxPerCell) % 5 === 0) {
+            ctx.strokeStyle = 'rgba(212, 175, 55, 0.28)';
+            ctx.lineWidth = 1.0;
+          } else {
+            ctx.strokeStyle = 'rgba(212, 175, 55, 0.12)';
+            ctx.lineWidth = 0.5;
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // Draw all saved rulers
+      rulerMeasurements.forEach((r) => {
+        ctx.save();
+        const dx = r.end.x - r.start.x;
+        const dy = r.end.y - r.start.y;
+        const distPx = Math.sqrt(dx * dx + dy * dy);
+        const distMm = distPx / 15;
+
+        ctx.strokeStyle = '#d4af37';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(r.start.x, r.start.y);
+        ctx.lineTo(r.end.x, r.end.y);
+        ctx.stroke();
+
+        const angle = Math.atan2(dy, dx);
+        const tickLen = 6;
+        ctx.beginPath();
+        ctx.moveTo(r.start.x - Math.sin(angle) * tickLen, r.start.y + Math.cos(angle) * tickLen);
+        ctx.lineTo(r.start.x + Math.sin(angle) * tickLen, r.start.y - Math.cos(angle) * tickLen);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(r.end.x - Math.sin(angle) * tickLen, r.end.y + Math.cos(angle) * tickLen);
+        ctx.lineTo(r.end.x + Math.sin(angle) * tickLen, r.end.y - Math.cos(angle) * tickLen);
+        ctx.stroke();
+
+        const mx = (r.start.x + r.end.x) / 2;
+        const my = (r.start.y + r.end.y) / 2;
+        const label = `${distMm.toFixed(1)} mm`;
+
+        ctx.font = 'bold 9px monospace';
+        const textWidth = ctx.measureText(label).width;
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.beginPath();
+        ctx.roundRect(mx - textWidth / 2 - 4, my - 7, textWidth + 8, 14, 4);
+        ctx.fill();
+
+        ctx.fillStyle = '#fbbf24';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, mx, my);
+
+        ctx.restore();
+      });
+    }
+
     // 1.5. Draw jewelry stencil overlay if selected for export
     if (stencilType !== 'none' && stencilIncludeInExport) {
       drawStencilMaster(
@@ -1184,6 +1885,29 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     onSave(flattenedDataUrl);
   };
 
+  // Mouse wheel zoom handler for desktop/trackpad users
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const zoomFactor = 1.05;
+    const direction = e.deltaY < 0 ? 1 : -1;
+    const factor = direction > 0 ? zoomFactor : 1 / zoomFactor;
+    const newZoom = Math.max(0.5, Math.min(6, zoom * factor));
+
+    const container = containerRef.current;
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      const cursorX = e.clientX - rect.left;
+      const cursorY = e.clientY - rect.top;
+
+      const nextPanX = cursorX - (cursorX - panX) * (newZoom / zoom);
+      const nextPanY = cursorY - (cursorY - panY) * (newZoom / zoom);
+
+      setZoom(newZoom);
+      setPanX(nextPanX);
+      setPanY(nextPanY);
+    }
+  };
+
   // Calculated styles for bounding transform box
   const w = imgState.width * imgState.scale;
   const h = imgState.height * imgState.scale;
@@ -1202,6 +1926,30 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
           <p className="text-[10px] text-brand-300 font-mono">Gold & Rose Design Suite</p>
         </div>
         <div className="flex gap-2 items-center">
+          {/* Undo Button */}
+          <button
+            type="button"
+            disabled={historyIndex <= 0}
+            onClick={handleUndo}
+            className="text-xs text-brand-200 hover:text-white disabled:opacity-30 bg-brand-800/60 disabled:hover:bg-transparent hover:bg-brand-800 px-2.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1"
+            title="Undo stroke"
+          >
+            <Undo2 size={13} />
+            Undo
+          </button>
+
+          {/* Redo Button */}
+          <button
+            type="button"
+            disabled={historyIndex >= history.length - 1}
+            onClick={handleRedo}
+            className="text-xs text-brand-200 hover:text-white disabled:opacity-30 bg-brand-800/60 disabled:hover:bg-transparent hover:bg-brand-800 px-2.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1 border-r border-brand-800 pr-3"
+            title="Redo stroke"
+          >
+            <Redo2 size={13} />
+            Redo
+          </button>
+
           <button 
             type="button"
             onClick={clear} 
@@ -1212,7 +1960,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
           <button 
             type="button"
             onClick={onCancel} 
-            className="text-xs text-brand-300 hover:bg-brand-800 px-3 py-1.5 rounded-lg font-bold transition-all border-r border-brand-800 pr-4"
+            className="text-xs text-brand-300 hover:bg-brand-800 px-3 py-1.5 rounded-lg font-bold transition-all"
           >
             Cancel
           </button>
@@ -1230,72 +1978,127 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       {/* Main design canvas stage */}
       <div 
         ref={containerRef}
+        onWheel={handleWheel}
         className="flex-1 relative overflow-hidden bg-brand-100"
       >
-        {/* Hardware-accelerated background image element */}
-        {bgSrc && bgImage && (
-          <img
-            src={bgSrc}
-            alt="Design backdrop"
+        {/* Transformable stage viewport wrapper */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
+            transformOrigin: '0 0',
+            width: '100%',
+            height: '100%',
+          }}
+        >
+          {/* Hardware-accelerated background image element */}
+          {bgSrc && bgImage && (
+            <img
+              src={bgSrc}
+              alt="Design backdrop"
+              style={{
+                position: 'absolute',
+                pointerEvents: 'none',
+                left: 0,
+                top: 0,
+                width: `${imgState.width}px`,
+                height: `${imgState.height}px`,
+                transform: `translate(${imgState.x}px, ${imgState.y}px) scale(${imgState.scale}) rotate(${imgState.rot}deg)`,
+                transformOrigin: 'top left',
+                display: 'block',
+                maxWidth: 'none',
+                maxHeight: 'none',
+                boxShadow: '0 10px 25px rgba(0,0,0,0.08)'
+              }}
+            />
+          )}
+
+          {/* Gestural transformation box (only active/visible in transform tool) */}
+          {bgSrc && bgImage && tool === 'transform' && (
+            <div
+              onPointerDown={(e) => handleTransformStart(e, 'drag')}
+              onPointerMove={handleTransformMove}
+              onPointerUp={handleTransformEnd}
+              style={{
+                position: 'absolute',
+                border: '2px dashed #d4af37',
+                width: `${w}px`,
+                height: `${h}px`,
+                left: 0,
+                top: 0,
+                transform: `translate(${cx - w/2}px, ${cy - h/2}px) rotate(${imgState.rot}deg)`,
+                cursor: 'move',
+                zIndex: 30,
+                pointerEvents: 'auto'
+              }}
+            >
+              {/* Rotation Handle (top-right) */}
+              <div
+                onPointerDown={(e) => handleTransformStart(e, 'rotate')}
+                onPointerMove={handleTransformMove}
+                onPointerUp={handleTransformEnd}
+                className="absolute -top-3.5 -right-3.5 w-7 h-7 bg-brand-800 text-brand-gold rounded-full border border-brand-gold flex items-center justify-center cursor-alias shadow-lg"
+                title="Rotate Background"
+              >
+                <RotateCw size={12} />
+              </div>
+
+              {/* Scale Handle (bottom-right) */}
+              <div
+                onPointerDown={(e) => handleTransformStart(e, 'scale')}
+                onPointerMove={handleTransformMove}
+                onPointerUp={handleTransformEnd}
+                className="absolute -bottom-3.5 -right-3.5 w-7 h-7 bg-brand-gold text-brand-900 rounded-full border border-white flex items-center justify-center cursor-se-resize shadow-lg"
+                title="Scale Background"
+              >
+                <RefreshCw size={12} />
+              </div>
+            </div>
+          )}
+
+          {/* Ghosted Stencil & Grid & Ruler Overlay Layer */}
+          <canvas
+            ref={stencilCanvasRef}
+            className="absolute inset-0 w-full h-full z-18 pointer-events-none"
+            style={{ mixBlendMode: 'multiply' }}
+          />
+
+          {/* Drawing canvas layer */}
+          <canvas
+            ref={canvasRef}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerLeave}
+            onPointerCancel={handlePointerLeave}
+            className="absolute inset-0 w-full h-full z-20 touch-none"
             style={{
-              position: 'absolute',
-              pointerEvents: 'none',
-              left: 0,
-              top: 0,
-              width: `${imgState.width}px`,
-              height: `${imgState.height}px`,
-              transform: `translate(${imgState.x}px, ${imgState.y}px) scale(${imgState.scale}) rotate(${imgState.rot}deg)`,
-              transformOrigin: 'top left',
-              display: 'block',
-              maxWidth: 'none',
-              maxHeight: 'none',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.08)'
+              pointerEvents: tool === 'transform' ? 'none' : 'auto',
+              background: 'transparent'
             }}
           />
-        )}
+        </div>
 
-        {/* Gestural transformation box (only active/visible in transform tool) */}
-        {bgSrc && bgImage && tool === 'transform' && (
-          <div
-            onPointerDown={(e) => handleTransformStart(e, 'drag')}
-            onPointerMove={handleTransformMove}
-            onPointerUp={handleTransformEnd}
-            style={{
-              position: 'absolute',
-              border: '2px dashed #d4af37',
-              width: `${w}px`,
-              height: `${h}px`,
-              left: 0,
-              top: 0,
-              transform: `translate(${cx - w/2}px, ${cy - h/2}px) rotate(${imgState.rot}deg)`,
-              cursor: 'move',
-              zIndex: 30,
-              pointerEvents: 'auto'
-            }}
-          >
-            {/* Rotation Handle (top-right) */}
-            <div
-              onPointerDown={(e) => handleTransformStart(e, 'rotate')}
-              onPointerMove={handleTransformMove}
-              onPointerUp={handleTransformEnd}
-              className="absolute -top-3.5 -right-3.5 w-7 h-7 bg-brand-800 text-brand-gold rounded-full border border-brand-gold flex items-center justify-center cursor-alias shadow-lg"
-              title="Rotate Background"
+        {/* Floating Zoom Control (Top Right of Stage) */}
+        <div className="absolute top-4 right-4 bg-brand-900/95 backdrop-blur-md px-3 py-2 rounded-xl text-xs text-brand-200 border border-brand-800 shadow-lg pointer-events-auto z-40 flex items-center gap-2.5">
+          <span className="font-mono text-[11px] font-bold text-brand-gold">
+            Zoom: {Math.round(zoom * 100)}%
+          </span>
+          {(zoom !== 1 || panX !== 0 || panY !== 0) && (
+            <button
+              type="button"
+              onClick={() => {
+                setZoom(1);
+                setPanX(0);
+                setPanY(0);
+              }}
+              className="text-[9px] font-black uppercase tracking-widest bg-brand-gold text-brand-900 px-2 py-1 rounded-lg hover:bg-brand-gold/90 transition-all shadow-md active:scale-95"
             >
-              <RotateCw size={12} />
-            </div>
-
-            {/* Scale Handle (bottom-right) */}
-            <div
-              onPointerDown={(e) => handleTransformStart(e, 'scale')}
-              onPointerMove={handleTransformMove}
-              onPointerUp={handleTransformEnd}
-              className="absolute -bottom-3.5 -right-3.5 w-7 h-7 bg-brand-gold text-brand-900 rounded-full border border-white flex items-center justify-center cursor-se-resize shadow-lg"
-              title="Scale Background"
-            >
-              <RefreshCw size={12} />
-            </div>
-          </div>
-        )}
+              Reset View
+            </button>
+          )}
+        </div>
 
         {/* Floating Help Tip */}
         <div className="absolute top-4 left-4 bg-brand-900/90 backdrop-blur-md px-3.5 py-2 rounded-xl text-xs text-brand-200 border border-brand-800 shadow-lg pointer-events-none z-40 max-w-xs space-y-1">
@@ -1308,195 +2111,267 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
               ? 'Move cursor onto the canvas to preview the shape. Click anywhere to instantly stamp it. Adjust the size slider anytime.' 
               : tool === 'transform' 
               ? 'Drag inside the dashed box to move the backdrop photo. Drag the golden handles to scale or rotate it.' 
+              : tool === 'ruler'
+              ? 'Click and drag calipers across any parts of the design to measure live dimensions in physical millimeters.'
               : 'Select pen color/thickness and draw directly on top. Switch to eraser to correct strokes.'}
+          </p>
+          <p className="text-[9px] text-brand-400 font-mono italic">
+            💡 Tablet Tip: Pinch with 2 fingers to zoom or pan.
           </p>
         </div>
 
-        {/* Ghosted Stencil Overlay Layer */}
-        {stencilType !== 'none' && (
-          <canvas
-            ref={stencilCanvasRef}
-            className="absolute inset-0 w-full h-full z-18 pointer-events-none"
-            style={{ mixBlendMode: 'multiply' }}
-          />
-        )}
+        {/* Floating CAD HUD Panels Overlay (Floating above the canvas to prevent layout shifts) */}
+        <div className="absolute bottom-4 left-4 right-4 z-40 flex flex-col gap-2 pointer-events-auto">
+          {/* ACTIVE CALIPER RULER PANEL (Shown only when ruler tool is active) */}
+          {tool === 'ruler' && (
+            <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-brand-900/95 backdrop-blur-md border border-brand-800 rounded-xl shadow-2xl animate-fadeIn">
+              <div className="flex items-center gap-2 self-start md:self-auto">
+                <span className="bg-brand-gold text-brand-900 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1">
+                  <Ruler size={10} /> Active Caliper Ruler
+                </span>
+                <span className="text-[10px] text-brand-200 font-medium hidden sm:inline">
+                  Click & drag calipers across the canvas to place real-time dimension measurements (15px = 1mm).
+                </span>
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                {rulerMeasurements.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setRulerMeasurements([])}
+                    className="text-[9px] font-black text-red-400 hover:bg-red-500/20 hover:text-red-300 border border-red-500/30 px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all"
+                  >
+                    Clear Measurements ({rulerMeasurements.length})
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {/* DESIGN STENCIL SETTINGS PANEL (Shown only when stencil is active) */}
+          {stencilType !== 'none' ? (
+            <div className="w-full grid grid-cols-1 md:grid-cols-4 items-center gap-4 p-3.5 bg-brand-950/95 backdrop-blur-md border border-brand-800 rounded-xl shadow-2xl animate-fadeIn text-[11px]">
+              {/* Header / Stencil Info */}
+              <div className="md:col-span-1 flex flex-col gap-1">
+                <span className="bg-brand-gold text-brand-900 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider w-max flex items-center gap-1">
+                  <Sparkles size={10} /> Stencil Active
+                </span>
+                <span className="font-bold text-brand-100 uppercase tracking-wide">
+                  {stencilType === 'solitaire' ? '4-Prong Solitaire' :
+                   stencilType === 'cathedral' ? 'Cathedral Side-View' :
+                   stencilType === 'halo' ? 'Halo Setting Guide' :
+                   stencilType === 'threestone' ? 'Three-Stone Mount' :
+                   'Pave Band Template'}
+                </span>
+              </div>
 
-        {/* Drawing canvas layer */}
-        <canvas
-          ref={canvasRef}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerLeave}
-          className="absolute inset-0 w-full h-full z-20 touch-none"
-          style={{
-            pointerEvents: tool === 'transform' ? 'none' : 'auto',
-            background: 'transparent'
-          }}
-        />
+              {/* Controls Row 1: Size & Opacity */}
+              <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Size Slider */}
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-brand-300 w-12 text-left">Size:</span>
+                  <input
+                    type="range"
+                    min="50"
+                    max="500"
+                    value={stencilSize}
+                    onChange={(e) => setStencilSize(parseInt(e.target.value))}
+                    className="flex-1 accent-brand-gold cursor-pointer h-1 bg-brand-900/40 rounded-lg appearance-none"
+                  />
+                  <span className="font-bold text-brand-200 font-mono w-10 text-right">{stencilSize}px</span>
+                </div>
+
+                {/* Opacity Slider */}
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-brand-300 w-12 text-left">Opacity:</span>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1.0"
+                    step="0.05"
+                    value={stencilOpacity}
+                    onChange={(e) => setStencilOpacity(parseFloat(e.target.value))}
+                    className="flex-1 accent-brand-gold cursor-pointer h-1 bg-brand-900/40 rounded-lg appearance-none"
+                  />
+                  <span className="font-bold text-brand-200 font-mono w-10 text-right">{(stencilOpacity * 100).toFixed(0)}%</span>
+                </div>
+              </div>
+
+              {/* Controls Row 2: Rotation & Reset */}
+              <div className="md:col-span-1 flex items-center justify-between gap-3">
+                {/* Rotate Slider */}
+                <div className="flex items-center gap-2 flex-1 min-w-[120px]">
+                  <span className="font-bold text-brand-300 w-10 text-left">Rotate:</span>
+                  <input
+                    type="range"
+                    min="-180"
+                    max="180"
+                    value={stencilRotate}
+                    onChange={(e) => setStencilRotate(parseInt(e.target.value))}
+                    className="flex-1 accent-brand-gold cursor-pointer h-1 bg-brand-900/40 rounded-lg appearance-none"
+                  />
+                  <span className="font-bold text-brand-200 font-mono w-10 text-right">{stencilRotate}°</span>
+                </div>
+
+                {/* Reset button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStencilOffsetX(0);
+                    setStencilOffsetY(0);
+                    setStencilRotate(0);
+                    setStencilSize(200);
+                    setStencilOpacity(0.4);
+                  }}
+                  className="text-[9px] font-black text-brand-300 hover:text-white border border-brand-800 bg-brand-900 px-2.5 py-1 rounded transition-all shrink-0 uppercase"
+                  title="Reset stencil properties"
+                >
+                  Reset
+                </button>
+              </div>
+
+              {/* Position offset controls & Export Toggle */}
+              <div className="md:col-span-4 border-t border-brand-800/50 pt-2.5 flex flex-wrap justify-between items-center gap-3">
+                {/* Position sliders */}
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-brand-400 uppercase tracking-widest text-[9px]">Offset X:</span>
+                    <input
+                      type="range"
+                      min="-300"
+                      max="300"
+                      value={stencilOffsetX}
+                      onChange={(e) => setStencilOffsetX(parseInt(e.target.value))}
+                      className="w-20 accent-brand-gold cursor-pointer h-1 bg-brand-900/40 rounded-lg appearance-none"
+                    />
+                    <span className="font-mono font-bold text-brand-200 w-8 text-right">{stencilOffsetX > 0 ? `+${stencilOffsetX}` : stencilOffsetX}px</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-brand-400 uppercase tracking-widest text-[9px]">Offset Y:</span>
+                    <input
+                      type="range"
+                      min="-300"
+                      max="300"
+                      value={stencilOffsetY}
+                      onChange={(e) => setStencilOffsetY(parseInt(e.target.value))}
+                      className="w-20 accent-brand-gold cursor-pointer h-1 bg-brand-900/40 rounded-lg appearance-none"
+                    />
+                    <span className="font-mono font-bold text-brand-200 w-8 text-right">{stencilOffsetY > 0 ? `+${stencilOffsetY}` : stencilOffsetY}px</span>
+                  </div>
+                </div>
+
+                {/* Include in Save Toggle */}
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-brand-300">Export:</span>
+                  <button
+                    type="button"
+                    onClick={() => setStencilIncludeInExport(!stencilIncludeInExport)}
+                    className={`px-2.5 py-1 rounded text-[9px] font-black uppercase transition-all ${
+                      stencilIncludeInExport ? 'bg-brand-gold text-brand-900 shadow-md' : 'bg-brand-800 text-brand-300 border border-brand-700'
+                    }`}
+                  >
+                    {stencilIncludeInExport ? 'Bake Enabled' : 'Guide Only'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* Floating control dock - highly optimized for tablet and mobile views */}
       <div className="bg-white/95 backdrop-blur-xl border-t border-brand-200 p-3 md:p-4 pb-5 flex flex-col gap-3 shadow-2xl z-30">
-        
-        {/* INTERACTIVE STAMP SETTINGS PANEL (Shown only when stamp tool is active) */}
-        {tool === 'stamp' && stampShape ? (
-          <div className="w-full flex flex-col md:flex-row items-center justify-between gap-3 p-3 bg-amber-50 border border-amber-200/60 rounded-xl shadow-inner animate-fadeIn">
-            <div className="flex items-center gap-2 self-start md:self-auto">
-              <span className="bg-amber-600 text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1">
-                <Sparkles size={10} className="animate-spin-slow" /> Active Stamp: {stampShape}
-              </span>
-              <span className="text-[10px] text-brand-600 font-medium hidden sm:inline">
-                Click anywhere on canvas to stamp. Use slider to adjust size.
-              </span>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
-              {/* Size Slider */}
-              <div className="flex items-center gap-2 flex-1 sm:flex-initial min-w-[140px]">
-                <span className="text-[10px] font-bold text-brand-700 w-8">Size:</span>
-                <input
-                  type="range"
-                  min={stampShape === 'Ring Rail' ? "20" : "5"}
-                  max="300"
-                  value={stampSize}
-                  onChange={(e) => setStampSize(parseInt(e.target.value))}
-                  className="flex-1 sm:w-28 md:w-32 accent-amber-500 cursor-pointer h-1.5 bg-amber-100 rounded-lg appearance-none"
-                />
-                <span className="text-[10px] font-bold text-brand-800 font-mono w-10 text-right">{stampSize}px</span>
-              </div>
-            </div>
-          </div>
-        ) : null}
 
-        {/* DESIGN STENCIL SETTINGS PANEL (Shown only when stencil is active) */}
-        {stencilType !== 'none' ? (
-          <div className="w-full grid grid-cols-1 md:grid-cols-4 items-center gap-4 p-3.5 bg-brand-50 border border-brand-200/60 rounded-xl shadow-inner animate-fadeIn text-[11px] mb-2">
-            {/* Header / Stencil Info */}
-            <div className="md:col-span-1 flex flex-col gap-1">
-              <span className="bg-brand-900 text-brand-gold text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider w-max flex items-center gap-1">
-                <Sparkles size={10} /> Stencil Active
-              </span>
-              <span className="font-bold text-brand-800 uppercase tracking-wide">
-                {stencilType === 'solitaire' ? '4-Prong Solitaire' :
-                 stencilType === 'cathedral' ? 'Cathedral Side-View' :
-                 stencilType === 'halo' ? 'Halo Setting Guide' :
-                 stencilType === 'threestone' ? 'Three-Stone Mount' :
-                 'Pave Band Template'}
-              </span>
-            </div>
-
-            {/* Controls Row 1: Size & Opacity */}
-            <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Size Slider */}
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-brand-700 w-12 text-left">Size:</span>
-                <input
-                  type="range"
-                  min="50"
-                  max="500"
-                  value={stencilSize}
-                  onChange={(e) => setStencilSize(parseInt(e.target.value))}
-                  className="flex-1 accent-brand-900 cursor-pointer h-1 bg-brand-200 rounded-lg appearance-none"
-                />
-                <span className="font-bold text-brand-800 font-mono w-10 text-right">{stencilSize}px</span>
-              </div>
-
-              {/* Opacity Slider */}
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-brand-700 w-12 text-left">Opacity:</span>
-                <input
-                  type="range"
-                  min="0.1"
-                  max="1.0"
-                  step="0.05"
-                  value={stencilOpacity}
-                  onChange={(e) => setStencilOpacity(parseFloat(e.target.value))}
-                  className="flex-1 accent-brand-900 cursor-pointer h-1 bg-brand-200 rounded-lg appearance-none"
-                />
-                <span className="font-bold text-brand-800 font-mono w-10 text-right">{(stencilOpacity * 100).toFixed(0)}%</span>
-              </div>
-            </div>
-
-            {/* Controls Row 2: Rotation & Reset */}
-            <div className="md:col-span-1 flex items-center justify-between gap-3">
-              {/* Rotate Slider */}
-              <div className="flex items-center gap-2 flex-1 min-w-[120px]">
-                <span className="font-bold text-brand-700 w-10 text-left">Rotate:</span>
-                <input
-                  type="range"
-                  min="-180"
-                  max="180"
-                  value={stencilRotate}
-                  onChange={(e) => setStencilRotate(parseInt(e.target.value))}
-                  className="flex-1 accent-brand-900 cursor-pointer h-1 bg-brand-200 rounded-lg appearance-none"
-                />
-                <span className="font-bold text-brand-800 font-mono w-10 text-right">{stencilRotate}°</span>
-              </div>
-
-              {/* Reset button */}
+        {/* VISUAL STAMP GALLERY RIBBON (Quick Stamp Selection) */}
+        <div className="w-full bg-amber-50/40 border border-amber-200/50 rounded-xl p-2.5 animate-fadeIn">
+          <div className="flex items-center justify-between gap-2 mb-2 px-1">
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
+              <Sparkles size={12} className="text-amber-500 animate-spin-slow" />
+              Quick Stamp Selector
+            </span>
+            {tool === 'stamp' && stampShape && (
               <button
                 type="button"
                 onClick={() => {
-                  setStencilOffsetX(0);
-                  setStencilOffsetY(0);
-                  setStencilRotate(0);
-                  setStencilSize(200);
-                  setStencilOpacity(0.4);
+                  handleStampShapeChange('');
+                  selectTool('pen');
                 }}
-                className="text-[9px] font-black text-brand-500 hover:text-brand-900 border border-brand-200 bg-white px-2 py-1 rounded transition-all shrink-0 uppercase"
-                title="Reset stencil properties"
+                className="text-[9px] font-black text-amber-800 hover:text-amber-900 uppercase tracking-widest bg-amber-100/80 hover:bg-amber-200/80 border border-amber-200 px-2 py-0.5 rounded-lg transition-all"
               >
-                Reset
+                Clear Selection
               </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-amber-200 scrollbar-track-transparent">
+            {/* Ring Rail Stamp */}
+            <button
+              type="button"
+              onClick={() => handleStampShapeChange('Ring Rail')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all shrink-0 min-h-[38px] ${
+                tool === 'stamp' && stampShape === 'Ring Rail'
+                  ? 'bg-amber-900 text-amber-100 border-amber-950 shadow-md scale-105 z-10 animate-pulse'
+                  : 'bg-white text-amber-800 border-amber-200/60 hover:bg-amber-100/40'
+              }`}
+              title="Click to select Ring Rail Stamp"
+            >
+              <StampIcon shape="Ring Rail" className="w-5 h-5 text-amber-500" />
+              <span>Ring Rail</span>
+            </button>
+
+            {/* Divider */}
+            <div className="w-px h-6 bg-amber-200/50 shrink-0 mx-1" />
+
+            {/* Top View Stones */}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[9px] font-bold text-amber-600/80 uppercase tracking-widest mr-1">Top Cuts:</span>
+              {CENTER_SHAPES.map((shape) => (
+                <button
+                  key={shape}
+                  type="button"
+                  onClick={() => handleStampShapeChange(shape)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all shrink-0 min-h-[38px] ${
+                    tool === 'stamp' && stampShape === shape
+                      ? 'bg-amber-900 text-amber-100 border-amber-950 shadow-md scale-105 z-10'
+                      : 'bg-white text-amber-800 border-amber-200/60 hover:bg-amber-100/40'
+                  }`}
+                  title={`Click to select ${shape} Stamp`}
+                >
+                  <StampIcon shape={shape} className="w-5 h-5 text-amber-500" />
+                  <span>{shape}</span>
+                </button>
+              ))}
             </div>
 
-            {/* Position offset controls & Export Toggle */}
-            <div className="md:col-span-4 border-t border-brand-200/50 pt-2.5 flex flex-wrap justify-between items-center gap-3">
-              {/* Position sliders */}
-              <div className="flex items-center gap-4 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-brand-500 uppercase tracking-widest text-[9px]">Offset X:</span>
-                  <input
-                    type="range"
-                    min="-300"
-                    max="300"
-                    value={stencilOffsetX}
-                    onChange={(e) => setStencilOffsetX(parseInt(e.target.value))}
-                    className="w-20 accent-brand-900 cursor-pointer h-1 bg-brand-200 rounded-lg appearance-none"
-                  />
-                  <span className="font-mono font-bold text-brand-700 w-8 text-right">{stencilOffsetX > 0 ? `+${stencilOffsetX}` : stencilOffsetX}px</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-brand-500 uppercase tracking-widest text-[9px]">Offset Y:</span>
-                  <input
-                    type="range"
-                    min="-300"
-                    max="300"
-                    value={stencilOffsetY}
-                    onChange={(e) => setStencilOffsetY(parseInt(e.target.value))}
-                    className="w-20 accent-brand-900 cursor-pointer h-1 bg-brand-200 rounded-lg appearance-none"
-                  />
-                  <span className="font-mono font-bold text-brand-700 w-8 text-right">{stencilOffsetY > 0 ? `+${stencilOffsetY}` : stencilOffsetY}px</span>
-                </div>
-              </div>
+            {/* Divider */}
+            <div className="w-px h-6 bg-amber-200/50 shrink-0 mx-1" />
 
-              {/* Include in Save Toggle */}
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-brand-600">Export:</span>
+            {/* Side View Stones */}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[9px] font-bold text-amber-600/80 uppercase tracking-widest mr-1">Side Cuts:</span>
+              {[
+                { val: 'Round Side', label: 'Round' },
+                { val: 'Princess Side', label: 'Princess' },
+                { val: 'Emerald Side', label: 'Emerald' },
+                { val: 'Pear Side', label: 'Pear' },
+                { val: 'Marquise Side', label: 'Marquise' },
+              ].map((item) => (
                 <button
+                  key={item.val}
                   type="button"
-                  onClick={() => setStencilIncludeInExport(!stencilIncludeInExport)}
-                  className={`px-2 py-0.5 rounded text-[9px] font-black uppercase transition-all ${
-                    stencilIncludeInExport ? 'bg-brand-900 text-brand-gold shadow' : 'bg-brand-200 text-brand-600'
+                  onClick={() => handleStampShapeChange(item.val)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all shrink-0 min-h-[38px] ${
+                    tool === 'stamp' && stampShape === item.val
+                      ? 'bg-amber-900 text-amber-100 border-amber-950 shadow-md scale-105 z-10'
+                      : 'bg-white text-amber-800 border-amber-200/60 hover:bg-amber-100/40'
                   }`}
+                  title={`Click to select ${item.label} Side Stamp`}
                 >
-                  {stencilIncludeInExport ? 'Bake Enabled' : 'Guide Only'}
+                  <StampIcon shape={item.val} className="w-5 h-5 text-amber-500" />
+                  <span>{item.label} Side</span>
                 </button>
-              </div>
+              ))}
             </div>
           </div>
-        ) : null}
+        </div>
 
         {/* MAIN SKETCH TOOLS BAR */}
         <div className="w-full flex flex-wrap lg:flex-nowrap items-center justify-between gap-3 md:gap-4">
@@ -1528,6 +2403,17 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
                 title="Eraser"
               >
                 <Eraser size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTool('ruler');
+                  setStampShape('');
+                }}
+                className={`p-2.5 md:p-3 rounded-lg transition-all min-w-[42px] min-h-[42px] flex items-center justify-center ${tool === 'ruler' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-100'}`}
+                title="Caliper Ruler Measurement Tool"
+              >
+                <Ruler size={15} />
               </button>
               <button
                 type="button"
@@ -1573,48 +2459,24 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
             </select>
           </div>
 
-          {/* Stamp Selector (Tablet layout optimized) */}
-          <div className="w-full sm:w-auto shrink-0 md:max-w-[200px]">
-            <select
-              id="sketch-shape-select"
-              value={tool === 'stamp' ? stampShape : ''}
-              onChange={(e) => handleStampShapeChange(e.target.value)}
-              className="cursor-pointer text-[10px] font-black text-brand-800 bg-amber-50 border border-amber-200 px-3 py-3 rounded-xl hover:bg-amber-100/80 transition-all shadow-sm outline-none w-full uppercase tracking-wider min-h-[42px]"
-            >
-              <option value="">💠 Stamp Design Template</option>
-              <optgroup label="Ring Design Layout">
-                <option value="Ring Rail">Ring Rail (Circle)</option>
-              </optgroup>
-              <optgroup label="Top View Gemstones">
-                {CENTER_SHAPES.map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </optgroup>
-              <optgroup label="Side Profile Gemstones">
-                <option value="Round Side">Round (Side)</option>
-                <option value="Princess Side">Princess (Side)</option>
-                <option value="Emerald Side">Emerald (Side)</option>
-                <option value="Pear Side">Pear (Side)</option>
-                <option value="Marquise Side">Marquise (Side)</option>
-              </optgroup>
-            </select>
-          </div>
+
  
           {/* Color palette & Pen thickness slider (Tablet layout optimized) */}
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto justify-end shrink-0">
             {/* Color palette */}
-            <div className="flex flex-nowrap gap-2 px-2.5 py-2 bg-brand-50/50 rounded-xl border border-brand-100/80 sm:border-transparent shrink-0">
-              {colorOptions.map(c => (
+            <div className="flex items-center gap-1.5 px-2.5 py-2 bg-brand-50/50 rounded-xl border border-brand-100/80 overflow-x-auto max-w-[280px] scrollbar-none shrink-0" title="Precious Metals & Fine Gemstones Palette">
+              {jewelryColors.map(c => (
                 <button
-                  key={c.id}
+                  key={c.name}
                   type="button"
                   onClick={() => {
                     setColor(c.val);
-                    if (tool === 'eraser' || tool === 'transform') {
+                    if (tool === 'eraser' || tool === 'transform' || tool === 'ruler') {
                       setTool('pen');
                     }
                   }}
-                  className={`w-6 h-6 rounded-full ${c.bgClass} border-2 transition-all shadow-sm shrink-0 ${color === c.val ? 'border-brand-gold scale-125 shadow-md' : 'border-transparent scale-100 hover:scale-105'}`}
+                  title={c.name}
+                  className={`w-6 h-6 rounded-full ${c.bgClass} border-2 transition-all shadow-sm shrink-0 relative ${color === c.val ? 'border-brand-gold scale-125 shadow-md z-10' : 'border-transparent scale-100 hover:scale-110'}`}
                 />
               ))}
             </div>
@@ -1638,6 +2500,88 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
           </div>
 
         </div>
+
+        {/* CONSULTATION ENHANCEMENTS DRAWER */}
+        <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-brand-100 pt-3 mt-1 text-[11px]">
+          {/* Column 1: Symmetry controls */}
+          <div className="flex flex-col gap-1.5 bg-brand-50/50 p-2.5 rounded-xl border border-brand-100/60">
+            <span className="font-bold text-brand-800 uppercase tracking-wider text-[9px] flex items-center gap-1">
+              <RefreshCw size={10} className="text-brand-gold" /> Symmetry Mirror Mode
+            </span>
+            <div className="grid grid-cols-4 gap-1">
+              {(['none', 'vertical', 'horizontal', 'quad'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setSymmetryMode(mode)}
+                  className={`px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all border text-center ${
+                    symmetryMode === mode 
+                      ? 'bg-brand-900 text-brand-gold border-brand-900 shadow-sm' 
+                      : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-100'
+                  }`}
+                >
+                  {mode === 'none' ? 'Off' : mode === 'vertical' ? 'Vert' : mode === 'horizontal' ? 'Horiz' : 'Quad'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Column 2: Calibrated mm Grid */}
+          <div className="flex flex-col gap-1.5 bg-brand-50/50 p-2.5 rounded-xl border border-brand-100/60">
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-brand-800 uppercase tracking-wider text-[9px] flex items-center gap-1">
+                <Grid3X3 size={10} className="text-brand-gold" /> Millimeter Grid
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsGridEnabled(!isGridEnabled)}
+                className={`px-2 py-0.5 rounded text-[8px] font-black uppercase transition-all ${
+                  isGridEnabled ? 'bg-emerald-600 text-white shadow' : 'bg-brand-200 text-brand-600'
+                }`}
+              >
+                {isGridEnabled ? 'Grid On' : 'Grid Off'}
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-bold text-brand-500 uppercase tracking-widest w-12 shrink-0">Spacing:</span>
+              <input
+                type="range"
+                min="15"
+                max="75"
+                step="15"
+                disabled={!isGridEnabled}
+                value={gridCellSize}
+                onChange={(e) => setGridCellSize(parseInt(e.target.value))}
+                className="flex-1 accent-brand-900 cursor-pointer h-1 bg-brand-200 rounded-lg appearance-none disabled:opacity-40"
+              />
+              <span className="font-mono font-bold text-brand-700 w-11 text-right shrink-0">
+                {(gridCellSize / 15).toFixed(0)} mm
+              </span>
+            </div>
+          </div>
+
+          {/* Column 3: Bake Options */}
+          <div className="flex flex-col gap-1.5 bg-brand-50/50 p-2.5 rounded-xl border border-brand-100/60">
+            <span className="font-bold text-brand-800 uppercase tracking-wider text-[9px] flex items-center gap-1">
+              <Check size={10} className="text-brand-gold" /> Export Calibration Options
+            </span>
+            <div className="flex items-center justify-between gap-2 h-full">
+              <span className="text-[10px] text-brand-600 font-medium">Include calipers and millimeter grids in saved design?</span>
+              <button
+                type="button"
+                onClick={() => setIncludeGridAndRulersInExport(!includeGridAndRulersInExport)}
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border shrink-0 ${
+                  includeGridAndRulersInExport 
+                    ? 'bg-brand-900 text-brand-gold border-brand-900 shadow-sm' 
+                    : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-100'
+                }`}
+              >
+                {includeGridAndRulersInExport ? 'Bake Calipers' : 'Consult Only'}
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );

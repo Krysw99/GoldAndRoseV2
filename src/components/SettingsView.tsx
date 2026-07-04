@@ -6,9 +6,10 @@
 import React, { useState } from 'react';
 import { 
   Save, Download, Trash2, Calendar, Settings, ShieldAlert, Key, 
-  DollarSign, Wrench, Gem, HardDrive 
+  DollarSign, Wrench, Gem, HardDrive, EyeOff
 } from 'lucide-react';
 import { AppSettings } from '../types';
+import { ROUND_MELEE, FANCY_SHAPES } from '../constants';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -33,7 +34,7 @@ export default function SettingsView({
 }: SettingsViewProps) {
   // Key state
   const [apiKey, setApiKey] = useState(goldApiKey);
-  const [subTab, setSubTab] = useState<'rates' | 'retail' | 'wholesale' | 'database'>('rates');
+  const [subTab, setSubTab] = useState<'rates' | 'retail' | 'wholesale' | 'database' | 'rawCosts'>('rates');
 
   // Manual spot rates state
   const [manualGold, setManualGold] = useState(spotPrices.gold.toString());
@@ -41,12 +42,31 @@ export default function SettingsView({
   const [manualPlatinum, setManualPlatinum] = useState(spotPrices.platinum.toString());
 
   // App Settings Local Edit State
-  const [localSettings, setLocalSettings] = useState<AppSettings>({ ...settings });
+  const [localSettings, setLocalSettings] = useState<AppSettings>(() => ({
+    ...settings,
+    cubanMultipliers: settings.cubanMultipliers || [
+      { minWidth: 5, maxWidth: 7.9, multiplier: 1.8 },
+      { minWidth: 8, maxWidth: 10.9, multiplier: 1.6 },
+      { minWidth: 11, maxWidth: 13.9, multiplier: 1.5 },
+      { minWidth: 14, maxWidth: 24, multiplier: 1.4 }
+    ],
+    tennisMultipliers: settings.tennisMultipliers || [
+      { minWidth: 1.0, maxWidth: 1.9, multiplier: 1.6 },
+      { minWidth: 2.0, maxWidth: 4.0, multiplier: 1.4 }
+    ],
+    tennisDiamondPricePerCt: settings.tennisDiamondPricePerCt !== undefined ? settings.tennisDiamondPricePerCt : 600
+  }));
 
   // Database Purge Options
   const [purgeRange, setPurgeRange] = useState<'all' | '365' | 'custom'>('365');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Wholesale stone rate custom sizes
+  const [activeFancyShapeTab, setActiveFancyShapeTab] = useState<string>('Princess');
+  
+  // Raw cost custom sizes
+  const [activeRawFancyShapeTab, setActiveRawFancyShapeTab] = useState<string>('Princess');
 
   const handleSaveAll = () => {
     // Apply manual spot rate updates
@@ -106,6 +126,122 @@ export default function SettingsView({
     }));
   };
 
+  const handleWholesaleMeleeRate = (size: string, value: number) => {
+    setLocalSettings(prev => ({
+      ...prev,
+      wholesale: {
+        ...prev.wholesale,
+        meleeRates: {
+          ...(prev.wholesale.meleeRates || {}),
+          [size]: value
+        }
+      }
+    }));
+  };
+
+  const handleWholesaleFancyRate = (key: string, value: number) => {
+    setLocalSettings(prev => ({
+      ...prev,
+      wholesale: {
+        ...prev.wholesale,
+        fancyRates: {
+          ...(prev.wholesale.fancyRates || {}),
+          [key]: value
+        }
+      }
+    }));
+  };
+
+  const handleRawMeleeRate = (size: string, value: number) => {
+    setLocalSettings(prev => ({
+      ...prev,
+      rawMeleeRates: {
+        ...(prev.rawMeleeRates || {}),
+        [size]: value
+      }
+    }));
+  };
+
+  const handleRawFancyRate = (key: string, value: number) => {
+    setLocalSettings(prev => ({
+      ...prev,
+      rawFancyRates: {
+        ...(prev.rawFancyRates || {}),
+        [key]: value
+      }
+    }));
+  };
+
+  const handleUpdateCubanMultiplier = (index: number, field: 'minWidth' | 'maxWidth' | 'multiplier', value: number) => {
+    setLocalSettings(prev => {
+      const updated = [...(prev.cubanMultipliers || [])];
+      updated[index] = {
+        ...updated[index],
+        [field]: value
+      };
+      return {
+        ...prev,
+        cubanMultipliers: updated
+      };
+    });
+  };
+
+  const handleAddCubanMultiplier = () => {
+    setLocalSettings(prev => {
+      const updated = [...(prev.cubanMultipliers || [])];
+      updated.push({ minWidth: 0, maxWidth: 0, multiplier: 1.0 });
+      return {
+        ...prev,
+        cubanMultipliers: updated
+      };
+    });
+  };
+
+  const handleRemoveCubanMultiplier = (index: number) => {
+    setLocalSettings(prev => {
+      const updated = (prev.cubanMultipliers || []).filter((_, i) => i !== index);
+      return {
+        ...prev,
+        cubanMultipliers: updated
+      };
+    });
+  };
+
+  const handleUpdateTennisMultiplier = (index: number, field: 'minWidth' | 'maxWidth' | 'multiplier', value: number) => {
+    setLocalSettings(prev => {
+      const updated = [...(prev.tennisMultipliers || [])];
+      updated[index] = {
+        ...updated[index],
+        [field]: value
+      };
+      return {
+        ...prev,
+        tennisMultipliers: updated
+      };
+    });
+  };
+
+  const handleAddTennisMultiplier = () => {
+    setLocalSettings(prev => {
+      const updated = [...(prev.tennisMultipliers || [])];
+      updated.push({ minWidth: 0, maxWidth: 0, multiplier: 1.0 });
+      return {
+        ...prev,
+        tennisMultipliers: updated
+      };
+    });
+  };
+
+  const handleRemoveTennisMultiplier = (index: number) => {
+    setLocalSettings(prev => {
+      const updated = (prev.tennisMultipliers || []).filter((_, i) => i !== index);
+      return {
+        ...prev,
+        tennisMultipliers: updated
+      };
+    });
+  };
+
   const handlePurgeHistory = () => {
     if (purgeRange === 'custom' && (!startDate || !endDate)) {
       alert("Please select both start and end dates for custom date range purge.");
@@ -155,6 +291,17 @@ export default function SettingsView({
         >
           <Gem size={14} className={subTab === 'wholesale' ? 'text-brand-gold' : 'text-brand-400'} />
           Wholesale Model
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab('rawCosts')}
+          className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between gap-2 ${subTab === 'rawCosts' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
+        >
+          <div className="flex items-center gap-2">
+            <EyeOff size={14} className={subTab === 'rawCosts' ? 'text-brand-gold' : 'text-brand-400'} />
+            <span>Internal Mfg Costs</span>
+          </div>
+          <span className="text-[7px] bg-amber-500 text-brand-950 font-black px-1.5 py-0.5 rounded-full uppercase scale-90">Eyes Only</span>
         </button>
         <button
           type="button"
@@ -272,21 +419,38 @@ export default function SettingsView({
               </div>
             </div>
 
-            {/* Toggle showRawCostOnQuoteTab */}
-            <div className="flex items-center justify-between bg-brand-50/30 border border-brand-100 p-3.5 rounded-xl">
-              <div>
-                <span className="text-[10px] font-black text-brand-800 uppercase tracking-wider block">Show Internal Manufacturing Raw Cost</span>
-                <span className="text-[9px] text-brand-500 block leading-tight">Display the amber raw cost breakdown box on the active custom quote tab.</span>
+            {/* Retail Metal Spot Premiums */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2">Retail Metal Spot Premiums (per Oz)</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Gold Spot Premium / oz</label>
+                  <input
+                    type="number"
+                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
+                    value={localSettings.retailGoldPremium !== undefined ? localSettings.retailGoldPremium : 100}
+                    onChange={(e) => setLocalSettings(prev => ({ ...prev, retailGoldPremium: parseFloat(e.target.value) || 0 }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Silver Spot Premium / oz</label>
+                  <input
+                    type="number"
+                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
+                    value={localSettings.retailSilverPremium !== undefined ? localSettings.retailSilverPremium : 20}
+                    onChange={(e) => setLocalSettings(prev => ({ ...prev, retailSilverPremium: parseFloat(e.target.value) || 0 }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Platinum Spot Premium / oz</label>
+                  <input
+                    type="number"
+                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
+                    value={localSettings.retailPlatinumPremium !== undefined ? localSettings.retailPlatinumPremium : 100}
+                    onChange={(e) => setLocalSettings(prev => ({ ...prev, retailPlatinumPremium: parseFloat(e.target.value) || 0 }))}
+                  />
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setLocalSettings(prev => ({ ...prev, showRawCostOnQuoteTab: !prev.showRawCostOnQuoteTab }))}
-                className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${localSettings.showRawCostOnQuoteTab ? 'bg-brand-900' : 'bg-brand-200'}`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${localSettings.showRawCostOnQuoteTab ? 'translate-x-5' : 'translate-x-0'}`}
-                />
-              </button>
             </div>
 
             {/* Standard Melee Stone Retail Supply Rates */}
@@ -381,6 +545,209 @@ export default function SettingsView({
                 ))}
               </div>
             </div>
+
+            {/* Cuban Chain Automatic Multipliers Configuration */}
+            <div className="bg-brand-50/30 p-4 rounded-2xl border border-brand-100 space-y-4">
+              <div className="flex justify-between items-center border-b border-brand-100 pb-2">
+                <div>
+                  <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest flex items-center gap-1.5">
+                    <Wrench size={13} className="text-brand-gold" />
+                    Cuban Chain Automatic Labor Multipliers
+                  </h4>
+                  <p className="text-[10px] text-brand-500">
+                    Define the gram labor multiplier rate based on the width (mm) of the chain.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddCubanMultiplier}
+                  className="px-2.5 py-1 bg-brand-900 text-white rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-800 cursor-pointer"
+                >
+                  + Add Range
+                </button>
+              </div>
+
+              <div className="space-y-2.5">
+                {(localSettings.cubanMultipliers || []).map((range, index) => (
+                  <div key={index} className="bg-white p-3 rounded-xl border border-brand-100 shadow-xs flex flex-wrap items-center gap-3">
+                    <div className="flex-1 min-w-[120px] grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] font-bold text-brand-400 block mb-0.5">Min Width (mm)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          className="w-full bg-brand-50/30 border border-brand-200 px-2 py-1 rounded-lg text-xs font-bold font-mono"
+                          value={range.minWidth}
+                          onChange={(e) => handleUpdateCubanMultiplier(index, 'minWidth', parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-brand-400 block mb-0.5">Max Width (mm)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          className="w-full bg-brand-50/30 border border-brand-200 px-2 py-1 rounded-lg text-xs font-bold font-mono"
+                          value={range.maxWidth}
+                          onChange={(e) => handleUpdateCubanMultiplier(index, 'maxWidth', parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="w-24 shrink-0">
+                      <label className="text-[9px] font-bold text-brand-400 block mb-0.5">Multiplier</label>
+                      <input
+                        type="number"
+                        step="0.05"
+                        min="1"
+                        className="w-full bg-brand-50/30 border border-brand-200 px-2 py-1 rounded-lg text-xs font-bold font-mono"
+                        value={range.multiplier}
+                        onChange={(e) => handleUpdateCubanMultiplier(index, 'multiplier', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCubanMultiplier(index)}
+                      className="text-red-500 hover:text-red-700 p-1 mt-3.5 hover:bg-red-50 rounded-lg cursor-pointer"
+                      title="Remove Range"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                
+                {(localSettings.cubanMultipliers || []).length === 0 && (
+                  <p className="text-xs text-brand-400 text-center py-4 bg-white rounded-xl border border-dashed border-brand-200">
+                    No ranges configured. Add a range or use defaults.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Tennis Bracelet Settings & Multipliers */}
+            <div className="bg-brand-50/30 p-4 rounded-2xl border border-brand-100 space-y-4">
+              <div className="border-b border-brand-100 pb-2">
+                <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest flex items-center gap-1.5">
+                  <Gem size={13} className="text-brand-gold" />
+                  Tennis Bracelet Pricing Parameters
+                </h4>
+                <p className="text-[10px] text-brand-500">
+                  Configure diamond/stone pricing and automatic multipliers for tennis bracelets.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Diamond Price / ct</label>
+                  <input
+                    type="number"
+                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    value={localSettings.tennisDiamondPricePerCt !== undefined ? localSettings.tennisDiamondPricePerCt : 600}
+                    onChange={(e) => setLocalSettings(prev => ({ ...prev, tennisDiamondPricePerCt: parseFloat(e.target.value) || 0 }))}
+                  />
+                  <span className="text-[9px] text-brand-400 mt-1 block">Default price for all diamond sizes ($600)</span>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Melee Price / ct</label>
+                  <input
+                    type="number"
+                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    value={localSettings.tennisMeleePricePerCt !== undefined ? localSettings.tennisMeleePricePerCt : 2600}
+                    onChange={(e) => setLocalSettings(prev => ({ ...prev, tennisMeleePricePerCt: parseFloat(e.target.value) || 0 }))}
+                  />
+                  <span className="text-[9px] text-brand-400 mt-1 block">Used if diamond override is not set ($2,600)</span>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Fancy Price / ct</label>
+                  <input
+                    type="number"
+                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    value={localSettings.tennisFancyPricePerCt !== undefined ? localSettings.tennisFancyPricePerCt : 800}
+                    onChange={(e) => setLocalSettings(prev => ({ ...prev, tennisFancyPricePerCt: parseFloat(e.target.value) || 0 }))}
+                  />
+                  <span className="text-[9px] text-brand-400 mt-1 block">Used for non-round fancy cut styles ($800)</span>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center border-t border-brand-100 pt-3">
+                <div>
+                  <h5 className="text-[11px] font-black text-brand-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Wrench size={11} className="text-brand-gold" />
+                    Tennis Bracelet Automatic Gram Multipliers
+                  </h5>
+                  <p className="text-[9px] text-brand-400">
+                    Apply a multiplier factor to the metal weight (grams) based on stone size (mm).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddTennisMultiplier}
+                  className="px-2.5 py-1 bg-brand-900 text-white rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-800 cursor-pointer"
+                >
+                  + Add Range
+                </button>
+              </div>
+
+              <div className="space-y-2.5">
+                {(localSettings.tennisMultipliers || []).map((range, index) => (
+                  <div key={index} className="bg-white p-3 rounded-xl border border-brand-100 shadow-xs flex flex-wrap items-center gap-3">
+                    <div className="flex-1 min-w-[120px] grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] font-bold text-brand-400 block mb-0.5">Min Size (mm)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          className="w-full bg-brand-50/30 border border-brand-200 px-2 py-1 rounded-lg text-xs font-bold font-mono"
+                          value={range.minWidth}
+                          onChange={(e) => handleUpdateTennisMultiplier(index, 'minWidth', parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-brand-400 block mb-0.5">Max Size (mm)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          className="w-full bg-brand-50/30 border border-brand-200 px-2 py-1 rounded-lg text-xs font-bold font-mono"
+                          value={range.maxWidth}
+                          onChange={(e) => handleUpdateTennisMultiplier(index, 'maxWidth', parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="w-24 shrink-0">
+                      <label className="text-[9px] font-bold text-brand-400 block mb-0.5">Multiplier</label>
+                      <input
+                        type="number"
+                        step="0.05"
+                        min="1"
+                        className="w-full bg-brand-50/30 border border-brand-200 px-2 py-1 rounded-lg text-xs font-bold font-mono"
+                        value={range.multiplier}
+                        onChange={(e) => handleUpdateTennisMultiplier(index, 'multiplier', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTennisMultiplier(index)}
+                      className="text-red-500 hover:text-red-700 p-1 mt-3.5 hover:bg-red-50 rounded-lg cursor-pointer"
+                      title="Remove Range"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                
+                {(localSettings.tennisMultipliers || []).length === 0 && (
+                  <p className="text-xs text-brand-400 text-center py-4 bg-white rounded-xl border border-dashed border-brand-200">
+                    No ranges configured. Add a range or use defaults.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -455,6 +822,409 @@ export default function SettingsView({
                     onChange={(e) => handleWholesaleSetting('settingCenter', parseFloat(e.target.value) || 0)}
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Melee Round Stone Rates by Size */}
+            <div className="bg-brand-50/30 p-4 rounded-2xl border border-brand-100 space-y-3">
+              <div className="flex justify-between items-center border-b border-brand-100 pb-2 flex-wrap gap-2">
+                <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest flex items-center gap-1.5">
+                  <Gem size={13} className="text-brand-gold" />
+                  Wholesale Melee Round Rates (per Carat)
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const val = parseFloat(prompt("Enter wholesale price per carat to set for ALL melee sizes:", "400") || "");
+                    if (!isNaN(val)) {
+                      const updated: Record<string, number> = {};
+                      Object.keys(ROUND_MELEE).forEach(size => {
+                        updated[size] = val;
+                      });
+                      setLocalSettings(prev => ({
+                        ...prev,
+                        wholesale: {
+                          ...prev.wholesale,
+                          meleeRates: updated
+                        }
+                      }));
+                    }
+                  }}
+                  className="text-[10px] text-brand-600 hover:text-brand-900 font-bold underline cursor-pointer"
+                >
+                  Set All Melee Rates
+                </button>
+              </div>
+              <p className="text-[10px] text-brand-500">Specify the manual wholesale price per carat for each round melee diameter size. Empty fields fall back to $400/ct.</p>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+                {Object.entries(ROUND_MELEE).map(([size, carat]) => (
+                  <div key={size} className="bg-white p-2 rounded-xl border border-brand-100/85 shadow-xs flex flex-col justify-between gap-1.5">
+                    <span className="text-[10px] font-bold text-brand-600 block leading-tight">
+                      {size} mm <span className="font-mono text-[9px] text-brand-400">({carat} ct)</span>
+                    </span>
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-brand-400">$</span>
+                      <input
+                        type="number"
+                        placeholder="400"
+                        className="w-full bg-brand-50/20 border border-brand-200 pl-4.5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono"
+                        value={localSettings.wholesale.meleeRates?.[size] ?? ""}
+                        onChange={(e) => handleWholesaleMeleeRate(size, parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Fancy Stone Rates by Shape & Size */}
+            <div className="bg-brand-50/30 p-4 rounded-2xl border border-brand-100 space-y-3">
+              <div className="flex justify-between items-center border-b border-brand-100 pb-2 flex-wrap gap-2">
+                <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest flex items-center gap-1.5">
+                  <Gem size={13} className="text-brand-gold" />
+                  Wholesale Fancy Rates by Shape & Size
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const val = parseFloat(prompt(`Enter wholesale price per carat to set for ALL sizes of ${activeFancyShapeTab}:`, "500") || "");
+                    if (!isNaN(val)) {
+                      const updated = { ...(localSettings.wholesale.fancyRates || {}) };
+                      const sizes = FANCY_SHAPES[activeFancyShapeTab] || [];
+                      sizes.forEach(sz => {
+                        const key = `${activeFancyShapeTab}-${sz.label}`;
+                        updated[key] = val;
+                      });
+                      updated[activeFancyShapeTab] = val; // Also fallback
+                      setLocalSettings(prev => ({
+                        ...prev,
+                        wholesale: {
+                          ...prev.wholesale,
+                          fancyRates: updated
+                        }
+                      }));
+                    }
+                  }}
+                  className="text-[10px] text-brand-600 hover:text-brand-900 font-bold underline cursor-pointer"
+                >
+                  Set All {activeFancyShapeTab} Rates
+                </button>
+              </div>
+              <p className="text-[10px] text-brand-500">Select a fancy cut shape below, then manually adjust the wholesale price per carat for each size specification.</p>
+              
+              {/* Fancy shape selector tabs */}
+              <div className="flex flex-wrap gap-1 border-b border-brand-100/50 pb-2">
+                {Object.keys(FANCY_SHAPES).map(shape => (
+                  <button
+                    key={shape}
+                    type="button"
+                    onClick={() => setActiveFancyShapeTab(shape)}
+                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                      activeFancyShapeTab === shape
+                        ? 'bg-brand-900 text-brand-gold shadow-xs'
+                        : 'bg-white text-brand-600 border border-brand-100 hover:bg-brand-50'
+                    }`}
+                  >
+                    {shape}
+                  </button>
+                ))}
+              </div>
+
+              {/* Base Shape Fallback rate input */}
+              <div className="bg-white p-3 rounded-xl border border-brand-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="leading-tight">
+                  <span className="text-[11px] font-bold text-brand-800 block">
+                    Base Shape Fallback Rate ({activeFancyShapeTab})
+                  </span>
+                  <span className="text-[9px] text-brand-400">Default rate used for this cut if any specific size is left empty.</span>
+                </div>
+                <div className="relative w-full sm:w-44 shrink-0">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-400">$</span>
+                  <input
+                    type="number"
+                    placeholder="500"
+                    className="w-full bg-brand-50/20 border border-brand-200 pl-6 pr-2 py-1 rounded-lg text-xs font-bold font-mono"
+                    value={localSettings.wholesale.fancyRates?.[activeFancyShapeTab] ?? ""}
+                    onChange={(e) => handleWholesaleFancyRate(activeFancyShapeTab, parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+              </div>
+
+              {/* Specific size rate inputs */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+                {(FANCY_SHAPES[activeFancyShapeTab] || []).map((sz) => {
+                  const key = `${activeFancyShapeTab}-${sz.label}`;
+                  const fallbackRate = localSettings.wholesale.fancyRates?.[activeFancyShapeTab] ?? 500;
+                  return (
+                    <div key={sz.label} className="bg-white p-2 rounded-xl border border-brand-100/85 shadow-xs flex flex-col justify-between gap-1.5">
+                      <span className="text-[10px] font-bold text-brand-600 block leading-tight">
+                        {sz.label} <span className="font-mono text-[9px] text-brand-400">({sz.carat} ct)</span>
+                      </span>
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-brand-400">$</span>
+                        <input
+                          type="number"
+                          placeholder={String(fallbackRate)}
+                          className="w-full bg-brand-50/20 border border-brand-200 pl-4.5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono"
+                          value={localSettings.wholesale.fancyRates?.[key] ?? ""}
+                          onChange={(e) => handleWholesaleFancyRate(key, parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SUBTAB 3.5: Internal Manufacturing Raw Costs (FOR EYES ONLY) */}
+        {subTab === 'rawCosts' && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-start gap-3">
+              <ShieldAlert className="text-amber-600 shrink-0 mt-0.5" size={18} />
+              <div className="space-y-1">
+                <h2 className="text-sm font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                  <EyeOff size={16} className="text-amber-600" />
+                  CONFIDENTIAL: Internal Manufacturing & Raw Costs
+                </h2>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  These rates represent the absolute minimum cost of materials and labor (for internal tracking only).
+                  These configurations are used to compute the <strong>Raw Cost CAD</strong> and must <strong>never</strong> be shown to clients.
+                </p>
+              </div>
+            </div>
+
+            {/* Toggle showRawCostOnQuoteTab */}
+            <div className="flex items-center justify-between bg-amber-50/50 border border-amber-200 p-3.5 rounded-xl">
+              <div>
+                <span className="text-[10px] font-black text-amber-950 uppercase tracking-wider block flex items-center gap-1.5">
+                  <EyeOff size={14} className="text-amber-600" />
+                  Show Internal Manufacturing Raw Cost Box
+                </span>
+                <span className="text-[9px] text-amber-700 block leading-tight">Display the confidential amber raw cost breakdown box on the active custom quote tab.</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLocalSettings(prev => ({ ...prev, showRawCostOnQuoteTab: !prev.showRawCostOnQuoteTab }))}
+                className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${localSettings.showRawCostOnQuoteTab ? 'bg-brand-900' : 'bg-brand-200'}`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${localSettings.showRawCostOnQuoteTab ? 'translate-x-5' : 'translate-x-0'}`}
+                />
+              </button>
+            </div>
+
+            {/* Base Fallback Raw Cost Rates */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2">Base Fallback Raw Rates (per ct)</h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Base Melee Raw / ct</label>
+                  <input
+                    type="number"
+                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
+                    value={localSettings.rawCostRates.melee}
+                    onChange={(e) => handleNestedSetting('rawCostRates', 'melee', parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Base Fancy Raw / ct</label>
+                  <input
+                    type="number"
+                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
+                    value={localSettings.rawCostRates.fancy}
+                    onChange={(e) => handleNestedSetting('rawCostRates', 'fancy', parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Base Center Raw / ct</label>
+                  <input
+                    type="number"
+                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
+                    value={localSettings.rawCostRates.center}
+                    onChange={(e) => handleNestedSetting('rawCostRates', 'center', parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Center Stone Raw Rates Matrix */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2">Center Stone Raw Rates Matrix (per ct)</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {Object.keys(localSettings.centerStoneRawRates || {}).map(stone => (
+                  <div key={stone} className="p-3 bg-brand-50 rounded-xl border border-brand-100 space-y-2">
+                    <p className="text-[10px] font-black uppercase text-brand-700 tracking-wider mb-1">{stone}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] font-bold text-brand-500">Raw Natural / ct</label>
+                        <input
+                          type="number"
+                          className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                          value={localSettings.centerStoneRawRates[stone]?.Natural ?? 500}
+                          onChange={(e) => handleDoubleNestedSetting('centerStoneRawRates', stone, 'Natural', parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-brand-500">Raw Lab-grown / ct</label>
+                        <input
+                          type="number"
+                          className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                          value={localSettings.centerStoneRawRates[stone]?.Lab ?? 200}
+                          onChange={(e) => handleDoubleNestedSetting('centerStoneRawRates', stone, 'Lab', parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Melee Round Raw Stone Rates by Size */}
+            <div className="bg-brand-50/30 p-4 rounded-2xl border border-brand-100 space-y-3">
+              <div className="flex justify-between items-center border-b border-brand-100 pb-2 flex-wrap gap-2">
+                <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest flex items-center gap-1.5">
+                  <Gem size={13} className="text-brand-gold" />
+                  Raw Melee Round Rates (per Carat)
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const val = parseFloat(prompt("Enter internal raw price per carat to set for ALL melee sizes:", "300") || "");
+                    if (!isNaN(val)) {
+                      const updated: Record<string, number> = {};
+                      Object.keys(ROUND_MELEE).forEach(size => {
+                        updated[size] = val;
+                      });
+                      setLocalSettings(prev => ({
+                        ...prev,
+                        rawMeleeRates: updated
+                      }));
+                    }
+                  }}
+                  className="text-[10px] text-brand-600 hover:text-brand-900 font-bold underline cursor-pointer"
+                >
+                  Set All Raw Melee Rates
+                </button>
+              </div>
+              <p className="text-[10px] text-brand-500">Specify the manual raw cost price per carat for each round melee diameter size. Empty fields fall back to ${localSettings.rawCostRates.melee || 300}/ct.</p>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+                {Object.entries(ROUND_MELEE).map(([size, carat]) => (
+                  <div key={size} className="bg-white p-2 rounded-xl border border-brand-100/85 shadow-xs flex flex-col justify-between gap-1.5">
+                    <span className="text-[10px] font-bold text-brand-600 block leading-tight">
+                      {size} mm <span className="font-mono text-[9px] text-brand-400">({carat} ct)</span>
+                    </span>
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-brand-400">$</span>
+                      <input
+                        type="number"
+                        placeholder={String(localSettings.rawCostRates.melee || 300)}
+                        className="w-full bg-brand-50/20 border border-brand-200 pl-4.5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono"
+                        value={localSettings.rawMeleeRates?.[size] ?? ""}
+                        onChange={(e) => handleRawMeleeRate(size, parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Raw Fancy Stone Rates by Shape & Size */}
+            <div className="bg-brand-50/30 p-4 rounded-2xl border border-brand-100 space-y-3">
+              <div className="flex justify-between items-center border-b border-brand-100 pb-2 flex-wrap gap-2">
+                <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest flex items-center gap-1.5">
+                  <Gem size={13} className="text-brand-gold" />
+                  Raw Fancy Rates by Shape & Size
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const val = parseFloat(prompt(`Enter internal raw price per carat to set for ALL sizes of ${activeRawFancyShapeTab}:`, "380") || "");
+                    if (!isNaN(val)) {
+                      const updated = { ...(localSettings.rawFancyRates || {}) };
+                      const sizes = FANCY_SHAPES[activeRawFancyShapeTab] || [];
+                      sizes.forEach(sz => {
+                        const key = `${activeRawFancyShapeTab}-${sz.label}`;
+                        updated[key] = val;
+                      });
+                      updated[activeRawFancyShapeTab] = val; // Also fallback
+                      setLocalSettings(prev => ({
+                        ...prev,
+                        rawFancyRates: updated
+                      }));
+                    }
+                  }}
+                  className="text-[10px] text-brand-600 hover:text-brand-900 font-bold underline cursor-pointer"
+                >
+                  Set All Raw {activeRawFancyShapeTab} Rates
+                </button>
+              </div>
+              <p className="text-[10px] text-brand-500">Select a fancy cut shape below, then manually adjust the raw cost price per carat for each size specification.</p>
+              
+              {/* Fancy shape selector tabs */}
+              <div className="flex flex-wrap gap-1 border-b border-brand-100/50 pb-2">
+                {Object.keys(FANCY_SHAPES).map(shape => (
+                  <button
+                    key={shape}
+                    type="button"
+                    onClick={() => setActiveRawFancyShapeTab(shape)}
+                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                      activeRawFancyShapeTab === shape
+                        ? 'bg-brand-900 text-brand-gold shadow-xs'
+                        : 'bg-white text-brand-600 border border-brand-100 hover:bg-brand-50'
+                    }`}
+                  >
+                    {shape}
+                  </button>
+                ))}
+              </div>
+
+              {/* Base Shape Fallback rate input */}
+              <div className="bg-white p-3 rounded-xl border border-brand-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="leading-tight">
+                  <span className="text-[11px] font-bold text-brand-800 block">
+                    Base Shape Raw Fallback Rate ({activeRawFancyShapeTab})
+                  </span>
+                  <span className="text-[9px] text-brand-400">Default raw rate used for this cut if any specific size is left empty.</span>
+                </div>
+                <div className="relative w-full sm:w-44 shrink-0">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-400">$</span>
+                  <input
+                    type="number"
+                    placeholder={String(localSettings.rawCostRates.fancy || 380)}
+                    className="w-full bg-brand-50/20 border border-brand-200 pl-6 pr-2 py-1 rounded-lg text-xs font-bold font-mono"
+                    value={localSettings.rawFancyRates?.[activeRawFancyShapeTab] ?? ""}
+                    onChange={(e) => handleRawFancyRate(activeRawFancyShapeTab, parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+              </div>
+
+              {/* Specific size rate inputs */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+                {(FANCY_SHAPES[activeRawFancyShapeTab] || []).map((sz) => {
+                  const key = `${activeRawFancyShapeTab}-${sz.label}`;
+                  const fallbackRate = localSettings.rawFancyRates?.[activeRawFancyShapeTab] ?? localSettings.rawCostRates.fancy ?? 380;
+                  return (
+                    <div key={sz.label} className="bg-white p-2 rounded-xl border border-brand-100/85 shadow-xs flex flex-col justify-between gap-1.5">
+                      <span className="text-[10px] font-bold text-brand-600 block leading-tight">
+                        {sz.label} <span className="font-mono text-[9px] text-brand-400">({sz.carat} ct)</span>
+                      </span>
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-brand-400">$</span>
+                        <input
+                          type="number"
+                          placeholder={String(fallbackRate)}
+                          className="w-full bg-brand-50/20 border border-brand-200 pl-4.5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono"
+                          value={localSettings.rawFancyRates?.[key] ?? ""}
+                          onChange={(e) => handleRawFancyRate(key, parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

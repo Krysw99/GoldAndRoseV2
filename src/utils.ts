@@ -31,7 +31,9 @@ export function getEmptyRing(category: CategoryType): JewelryItem {
     discount: '',
     discountType: '$',
     applyDesignFee: false,
-    goldGrams: ''
+    goldGrams: '',
+    referenceSketches: [],
+    referencePhotos: []
   };
 
   if (category === 'mensBand') {
@@ -121,6 +123,12 @@ export function upgradeRingData(r: any): JewelryItem {
       if (!base.centerStone2.type) base.centerStone2.type = 'Diamond';
       if (!base.centerStone2.origin) base.centerStone2.origin = 'Lab';
     }
+  }
+  if (!base.referenceSketches) {
+    base.referenceSketches = base.referenceSketch ? [base.referenceSketch] : [];
+  }
+  if (!base.referencePhotos) {
+    base.referencePhotos = base.referencePhoto ? [base.referencePhoto] : [];
   }
   return base as JewelryItem;
 }
@@ -289,7 +297,10 @@ export function hasRingData(r: JewelryItem): boolean {
 export function calculateWholesaleRingCost(r: JewelryItem, settings: AppSettings, spotPrices: { gold: number, silver: number, platinum: number }, overridePrices?: { gold?: number, silver?: number, platinum?: number }): number {
   let c = 0;
   const w = settings.wholesale;
-  const g = Number(r.goldGrams) || 0;
+  let g = Number(r.goldGrams) || 0;
+  if (r.category === 'tennisBracelet' && !g) {
+    g = getTennisEstimates(r).estGrams;
+  }
   
   const sPGold = Number(overridePrices?.gold ?? spotPrices.gold);
   const sPPlat = Number(overridePrices?.platinum ?? spotPrices.platinum);
@@ -306,29 +317,48 @@ export function calculateWholesaleRingCost(r: JewelryItem, settings: AppSettings
   // fab labor
   c += g * Number(w.laborPerGram);
   
-  // setting & supplying melee stones
-  let mQ = 0;
-  let mC = 0;
-  r.melee.forEach(m => {
-    const q = Number(m.qty) || 0;
-    const rate = Number(w.meleeRates?.[m.size] ?? 400);
-    mQ += q;
-    mC += q * Number(m.carat) * rate;
-  });
-  c += (mQ * Number(w.settingMelee)) + mC;
-  
-  // setting & supplying fancy stones
-  let fQ = 0;
-  let fC = 0;
-  r.fancy.forEach(f => {
-    const aF = FANCY_SHAPES[f.shape] || [];
-    const fd = aF[f.sizeIdx] || { carat: 0 };
-    const q = Number(f.qty) || 0;
-    const rate = Number(w.fancyRates?.[f.shape] ?? 500);
-    fQ += q;
-    fC += q * Number(fd.carat) * rate;
-  });
-  c += (fQ * Number(w.settingFancy)) + fC;
+  if (r.category === 'tennisBracelet') {
+    const est = getTennisEstimates(r);
+    const fs = Number(r.tbManualStones) || est.estStones;
+    const fc = Number(r.tbManualCarats) || (fs * est.caratPerStone);
+    
+    const ppc = r.tbShape === 'Round' 
+      ? (settings.wholesale.meleeRates?.[r.tbSizeRound || '2.0'] ?? settings.rawCostRates.melee ?? 350) 
+      : (settings.wholesale.fancyRates?.[r.tbShape || 'Princess'] ?? settings.rawCostRates.fancy ?? 450);
+      
+    const settingFee = r.tbShape === 'Round'
+      ? Number(w.settingMelee || 5)
+      : Number(w.settingFancy || 8);
+      
+    if (r.stoneSource !== 'customer') {
+      c += (fc * ppc) + (fs * settingFee);
+    }
+  } else {
+    // setting & supplying melee stones
+    let mQ = 0;
+    let mC = 0;
+    r.melee.forEach(m => {
+      const q = Number(m.qty) || 0;
+      const rate = Number(w.meleeRates?.[m.size] ?? 400);
+      mQ += q;
+      mC += q * Number(m.carat) * rate;
+    });
+    c += (mQ * Number(w.settingMelee)) + mC;
+    
+    // setting & supplying fancy stones
+    let fQ = 0;
+    let fC = 0;
+    r.fancy.forEach(f => {
+      const aF = FANCY_SHAPES[f.shape] || [];
+      const fd = aF[f.sizeIdx] || { carat: 0, label: '' };
+      const q = Number(f.qty) || 0;
+      const key = fd.label ? `${f.shape}-${fd.label}` : '';
+      const rate = Number((key && w.fancyRates?.[key]) ?? w.fancyRates?.[f.shape] ?? 500);
+      fQ += q;
+      fC += q * Number(fd.carat) * rate;
+    });
+    c += (fQ * Number(w.settingFancy)) + fC;
+  }
   
   // Client Stones setting fee
   r.clientStones.forEach(cs => {
@@ -360,33 +390,58 @@ export function calculateRingCost(r: JewelryItem, settings: AppSettings, spotPri
   }
   
   let cM = 0;
-  const g = Number(r.goldGrams) || 0;
+  let g = Number(r.goldGrams) || 0;
+  if (r.category === 'tennisBracelet' && !g) {
+    g = getTennisEstimates(r).estGrams;
+  }
   const aS = r.addons.reduce((acc, a) => acc + (Number(a.fee) || 0), 0);
   
+  const sPGold = Number(overridePrices?.gold ?? spotPrices.gold);
+  const sPPlat = Number(overridePrices?.platinum ?? spotPrices.platinum);
+  const sPSilv = Number(overridePrices?.silver ?? spotPrices.silver);
+
+  const rGoldPrem = Number(settings.retailGoldPremium !== undefined ? settings.retailGoldPremium : 100);
+  const rSilverPrem = Number(settings.retailSilverPremium !== undefined ? settings.retailSilverPremium : 20);
+  const rPlatPrem = Number(settings.retailPlatinumPremium !== undefined ? settings.retailPlatinumPremium : 100);
+
+  if (r.material === 'gold') {
+    const karat = Number(r.goldKarat) || 14;
+    cM = g * (((sPGold + rGoldPrem) / 31.1034768) * (karat / 24));
+  } else if (r.material === 'platinum') {
+    cM = g * (((sPPlat + rPlatPrem) / 31.1034768) * 0.95);
+  } else if (r.material === 'silver') {
+    cM = g * (((sPSilv + rSilverPrem) / 31.1034768) * 0.925);
+  }
+
   if (r.category === 'tennisBracelet') {
-    if (r.material === 'gold') {
-      cM = g * Number(settings.tennisGoldPricesPerGram[r.goldKarat] || 0);
-    } else if (r.material === 'platinum') {
-      cM = g * Number(settings.tennisPlatinumPricePerGram);
-    } else if (r.material === 'silver') {
-      cM = g * Number(settings.tennisSilverPricePerGram);
+    let smm = 0;
+    if (r.tbShape === 'Round') {
+      smm = Number(r.tbSizeRound) || 2.0;
+    } else {
+      const shape = r.tbShape || 'Princess';
+      const aF = FANCY_SHAPES[shape] || FANCY_SHAPES['Princess'];
+      const fd = aF[r.tbSizeIdx || 0] || aF[0];
+      smm = parseFloat(fd.label) || 2.0;
     }
-  } else if (r.category === 'earrings') {
-    if (r.material === 'gold') {
-      cM = g * Number(settings.earringGoldPricesPerGram[r.goldKarat] || 0);
-    } else if (r.material === 'platinum') {
-      cM = g * Number(settings.earringPlatinumPricePerGram);
-    } else if (r.material === 'silver') {
-      cM = g * Number(settings.earringSilverPricePerGram);
+
+    const multipliers = settings.tennisMultipliers || [
+      { minWidth: 1.0, maxWidth: 1.9, multiplier: 1.6 },
+      { minWidth: 2.0, maxWidth: 4.0, multiplier: 1.4 }
+    ];
+
+    const sortedRanges = [...multipliers].sort((a, b) => a.minWidth - b.minWidth);
+    const match = sortedRanges.find(m => smm >= m.minWidth && smm <= m.maxWidth);
+    let tennisMult = 1.0;
+    if (match) {
+      tennisMult = match.multiplier;
+    } else if (sortedRanges.length > 0) {
+      if (smm < sortedRanges[0].minWidth) {
+        tennisMult = sortedRanges[0].multiplier;
+      } else if (smm > sortedRanges[sortedRanges.length - 1].maxWidth) {
+        tennisMult = sortedRanges[sortedRanges.length - 1].multiplier;
+      }
     }
-  } else {
-    if (r.material === 'gold') {
-      cM = g * Number(settings.goldPricesPerGram[r.goldKarat] || 0);
-    } else if (r.material === 'platinum') {
-      cM = g * Number(settings.platinumPricePerGram);
-    } else if (r.material === 'silver') {
-      cM = g * Number(settings.silverPricePerGram);
-    }
+    cM = cM * tennisMult;
   }
   
   let cS = 0;
@@ -394,9 +449,11 @@ export function calculateRingCost(r: JewelryItem, settings: AppSettings, spotPri
     const est = getTennisEstimates(r);
     const fs = Number(r.tbManualStones) || est.estStones;
     const fc = Number(r.tbManualCarats) || (fs * est.caratPerStone);
-    const ppc = r.tbShape === 'Round' 
-      ? Number(settings.tennisMeleePricePerCt) 
-      : Number(settings.tennisFancyPricePerCt);
+    const ppc = settings.tennisDiamondPricePerCt !== undefined
+      ? Number(settings.tennisDiamondPricePerCt)
+      : (r.tbShape === 'Round' 
+          ? Number(settings.tennisMeleePricePerCt) 
+          : Number(settings.tennisFancyPricePerCt));
       
     if (r.stoneSource !== 'customer') {
       cS = (fc * ppc) + (fs * Number(settings.tennisLaborRetail || 0));
@@ -459,7 +516,11 @@ export function calculateRawCost(r: JewelryItem, settings: AppSettings, spotPric
   const pf = r.material === 'gold' 
     ? (Number(r.goldKarat) / 24) 
     : (r.material === 'silver' ? 0.925 : 0.950);
-  const rM = (Number(r.goldGrams) || 0) * s * pf;
+  let g = Number(r.goldGrams) || 0;
+  if (r.category === 'tennisBracelet' && !g) {
+    g = getTennisEstimates(r).estGrams;
+  }
+  const rM = g * s * pf;
   
   if (r.stoneSource === 'customer') return rM;
   
@@ -473,17 +534,21 @@ export function calculateRawCost(r: JewelryItem, settings: AppSettings, spotPric
     return (fs > 0 && fc > 0) ? (fc * ppcr) + rM : rM;
   }
   
-  let mc = 0;
+  let rMc = 0;
   r.melee.forEach(m => {
-    mc += (Number(m.qty) || 0) * Number(m.carat);
+    const q = Number(m.qty) || 0;
+    const rate = Number(settings.rawMeleeRates?.[m.size] ?? settings.rawCostRates.melee);
+    rMc += q * Number(m.carat) * rate;
   });
-  const rMc = mc * Number(settings.rawCostRates.melee);
   
   let fc = 0;
   r.fancy.forEach(f => {
     const aF = FANCY_SHAPES[f.shape] || [];
-    const fd = aF[f.sizeIdx] || { carat: 0 };
-    fc += (Number(f.qty) || 0) * Number(fd.carat) * Number(settings.rawCostRates.fancy);
+    const fd = aF[f.sizeIdx] || { carat: 0, label: '' };
+    const q = Number(f.qty) || 0;
+    const key = fd.label ? `${f.shape}-${fd.label}` : '';
+    const rate = Number((key && settings.rawFancyRates?.[key]) ?? settings.rawFancyRates?.[f.shape] ?? settings.rawCostRates.fancy);
+    fc += q * Number(fd.carat) * rate;
   });
   
   let rC = 0;

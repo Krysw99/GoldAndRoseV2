@@ -51,8 +51,8 @@ export default function CubanBraceletBuilder({ spotPrices, settings }: CubanBrac
   const [linkStyle, setLinkStyle] = useState<string>('classic'); // classic, tight, hollow, flat
   
   // Pricing & Labor
-  const [laborType, setLaborType] = useState<'perGram' | 'flat'>('perGram');
-  const [laborRate, setLaborRate] = useState<number>(12.0); // CAD per gram or flat fee
+  const [useFlatOverride, setUseFlatOverride] = useState<boolean>(false);
+  const [flatOverrideRate, setFlatOverrideRate] = useState<number>(250);
 
   // Customer Logging State
   const [customerName, setCustomerName] = useState<string>('');
@@ -138,14 +138,61 @@ export default function CubanBraceletBuilder({ spotPrices, settings }: CubanBrac
 
   const metalCostPerGram = getMetalCostPerGram();
   const metalCostNominal = weightNominal * metalCostPerGram;
+  const metalCostMin = weightMin * metalCostPerGram;
+  const metalCostMax = weightMax * metalCostPerGram;
 
-  // 3. Labor cost
-  const calculatedLabor = laborType === 'perGram' ? weightNominal * laborRate : laborRate;
-
-  // 4. Combined pricing range
-  const totalCostNominal = metalCostNominal + calculatedLabor;
-  const totalCostMin = (weightMin * metalCostPerGram) + (laborType === 'perGram' ? weightMin * laborRate : laborRate);
-  const totalCostMax = (weightMax * metalCostPerGram) + (laborType === 'perGram' ? weightMax * laborRate : laborRate);
+  // 3. Labor & Total cost calculations with automatic multiplier
+  const getAutomaticMultiplier = (): number => {
+    const multipliers = settings?.cubanMultipliers || [
+      { minWidth: 5, maxWidth: 7.9, multiplier: 1.8 },
+      { minWidth: 8, maxWidth: 10.9, multiplier: 1.6 },
+      { minWidth: 11, maxWidth: 13.9, multiplier: 1.5 },
+      { minWidth: 14, maxWidth: 24, multiplier: 1.4 }
+    ];
+    
+    const sortedRanges = [...multipliers].sort((a, b) => a.minWidth - b.minWidth);
+    const match = sortedRanges.find(r => width >= r.minWidth && width <= r.maxWidth);
+    if (match) {
+      return match.multiplier;
+    }
+    
+    if (sortedRanges.length > 0) {
+      if (width < sortedRanges[0].minWidth) {
+        return sortedRanges[0].multiplier;
+      }
+      if (width > sortedRanges[sortedRanges.length - 1].maxWidth) {
+        return sortedRanges[sortedRanges.length - 1].multiplier;
+      }
+    }
+    
+    return 1.4;
+  };
+  
+  const activeMultiplier = getAutomaticMultiplier();
+  
+  const totalCostNominal = useFlatOverride 
+    ? metalCostNominal + flatOverrideRate 
+    : metalCostNominal * activeMultiplier;
+    
+  const totalCostMin = useFlatOverride 
+    ? metalCostMin + flatOverrideRate 
+    : metalCostMin * activeMultiplier;
+    
+  const totalCostMax = useFlatOverride 
+    ? metalCostMax + flatOverrideRate 
+    : metalCostMax * activeMultiplier;
+    
+  const calculatedLabor = useFlatOverride 
+    ? flatOverrideRate 
+    : totalCostNominal - metalCostNominal;
+    
+  const laborMin = useFlatOverride 
+    ? flatOverrideRate 
+    : totalCostMin - metalCostMin;
+    
+  const laborMax = useFlatOverride 
+    ? flatOverrideRate 
+    : totalCostMax - metalCostMax;
 
   // Handle saving estimate
   const handleSaveEstimate = () => {
@@ -169,8 +216,8 @@ export default function CubanBraceletBuilder({ spotPrices, settings }: CubanBrac
       weightNominal,
       weightMin,
       weightMax,
-      laborType,
-      laborRate,
+      laborType: useFlatOverride ? 'flat' : 'perGram',
+      laborRate: useFlatOverride ? flatOverrideRate : activeMultiplier,
       metalCost: parseFloat(metalCostNominal.toFixed(2)),
       laborCost: parseFloat(calculatedLabor.toFixed(2)),
       totalCostMin: parseFloat(totalCostMin.toFixed(2)),
@@ -602,12 +649,12 @@ export default function CubanBraceletBuilder({ spotPrices, settings }: CubanBrac
           </div>
 
           {/* Sliders Area (Length extended up to 26 inches!) */}
-          <div className="bg-brand-50/50 p-5 rounded-2xl border border-brand-100 space-y-5">
+          <div className="bg-brand-50/50 p-5 rounded-2xl border border-brand-100 space-y-6">
             {/* Width Slider */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-[11px] font-bold">
-                <span className="text-brand-700 uppercase tracking-wider">Link Width (mm)</span>
-                <span className="text-brand-900 font-mono font-black bg-white px-2 py-0.5 rounded-lg border border-brand-100">
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-xs sm:text-sm font-black">
+                <span className="text-brand-800 uppercase tracking-wider">Link Width</span>
+                <span className="text-brand-950 font-mono font-black text-sm sm:text-lg bg-white px-3.5 py-1 rounded-xl border-2 border-brand-300 shadow-md min-w-[100px] text-center inline-block">
                   {width.toFixed(1)} mm
                 </span>
               </div>
@@ -618,20 +665,20 @@ export default function CubanBraceletBuilder({ spotPrices, settings }: CubanBrac
                 step="0.5"
                 value={width}
                 onChange={(e) => setWidth(parseFloat(e.target.value))}
-                className="w-full accent-brand-900 cursor-pointer h-1.5 bg-brand-200/60 rounded-lg appearance-none"
+                className="w-full accent-brand-900 cursor-pointer h-2 bg-brand-200/60 rounded-lg appearance-none"
               />
-              <div className="flex justify-between text-[8px] text-brand-400 font-black font-mono">
+              <div className="flex justify-between text-[8px] sm:text-[9px] text-brand-500 font-bold font-mono">
                 <span>4.0mm (Sleek)</span>
-                <span>8.0mm (Classic Men's)</span>
+                <span>8.0mm (Classic)</span>
                 <span>24.0mm (Chunky Heavyweight)</span>
               </div>
             </div>
 
             {/* Length Slider - Extended up to 26" as requested */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-[11px] font-bold">
-                <span className="text-brand-700 uppercase tracking-wider">Chain / Bracelet Length (Inches)</span>
-                <span className="text-brand-900 font-mono font-black bg-white px-2 py-0.5 rounded-lg border border-brand-100">
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-xs sm:text-sm font-black">
+                <span className="text-brand-800 uppercase tracking-wider">Chain / Bracelet Length</span>
+                <span className="text-brand-950 font-mono font-black text-sm sm:text-lg bg-white px-3.5 py-1 rounded-xl border-2 border-brand-300 shadow-md min-w-[100px] text-center inline-block">
                   {length.toFixed(2)}"
                 </span>
               </div>
@@ -642,9 +689,9 @@ export default function CubanBraceletBuilder({ spotPrices, settings }: CubanBrac
                 step="0.25"
                 value={length}
                 onChange={(e) => setLength(parseFloat(e.target.value))}
-                className="w-full accent-brand-900 cursor-pointer h-1.5 bg-brand-200/60 rounded-lg appearance-none"
+                className="w-full accent-brand-900 cursor-pointer h-2 bg-brand-200/60 rounded-lg appearance-none"
               />
-              <div className="flex justify-between text-[8px] text-brand-400 font-black font-mono">
+              <div className="flex justify-between text-[8px] sm:text-[9px] text-brand-500 font-bold font-mono">
                 <span>6.0" (Small Wrist)</span>
                 <span>8.5" (Standard Men's)</span>
                 <span>16.0" (Choker)</span>
@@ -860,45 +907,39 @@ export default function CubanBraceletBuilder({ spotPrices, settings }: CubanBrac
               <DollarSign size={12} className="text-brand-900" /> Pricing Desk & Solder Labor
             </h3>
 
-            {/* Labor rate configuration */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-bold text-brand-400 uppercase tracking-wider block">Labor Setup Type</label>
-                <div className="flex bg-brand-50 p-1 rounded-xl border border-brand-100">
-                  <button
-                    type="button"
-                    onClick={() => { setLaborType('perGram'); if (laborRate === 250) setLaborRate(12); }}
-                    className={`flex-1 text-[9px] font-black uppercase py-1.5 rounded-lg transition-all ${
-                      laborType === 'perGram' ? 'bg-white text-brand-900 shadow-sm' : 'text-brand-500 hover:text-brand-700'
-                    }`}
-                  >
-                    Per Gram labor
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setLaborType('flat'); if (laborRate === 12) setLaborRate(250); }}
-                    className={`flex-1 text-[9px] font-black uppercase py-1.5 rounded-lg transition-all ${
-                      laborType === 'flat' ? 'bg-white text-brand-900 shadow-sm' : 'text-brand-500 hover:text-brand-700'
-                    }`}
-                  >
-                    Flat Rate labor
-                  </button>
-                </div>
+            {/* Flat Rate override configuration */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+              <div className="flex items-center gap-2 bg-brand-50/50 p-2.5 rounded-xl border border-brand-100">
+                <input
+                  type="checkbox"
+                  id="flatRateOverride"
+                  checked={useFlatOverride}
+                  onChange={(e) => setUseFlatOverride(e.target.checked)}
+                  className="w-4 h-4 text-brand-900 border-brand-300 rounded focus:ring-brand-900 cursor-pointer"
+                />
+                <label htmlFor="flatRateOverride" className="text-[10px] font-black text-brand-700 uppercase tracking-wider cursor-pointer select-none">
+                  Flat Rate Override
+                </label>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-bold text-brand-400 uppercase tracking-wider block">
-                  {laborType === 'perGram' ? 'Labor Fee (CAD/g)' : 'Flat Labor Fee (CAD)'}
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step={laborType === 'perGram' ? '0.5' : '10'}
-                  className="w-full bg-white border border-brand-200 p-2 rounded-xl text-xs font-bold"
-                  value={laborRate}
-                  onChange={(e) => setLaborRate(parseFloat(e.target.value) || 0)}
-                />
-              </div>
+              {useFlatOverride && (
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-brand-400 uppercase tracking-wider block">
+                    Flat Labor Fee Override (CAD)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-400">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="10"
+                      className="w-full bg-white border border-brand-200 pl-6 pr-3 py-1.5 rounded-xl text-xs font-bold font-mono"
+                      value={flatOverrideRate}
+                      onChange={(e) => setFlatOverrideRate(parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Bill of materials dynamic layout */}
@@ -925,7 +966,9 @@ export default function CubanBraceletBuilder({ spotPrices, settings }: CubanBrac
 
               <div className="flex justify-between text-brand-600">
                 <span>Estimated hand labor:</span>
-                <span className="font-bold text-brand-900">${calculatedLabor.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span className="font-bold text-brand-900">
+                  ${laborMin.toLocaleString('en-US', { maximumFractionDigits: 0 })} - ${laborMax.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                </span>
               </div>
 
               <div className="h-[1px] bg-brand-200 my-2"></div>

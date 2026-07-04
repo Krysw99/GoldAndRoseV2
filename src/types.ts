@@ -66,6 +66,8 @@ export interface JewelryItem {
   applyDesignFee: boolean;
   referenceSketch?: string | null;
   referencePhoto?: string | null;
+  referenceSketches?: string[];
+  referencePhotos?: string[];
   
   // Mens Band specific
   mbSize?: string;
@@ -209,5 +211,31 @@ export interface AppSettings {
   tennisFancyPricePerCtRaw: number;
   showRawCostOnQuoteTab: boolean;
   
+  retailGoldPremium?: number;
+  retailSilverPremium?: number;
+  retailPlatinumPremium?: number;
+  
+  rawMeleeRates?: {
+    [size: string]: number;
+  };
+  rawFancyRates?: {
+    [shape: string]: number;
+  };
+  cubanMultipliers?: CubanMultiplierRange[];
+  tennisDiamondPricePerCt?: number;
+  tennisMultipliers?: TennisMultiplierRange[];
+  
   wholesale: WholesaleSettings;
+}
+
+export interface CubanMultiplierRange {
+  minWidth: number;
+  maxWidth: number;
+  multiplier: number;
+}
+
+export interface TennisMultiplierRange {
+  minWidth: number;
+  maxWidth: number;
+  multiplier: number;
 }

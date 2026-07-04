@@ -15,7 +15,7 @@ import {
   ScrapItem, JewelryItem 
 } from './types';
 import { DEFAULT_SETTINGS, TROY_ONCE_GRAMS, FANCY_SHAPES, ROUND_MELEE } from './constants';
-import { getEmptyQuoteSession, upgradeRingData } from './utils';
+import { getEmptyQuoteSession, upgradeRingData, calculateRingCost } from './utils';
 
 // Modular Components
 import ScrapCalculator from './components/ScrapCalculator';
@@ -55,6 +55,7 @@ export default function App() {
   // Sketchpad state triggers
   const [isSketching, setIsSketching] = useState(false);
   const [editingImageType, setEditingImageType] = useState<'sketch' | 'photo'>('sketch');
+  const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null);
 
   // Load persistence data on initialization
   useEffect(() => {
@@ -80,13 +81,29 @@ export default function App() {
           // ensure child objects are fully initialized to avoid missing attributes
           wholesale: { ...prev.wholesale, ...(parsed.wholesale || {}) },
           centerStoneRates: { ...prev.centerStoneRates, ...(parsed.centerStoneRates || {}) },
-          centerStoneRawRates: { ...prev.centerStoneRawRates, ...(parsed.centerStoneRawRates || {}) }
+          centerStoneRawRates: { ...prev.centerStoneRawRates, ...(parsed.centerStoneRawRates || {}) },
+          cubanMultipliers: parsed.cubanMultipliers || prev.cubanMultipliers || [
+            { minWidth: 5, maxWidth: 7, multiplier: 1.8 },
+            { minWidth: 8, maxWidth: 10, multiplier: 1.6 },
+            { minWidth: 11, maxWidth: 13, multiplier: 1.5 },
+            { minWidth: 14, maxWidth: 24, multiplier: 1.4 }
+          ],
+          tennisMultipliers: parsed.tennisMultipliers || prev.tennisMultipliers || [
+            { minWidth: 1.0, maxWidth: 1.9, multiplier: 1.6 },
+            { minWidth: 2.0, maxWidth: 4.0, multiplier: 1.4 }
+          ],
+          tennisDiamondPricePerCt: parsed.tennisDiamondPricePerCt !== undefined ? parsed.tennisDiamondPricePerCt : (prev.tennisDiamondPricePerCt !== undefined ? prev.tennisDiamondPricePerCt : 600)
         }));
       }
     } catch (e) {
       console.error("Local Storage Load Error:", e);
     }
   }, []);
+
+  // Persist master settings on changes
+  useEffect(() => {
+    localStorage.setItem('gr_master_settings', JSON.stringify(settings));
+  }, [settings]);
 
   // Fetch GoldAPI CAD Spot Indices
   const fetchLivePrices = async () => {
@@ -220,67 +237,7 @@ export default function App() {
     let gT = 0;
     let tD = 0;
     activeSession.rings.forEach(r => {
-      let cost = 0;
-      const g = parseFloat(r.goldGrams) || 0;
-      if (r.category === 'tennisBracelet') {
-        // tennis bracelet custom logic
-        const est = getTennisEstimates(r);
-        const fs = parseFloat(r.tbManualStones || '') || est.estStones;
-        const fc = parseFloat(r.tbManualCarats || '') || (fs * est.caratPerStone);
-        const ppc = r.tbShape === 'Round' ? settings.tennisMeleePricePerCt : settings.tennisFancyPricePerCt;
-        cost = (r.stoneSource !== 'customer') ? (fc * ppc) + (fs * settings.tennisLaborRetail) : 0;
-        
-        let cM = 0;
-        if (r.material === 'gold') cM = g * settings.tennisGoldPricesPerGram[r.goldKarat];
-        else if (r.material === 'platinum') cM = g * settings.tennisPlatinumPricePerGram;
-        else if (r.material === 'silver') cM = g * settings.tennisSilverPricePerGram;
-        cost += cM;
-      } else {
-        // normal piece
-        let cM = 0;
-        if (r.material === 'gold') cM = g * settings.goldPricesPerGram[r.goldKarat];
-        else if (r.material === 'platinum') cM = g * settings.platinumPricePerGram;
-        else if (r.material === 'silver') cM = g * settings.silverPricePerGram;
-        
-        let cS = 0;
-        const mR = r.category === 'earrings' ? settings.earringMeleePricePerCt : settings.meleePricePerCt;
-        const fR = r.category === 'earrings' ? settings.earringFancyPricePerCt : settings.fancyPricePerCt;
-        
-        let mc = 0;
-        r.melee.forEach(m => { mc += (parseFloat(m.qty) || 0) * (parseFloat(m.carat) || 0); });
-        const cMc = mc * mR;
-        
-        let fc = 0;
-        r.fancy.forEach(f => {
-          const sizes = FANCY_SHAPES[f.shape] || [];
-          const activeSize = sizes[f.sizeIdx] || { carat: 0 };
-          fc += (parseFloat(f.qty) || 0) * activeSize.carat * fR;
-        });
-
-        let cC = 0;
-        if (r.centerStone?.carats) {
-          cC = parseFloat(r.centerStone.carats) * (settings.centerStoneRates[r.centerStone.type]?.[r.centerStone.origin] || 1000);
-        }
-        let cC2 = 0;
-        if (r.category === 'earrings' && r.centerStone2?.carats) {
-          cC2 = parseFloat(r.centerStone2.carats) * (settings.centerStoneRates[r.centerStone2.type]?.[r.centerStone2.origin] || 1000);
-        }
-        
-        cS = cMc + fc + cC + cC2;
-
-        let cCF = 0;
-        r.clientStones.forEach(c => {
-          if (c.type === 'Center') cCF += (parseFloat(c.carats) || 0) * settings.settingFeeCenterPerCt;
-          else cCF += (parseFloat(c.qty) || 0) * settings.settingFeeMeleePerSt;
-        });
-
-        cost = cM + cS + cCF;
-      }
-
-      // Add addons
-      r.addons.forEach(a => { cost += parseFloat(a.fee) || 0; });
-      if (r.showEngraving && r.engravingText) cost += 50;
-
+      const cost = calculateRingCost(r, settings, spotPrices, isWholesale ? 'wholesale' : 'retail', activeSession.overridePrices);
       gT += cost;
       const val = parseFloat(r.discount) || 0;
       tD += r.discountType === '%' ? cost * (val / 100) : val;
@@ -478,14 +435,32 @@ export default function App() {
 
     onChange(prev => ({
       ...prev,
-      rings: prev.rings.map(r => 
-        r.id === prev.activeSubTab 
-          ? { ...r, [editingImageType === 'sketch' ? 'referenceSketch' : 'referencePhoto']: dataUrl } 
-          : r
-      )
+      rings: prev.rings.map(r => {
+        if (r.id === prev.activeSubTab) {
+          const fieldSingle = editingImageType === 'sketch' ? 'referenceSketch' : 'referencePhoto';
+          const fieldArr = editingImageType === 'sketch' ? 'referenceSketches' : 'referencePhotos';
+
+          const currentArr = Array.isArray(r[fieldArr]) ? [...r[fieldArr]!] : (r[fieldSingle] ? [r[fieldSingle]!] : []);
+          let updatedArr = [...currentArr];
+
+          if (editingImageIndex !== null && editingImageIndex !== undefined && editingImageIndex >= 0 && editingImageIndex < currentArr.length) {
+            updatedArr[editingImageIndex] = dataUrl;
+          } else {
+            updatedArr.push(dataUrl);
+          }
+
+          return {
+            ...r,
+            [fieldSingle]: updatedArr[0] || null,
+            [fieldArr]: updatedArr
+          };
+        }
+        return r;
+      })
     }));
 
     setIsSketching(false);
+    setEditingImageIndex(null);
   };
 
   // Active sketchpad image source loader
@@ -494,7 +469,16 @@ export default function App() {
     const session = isWholesale ? wholesaleSession : retailSession;
     const ring = session.rings.find(r => r.id === session.activeSubTab);
     if (!ring) return null;
-    return editingImageType === 'sketch' ? ring.referenceSketch : ring.referencePhoto;
+
+    const fieldSingle = editingImageType === 'sketch' ? 'referenceSketch' : 'referencePhoto';
+    const fieldArr = editingImageType === 'sketch' ? 'referenceSketches' : 'referencePhotos';
+
+    const currentArr = Array.isArray(ring[fieldArr]) ? ring[fieldArr]! : (ring[fieldSingle] ? [ring[fieldSingle]!] : []);
+
+    if (editingImageIndex !== null && editingImageIndex !== undefined && editingImageIndex >= 0 && editingImageIndex < currentArr.length) {
+      return currentArr[editingImageIndex];
+    }
+    return null;
   };
 
   return (
@@ -675,8 +659,9 @@ export default function App() {
               session={retailSession}
               onChangeSession={setRetailSession}
               onSaveQuote={() => handleSaveQuote(false)}
-              onLaunchSketch={(type) => {
+              onLaunchSketch={(type, index = null) => {
                 setEditingImageType(type);
+                setEditingImageIndex(index);
                 setIsSketching(true);
               }}
               settings={settings}
@@ -690,8 +675,9 @@ export default function App() {
               session={wholesaleSession}
               onChangeSession={setWholesaleSession}
               onSaveQuote={() => handleSaveQuote(true)}
-              onLaunchSketch={(type) => {
+              onLaunchSketch={(type, index = null) => {
                 setEditingImageType(type);
+                setEditingImageIndex(index);
                 setIsSketching(true);
               }}
               settings={settings}
