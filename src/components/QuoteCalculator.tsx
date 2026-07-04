@@ -3512,94 +3512,81 @@ export default function QuoteCalculator({
                         </div>
 
                         {/* Dimensions & Target Specs Grid */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                          <div>
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Metal/Material</span>
-                            <span className="font-bold text-brand-950">{r.goldKarat ? `${r.goldKarat}K` : ''} {r.metalColor} {r.material.toUpperCase()}</span>
+                        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 space-y-4 shadow-sm">
+                          <span className="text-[10px] font-black text-brand-900 uppercase tracking-widest block border-b border-slate-100 pb-2 flex items-center gap-1.5">
+                            <Compass size={13} className="text-brand-gold" />
+                            CAD Engineering Specifications & Blueprint Parameters
+                          </span>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                            <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">
+                                {r.category === 'pendant' ? 'Pendant Dimensions' : r.category === 'tennisBracelet' ? 'Bracelet Length' : r.category === 'earrings' ? 'Backing Type' : 'Finger Size'}
+                              </span>
+                              <span className="font-bold text-brand-950 text-sm">
+                                {r.category === 'mensBand' 
+                                  ? (r.mbSize || 'Not set') 
+                                  : (r.category === 'customRing' || r.category === 'weddingBand') 
+                                    ? (r.cRingSize || 'Not set') 
+                                    : r.category === 'pendant' 
+                                      ? (r.pDimensions || 'N/A') 
+                                      : r.category === 'tennisBracelet' 
+                                        ? (r.tbLength ? `${r.tbLength}"` : 'N/A') 
+                                        : r.category === 'earrings' 
+                                          ? (r.backingType || 'N/A') 
+                                          : 'N/A'}
+                              </span>
+                            </div>
+
+                            <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">Band Width</span>
+                              <span className="font-bold text-brand-950 text-sm">
+                                {r.category === 'mensBand' 
+                                  ? (r.mbWidth ? `${r.mbWidth} mm` : 'N/A') 
+                                  : (r.category === 'customRing' || r.category === 'weddingBand') 
+                                    ? (r.cBandWidth ? `${r.cBandWidth} mm` : 'N/A') 
+                                    : 'N/A'}
+                              </span>
+                            </div>
+
+                            <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">Band Thickness</span>
+                              <span className="font-bold text-brand-950 text-sm">
+                                {r.category === 'mensBand' 
+                                  ? (r.mbThickness ? `${r.mbThickness} mm` : 'N/A') 
+                                  : (r.category === 'customRing' || r.category === 'weddingBand') 
+                                    ? (r.cBandThickness ? `${r.cBandThickness} mm` : 'N/A') 
+                                    : 'N/A'}
+                              </span>
+                            </div>
+
+                            <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">Target Metal Weight</span>
+                              <span className="font-mono font-bold text-brand-950 text-sm">
+                                {r.goldGrams || 'N/A'} grams
+                              </span>
+                            </div>
                           </div>
-                          <div>
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Target Metal Weight</span>
-                            <span className="font-mono font-bold text-brand-950">{r.goldGrams || 'N/A'} grams</span>
-                          </div>
-                          
-                          {/* Dimensions fields */}
-                          {(r.category === 'customRing' || r.category === 'weddingBand') && (
-                            <>
-                              <div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Finger Size</span>
-                                <span className="font-bold text-brand-950">{r.cRingSize || 'Not set'}</span>
-                              </div>
-                              <div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Band Width / Thickness</span>
-                                <span className="font-bold text-brand-950">{r.cBandWidth ? `${r.cBandWidth}mm` : 'N/A'} / {r.cBandThickness ? `${r.cBandThickness}mm` : 'N/A'}</span>
-                              </div>
-                            </>
-                          )}
 
-                          {r.category === 'mensBand' && (
-                            <>
-                              <div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Finger Size / Profile</span>
-                                <span className="font-bold text-brand-950">{r.mbSize || 'Not set'} / {r.mbProfile || 'N/A'}</span>
-                              </div>
-                              <div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Band Width / Thickness</span>
-                                <span className="font-bold text-brand-950">{r.mbWidth ? `${r.mbWidth}mm` : 'N/A'} / {r.mbThickness ? `${r.mbThickness}mm` : 'N/A'}</span>
-                              </div>
-                            </>
-                          )}
-
-                          {r.category === 'pendant' && (
-                            <>
-                              <div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Pendant Dimensions</span>
-                                <span className="font-bold text-brand-950">{r.pDimensions || 'N/A'}</span>
-                              </div>
-                              <div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Hanger / Bail Style</span>
-                                <span className="font-bold text-brand-950">Integrated</span>
-                              </div>
-                            </>
-                          )}
-
-                          {r.category === 'earrings' && (
-                            <>
-                              <div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Backing / Closure Type</span>
-                                <span className="font-bold text-brand-950">{r.backingType || 'N/A'}</span>
-                              </div>
-                              <div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Style Layout</span>
-                                <span className="font-bold text-brand-950">Matching Pair (Left & Right)</span>
-                              </div>
-                            </>
-                          )}
-
-                          {r.category === 'tennisBracelet' && (
-                            <>
-                              <div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Bracelet Length</span>
-                                <span className="font-bold text-brand-950">{r.tbLength ? `${r.tbLength}"` : 'N/A'}</span>
-                              </div>
-                              <div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Clasp / Safety Lock</span>
-                                <span className="font-bold text-brand-950">Double-Safety Box Clasp</span>
-                              </div>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Settings & Band Details */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-white p-4 rounded-xl border border-slate-100">
-                          <div>
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">Band Style / Design Pattern</span>
-                            <span className="font-bold text-brand-900">{r.bandStyle || 'Solid plain shank / standard'}</span>
-                          </div>
-                          <div>
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1">Stone Procurement Source</span>
-                            <span className={`font-black uppercase tracking-wider text-[10px] px-2 py-0.5 rounded inline-block ${r.stoneSource === 'customer' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                              {r.stoneSource === 'customer' ? '⚠️ Customer Supplied Stones (Measure First!)' : '🏢 Company Inventory (Select from Stock)'}
-                            </span>
+                          {/* Extra Specific Details */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+                            <div className="bg-slate-50/30 p-2.5 rounded-xl border border-slate-100">
+                              <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Metal Alloy / Color</span>
+                              <span className="font-bold text-brand-900 block">
+                                {r.goldKarat ? `${r.goldKarat}K` : ''} {r.metalColor} {r.material.toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="bg-slate-50/30 p-2.5 rounded-xl border border-slate-100">
+                              <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Band Profile / Finish Style</span>
+                              <span className="font-bold text-brand-900 block">
+                                {r.category === 'mensBand' ? (r.mbProfile || 'Step Edge Beveled') : (r.bandStyle || 'Solid plain shank / standard')}
+                              </span>
+                            </div>
+                            <div className="bg-slate-50/30 p-2.5 rounded-xl border border-slate-100">
+                              <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Stone Procurement Source</span>
+                              <span className={`font-black text-[10px] block ${r.stoneSource === 'customer' ? 'text-amber-600 font-bold' : 'text-emerald-600 font-bold'}`}>
+                                {r.stoneSource === 'customer' ? '⚠️ Client Supplied Stones' : '🏢 Company Inventory'}
+                              </span>
+                            </div>
                           </div>
                         </div>
 

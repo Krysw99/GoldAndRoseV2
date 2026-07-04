@@ -42,7 +42,7 @@ body {
   scrollbar-width: none;
 }
 
-/* Print Optimization for Black, White, and Grayscales */
+/* Print Optimization for High-Quality Brand Colors and Layouts */
 @media print {
   /* Hide UI elements */
   header,
@@ -58,35 +58,25 @@ body {
   /* Reset main layouts to simple blocks */
   body, html, #root {
     background: #ffffff !important;
-    color: #000000 !important;
+    color: #12151a !important;
     padding: 0 !important;
     margin: 0 !important;
-    font-size: 11pt !important;
+    font-size: 10pt !important;
   }
 
-  /* Force grayscale color filter to prevent B&W printer color errors */
+  /* Force browsers to print original brand background colors & borders */
   body {
-    filter: grayscale(100%) !important;
-    -webkit-filter: grayscale(100%) !important;
-    color-adjust: economy !important;
-    -webkit-print-color-adjust: economy !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
   }
 
-  /* Convert dark containers into clean white blocks with thin dark borders */
-  .bg-brand-900,
-  .bg-brand-950,
-  .bg-[#0f172a],
-  .bg-slate-900 {
-    background-color: #ffffff !important;
-    color: #000000 !important;
-    border: 1px solid #94a3b8 !important;
-  }
-
-  /* Ensure text elements inside converted headers are readable */
-  .text-brand-gold,
-  .text-white,
-  .text-[#f1c40f] {
-    color: #000000 !important;
+  /* Prevent shadow overlap and blur artifacts */
+  .shadow-sm,
+  .shadow-md,
+  .shadow-lg,
+  .shadow-xl,
+  .shadow-2xl {
+    box-shadow: none !important;
   }
 
   /* Table styles optimization */
@@ -102,42 +92,10 @@ body {
   thead {
     display: table-header-group !important;
   }
-  thead tr {
-    background-color: #f1f5f9 !important;
-    color: #000000 !important;
-    border-bottom: 2px solid #000000 !important;
-  }
-  thead tr th {
-    color: #000000 !important;
-  }
 
-  /* Backgrounds and text alignments */
-  .bg-brand-50,
-  .bg-brand-50\/50,
-  .bg-brand-50\/20,
-  .bg-slate-50 {
-    background-color: #f8fafc !important;
-    border: 1px solid #cbd5e1 !important;
-  }
-
-  /* Thin out shadow effects */
-  .shadow-sm,
-  .shadow-md,
-  .shadow-lg,
-  .shadow-xl,
-  .shadow-2xl {
-    box-shadow: none !important;
-  }
-
-  /* Smooth layout spacers */
-  .p-4, .p-5, .p-6, .p-8 {
-    padding: 12px !important;
-  }
-  .rounded-[2rem],
-  .rounded-3xl,
-  .rounded-2xl,
-  .rounded-xl {
-    border-radius: 6px !important;
+  /* Ensure page-breaks are respected for multiple items */
+  .page-break-inside-avoid {
+    page-break-inside: avoid !important;
   }
 }
 
