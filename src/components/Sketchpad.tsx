@@ -7,7 +7,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { 
   Pen, Highlighter, Eraser, Move, 
   RotateCw, RefreshCw, X, Check, Camera, Sparkles, HelpCircle,
-  Undo2, Redo2, Ruler, Grid3X3
+  Undo2, Redo2, Ruler, Grid3X3, Minus, Maximize2
 } from 'lucide-react';
 import { CENTER_SHAPES } from '../constants';
 
@@ -577,10 +577,15 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Drawing tool state
-  const [tool, setTool] = useState<'pen' | 'highlighter' | 'eraser' | 'transform' | 'stamp' | 'ruler'>('pen');
+  const [tool, setTool] = useState<'pen' | 'highlighter' | 'eraser' | 'transform' | 'stamp' | 'ruler' | 'line'>('pen');
   const [color, setColor] = useState('#1e293b'); // Slate dark
   const [thickness, setThickness] = useState(3.0);
   const [stampShape, setStampShape] = useState<string>('');
+
+  // Straight line drawing states
+  const [lineStart, setLineStart] = useState<{ x: number; y: number } | null>(null);
+  const [lineEnd, setLineEnd] = useState<{ x: number; y: number } | null>(null);
+  const [isDrawingLine, setIsDrawingLine] = useState(false);
 
   // Symmetry, Grid, Ruler & Undo/Redo states
   const [symmetryMode, setSymmetryMode] = useState<'none' | 'vertical' | 'horizontal' | 'quad'>('none');
@@ -632,6 +637,29 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
 
   // Saved canvas data for interactive stamp previewing
   const [savedCanvasData, setSavedCanvasData] = useState<ImageData | null>(null);
+
+  // Active interactive stamp state
+  const [activeStamp, setActiveStamp] = useState<{
+    shape: string;
+    x: number;
+    y: number;
+    size: number;
+    angle: number;
+    color: string;
+    thickness: number;
+  } | null>(null);
+
+  // Active stamp transformation mode ('drag' | 'scale' | 'rotate')
+  const [stampTransformMode, setStampTransformMode] = useState<'drag' | 'scale' | 'rotate' | null>(null);
+  const [stampDragStart, setStampDragStart] = useState({ x: 0, y: 0 });
+  const [initialStampTransformState, setInitialStampTransformState] = useState<{
+    x: number;
+    y: number;
+    size: number;
+    angle: number;
+  } | null>(null);
+  const [stampTransformStartDist, setStampTransformStartDist] = useState(1);
+  const [stampTransformStartAngle, setStampTransformStartAngle] = useState(0);
 
   // Instant Stamp parameters
   const [stampSize, setStampSize] = useState<number>(45);
@@ -1205,6 +1233,48 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     }
   };
 
+  // Flatten / Bake the active interactive stamp permanently onto the drawing canvas
+  const flattenActiveStamp = (stampToFlatten = activeStamp) => {
+    if (!stampToFlatten) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (ctx && canvas) {
+      if (savedCanvasData) {
+        ctx.putImageData(savedCanvasData, 0, 0);
+      }
+
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = stampToFlatten.color;
+      ctx.lineWidth = stampToFlatten.thickness;
+      ctx.globalAlpha = 1.0;
+
+      const drawStampWithSymmetry = (cx: number, cy: number) => {
+        drawDiamondShape(ctx, cx, cy, stampToFlatten.size, stampToFlatten.shape, stampToFlatten.angle);
+        
+        if (symmetryMode === 'vertical') {
+          drawDiamondShape(ctx, canvas.width - cx, cy, stampToFlatten.size, stampToFlatten.shape, stampToFlatten.angle);
+        } else if (symmetryMode === 'horizontal') {
+          drawDiamondShape(ctx, cx, canvas.height - cy, stampToFlatten.size, stampToFlatten.shape, stampToFlatten.angle);
+        } else if (symmetryMode === 'quad') {
+          drawDiamondShape(ctx, canvas.width - cx, cy, stampToFlatten.size, stampToFlatten.shape, stampToFlatten.angle);
+          drawDiamondShape(ctx, cx, canvas.height - cy, stampToFlatten.size, stampToFlatten.shape, stampToFlatten.angle);
+          drawDiamondShape(ctx, canvas.width - cx, canvas.height - cy, stampToFlatten.size, stampToFlatten.shape, stampToFlatten.angle);
+        }
+      };
+
+      drawStampWithSymmetry(stampToFlatten.x, stampToFlatten.y);
+      ctx.restore();
+
+      const cleanState = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      setSavedCanvasData(cleanState);
+      pushToHistory(canvas.toDataURL());
+    }
+    setActiveStamp(null);
+  };
+
   // Push Canvas to Undo/Redo history stack
   const pushToHistory = (customDataUrl?: string) => {
     const canvas = canvasRef.current;
@@ -1218,6 +1288,10 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
   };
 
   const handleUndo = () => {
+    if (activeStamp) {
+      setActiveStamp(null);
+      return;
+    }
     if (historyIndex > 0) {
       const prevIndex = historyIndex - 1;
       setHistoryIndex(prevIndex);
@@ -1283,9 +1357,14 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
         const ctx = canvas.getContext('2d');
         if (ctx) ctx.putImageData(savedCanvasData, 0, 0);
       }
+      if (tool === 'line' && isDrawingLine && savedCanvasData) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.putImageData(savedCanvasData, 0, 0);
+      }
       setIsDrawing(false);
       setIsStamping(false);
       setIsMeasuring(false);
+      setIsDrawingLine(false);
 
       const pointers = Array.from(activePointersRef.current.values()) as { x: number; y: number }[];
       const p1 = pointers[0];
@@ -1314,6 +1393,9 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     if (!ctx) return;
 
     if (tool === 'stamp' && stampShape) {
+      if (activeStamp) {
+        flattenActiveStamp();
+      }
       canvas.setPointerCapture(e.pointerId);
       stampStartPosRef.current = { x, y };
       initialStampSizeRef.current = stampSize;
@@ -1326,6 +1408,13 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       setRulerStart({ x, y });
       setRulerEnd({ x, y });
       setIsMeasuring(true);
+    } else if (tool === 'line') {
+      canvas.setPointerCapture(e.pointerId);
+      const startPos = { x, y };
+      setLineStart(startPos);
+      setLineEnd(startPos);
+      captureCanvasState();
+      setIsDrawingLine(true);
     } else {
       setIsDrawing(true);
       canvas.setPointerCapture(e.pointerId);
@@ -1408,6 +1497,13 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       return;
     }
 
+    if (tool === 'line') {
+      if (isDrawingLine) {
+        setLineEnd({ x, y });
+      }
+      return;
+    }
+
     if (!isDrawing) return;
 
     const ctx = getCanvasContext();
@@ -1442,48 +1538,25 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       setIsDrawing(false);
       setIsStamping(false);
       setIsMeasuring(false);
+      setIsDrawingLine(false);
       return;
     }
 
     if (tool === 'stamp' && stampShape && isStamping) {
-      const ctx = getCanvasContext();
-      if (ctx && canvas) {
-        if (savedCanvasData) {
-          ctx.putImageData(savedCanvasData, 0, 0);
-        }
+      const centerPos = stampStartPosRef.current || getCanvasCoords(e.clientX, e.clientY);
+      const finalSize = dragThresholdMetRef.current ? stampSize : initialStampSizeRef.current;
+      const finalAngle = dragThresholdMetRef.current ? stampAngle : 0;
 
-        const centerPos = stampStartPosRef.current || getCanvasCoords(e.clientX, e.clientY);
-        const finalSize = dragThresholdMetRef.current ? stampSize : initialStampSizeRef.current;
-        const finalAngle = dragThresholdMetRef.current ? stampAngle : 0;
+      setActiveStamp({
+        shape: stampShape,
+        x: centerPos.x,
+        y: centerPos.y,
+        size: finalSize,
+        angle: finalAngle,
+        color: color,
+        thickness: thickness
+      });
 
-        ctx.save();
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.strokeStyle = color;
-        ctx.lineWidth = thickness;
-        ctx.globalAlpha = 1.0;
-
-        const drawStampWithSymmetry = (cx: number, cy: number) => {
-          drawDiamondShape(ctx, cx, cy, finalSize, stampShape, finalAngle);
-          
-          if (symmetryMode === 'vertical') {
-            drawDiamondShape(ctx, canvas.width - cx, cy, finalSize, stampShape, finalAngle);
-          } else if (symmetryMode === 'horizontal') {
-            drawDiamondShape(ctx, cx, canvas.height - cy, finalSize, stampShape, finalAngle);
-          } else if (symmetryMode === 'quad') {
-            drawDiamondShape(ctx, canvas.width - cx, cy, finalSize, stampShape, finalAngle);
-            drawDiamondShape(ctx, cx, canvas.height - cy, finalSize, stampShape, finalAngle);
-            drawDiamondShape(ctx, canvas.width - cx, canvas.height - cy, finalSize, stampShape, finalAngle);
-          }
-        };
-
-        drawStampWithSymmetry(centerPos.x, centerPos.y);
-        ctx.restore();
-
-        const cleanState = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        setSavedCanvasData(cleanState);
-
-        pushToHistory(canvas.toDataURL());
-      }
       setIsStamping(false);
       stampStartPosRef.current = null;
 
@@ -1504,6 +1577,35 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       setIsMeasuring(false);
       setRulerStart(null);
       setRulerEnd(null);
+      return;
+    }
+
+    if (tool === 'line') {
+      if (isDrawingLine && lineStart && lineEnd) {
+        const ctx = getCanvasContext();
+        if (ctx && canvas) {
+          if (savedCanvasData) {
+            ctx.putImageData(savedCanvasData, 0, 0);
+          }
+
+          ctx.save();
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.strokeStyle = color;
+          ctx.lineWidth = thickness;
+          ctx.globalAlpha = 1.0;
+
+          drawSegment(lineStart.x, lineStart.y, lineEnd.x, lineEnd.y, ctx, canvas.width, canvas.height);
+          ctx.restore();
+
+          const cleanState = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          setSavedCanvasData(cleanState);
+          pushToHistory(canvas.toDataURL());
+        }
+      }
+      setIsDrawingLine(false);
+      setLineStart(null);
+      setLineEnd(null);
       return;
     }
 
@@ -1540,47 +1642,96 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     setPointerPos(null);
   };
 
-  // Render live stamp preview under the pointer
+  // Render live stamp preview under the pointer OR active stamp adjustments
   useEffect(() => {
-    if (tool === 'stamp' && stampShape && pointerPos && savedCanvasData) {
+    if (tool === 'stamp' && stampShape && savedCanvasData) {
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext('2d');
       if (ctx && canvas) {
-        // First restore the clean canvas state to erase the previous preview
+        // Restore the clean canvas state first
         ctx.putImageData(savedCanvasData, 0, 0);
 
-        // Lock the preview center to the start click position if dragging/stamping, otherwise follow hover pointer
-        const cx = isStamping && stampStartPosRef.current ? stampStartPosRef.current.x : pointerPos.x;
-        const cy = isStamping && stampStartPosRef.current ? stampStartPosRef.current.y : pointerPos.y;
+        const drawStampWithSymmetry = (
+          cx: number,
+          cy: number,
+          size: number,
+          shape: string,
+          angle: number,
+          alpha: number
+        ) => {
+          ctx.save();
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.strokeStyle = color;
+          ctx.lineWidth = thickness;
+          ctx.globalAlpha = alpha;
 
-        // Draw dashed drag guide line if actively dragging/scaling/rotating
-        if (isStamping && stampStartPosRef.current) {
+          drawDiamondShape(ctx, cx, cy, size, shape, angle);
+          
+          if (symmetryMode === 'vertical') {
+            drawDiamondShape(ctx, canvas.width - cx, cy, size, shape, angle);
+          } else if (symmetryMode === 'horizontal') {
+            drawDiamondShape(ctx, cx, canvas.height - cy, size, shape, angle);
+          } else if (symmetryMode === 'quad') {
+            drawDiamondShape(ctx, canvas.width - cx, cy, size, shape, angle);
+            drawDiamondShape(ctx, cx, canvas.height - cy, size, shape, angle);
+            drawDiamondShape(ctx, canvas.width - cx, canvas.height - cy, size, shape, angle);
+          }
+          ctx.restore();
+        };
+
+        if (isStamping && stampStartPosRef.current && pointerPos) {
+          // 1. Actively dragging/placing a new stamp
           ctx.save();
           ctx.strokeStyle = '#f59e0b'; // golden amber
           ctx.lineWidth = 1.2;
           ctx.setLineDash([4, 4]);
           ctx.beginPath();
-          ctx.moveTo(cx, cy);
+          ctx.moveTo(stampStartPosRef.current.x, stampStartPosRef.current.y);
           ctx.lineTo(pointerPos.x, pointerPos.y);
           ctx.stroke();
           ctx.restore();
-        }
 
-        // Draw the preview shape with 0.5 opacity
+          drawStampWithSymmetry(stampStartPosRef.current.x, stampStartPosRef.current.y, stampSize, stampShape, stampAngle, 0.5);
+        } else if (activeStamp) {
+          // 2. Adjusting an existing active stamp
+          drawStampWithSymmetry(activeStamp.x, activeStamp.y, activeStamp.size, activeStamp.shape, activeStamp.angle, 0.85);
+        } else if (pointerPos) {
+          // 3. Hovering with stamp tool
+          drawStampWithSymmetry(pointerPos.x, pointerPos.y, stampSize, stampShape, stampAngle, 0.5);
+        }
+      }
+    }
+  }, [pointerPos, stampSize, stampAngle, savedCanvasData, tool, stampShape, color, thickness, isStamping, activeStamp, symmetryMode]);
+
+  // Render live straight line preview during line tool drawing
+  useEffect(() => {
+    if (tool === 'line' && isDrawingLine && lineStart && lineEnd && savedCanvasData) {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (ctx && canvas) {
+        // Restore the clean canvas state first to erase previous preview lines
+        ctx.putImageData(savedCanvasData, 0, 0);
+
         ctx.save();
-        ctx.globalCompositeOperation = 'source-over';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         ctx.strokeStyle = color;
         ctx.lineWidth = thickness;
-        ctx.globalAlpha = 0.5;
+        ctx.globalAlpha = 0.6; // slightly semi-transparent for the drag preview
 
-        drawDiamondShape(ctx, cx, cy, stampSize, stampShape, stampAngle);
+        drawSegment(lineStart.x, lineStart.y, lineEnd.x, lineEnd.y, ctx, canvas.width, canvas.height);
         ctx.restore();
       }
     }
-  }, [pointerPos, stampSize, stampAngle, savedCanvasData, tool, stampShape, color, thickness, isStamping]);
+  }, [lineStart, lineEnd, isDrawingLine, savedCanvasData, tool, color, thickness, symmetryMode]);
 
   // Switch drawing tools safely, clearing any outstanding preview
-  const selectTool = (t: 'pen' | 'highlighter' | 'eraser' | 'transform') => {
+  const selectTool = (t: 'pen' | 'highlighter' | 'eraser' | 'transform' | 'line') => {
+    if (activeStamp) {
+      flattenActiveStamp();
+    }
     if (tool === 'stamp' && savedCanvasData) {
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext('2d');
@@ -1588,6 +1739,9 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
         ctx.putImageData(savedCanvasData, 0, 0);
       }
     }
+    setIsDrawingLine(false);
+    setLineStart(null);
+    setLineEnd(null);
     setPointerPos(null);
     setStampShape('');
     setTool(t);
@@ -1599,6 +1753,10 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    if (activeStamp) {
+      flattenActiveStamp();
+    }
 
     if (shape) {
       // First, restore current clean state if a preview was active
@@ -1654,6 +1812,106 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       img.src = result;
     };
     reader.readAsDataURL(file);
+  };
+
+  // Active stamp transformation logic
+  const handleStampTransformStart = (e: React.PointerEvent<HTMLDivElement>, mode: 'drag' | 'scale' | 'rotate') => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setStampTransformMode(mode);
+    setStampDragStart({ x: e.clientX, y: e.clientY });
+    if (activeStamp) {
+      setInitialStampTransformState({
+        x: activeStamp.x,
+        y: activeStamp.y,
+        size: activeStamp.size,
+        angle: activeStamp.angle
+      });
+    }
+
+    // Find center of bounding box to calculate angles/distances in client space
+    const box = e.currentTarget.parentElement;
+    if (box) {
+      const rect = box.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      const dx = e.clientX - cx;
+      const dy = e.clientY - cy;
+      setStampTransformStartDist(Math.sqrt(dx * dx + dy * dy) || 1);
+      setStampTransformStartAngle(Math.atan2(dy, dx));
+    }
+    
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handleStampTransformMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!stampTransformMode || !initialStampTransformState || !activeStamp) return;
+    e.preventDefault();
+
+    if (stampTransformMode === 'drag') {
+      const dxClient = e.clientX - stampDragStart.x;
+      const dyClient = e.clientY - stampDragStart.y;
+      
+      const dxCanvas = dxClient / zoom;
+      const dyCanvas = dyClient / zoom;
+
+      setActiveStamp(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          x: initialStampTransformState.x + dxCanvas,
+          y: initialStampTransformState.y + dyCanvas
+        };
+      });
+    } else if (stampTransformMode === 'scale') {
+      const box = e.currentTarget.parentElement;
+      if (box) {
+        const rect = box.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+
+        const dx = e.clientX - cx;
+        const dy = e.clientY - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        const scaleMultiplier = dist / stampTransformStartDist;
+        setActiveStamp(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            size: Math.max(5, Math.round(initialStampTransformState.size * scaleMultiplier))
+          };
+        });
+      }
+    } else if (stampTransformMode === 'rotate') {
+      const box = e.currentTarget.parentElement;
+      if (box) {
+        const rect = box.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+
+        const dx = e.clientX - cx;
+        const dy = e.clientY - cy;
+        const angle = Math.atan2(dy, dx);
+        const radDiff = angle - stampTransformStartAngle;
+        setActiveStamp(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            angle: (initialStampTransformState.angle + radDiff) % (2 * Math.PI)
+          };
+        });
+      }
+    }
+  };
+
+  const handleStampTransformEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!stampTransformMode) return;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setStampTransformMode(null);
+    setInitialStampTransformState(null);
   };
 
   // Background transformation logic
@@ -1731,6 +1989,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setActiveStamp(null);
     setBgImage(null);
     setBgSrc(null);
     setTool('pen');
@@ -1738,6 +1997,9 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
 
   // Save Canvas (Flattens background image + drawings together)
   const save = () => {
+    if (activeStamp) {
+      flattenActiveStamp();
+    }
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -2052,7 +2314,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
                 className="absolute -bottom-3.5 -right-3.5 w-7 h-7 bg-brand-gold text-brand-900 rounded-full border border-white flex items-center justify-center cursor-se-resize shadow-lg"
                 title="Scale Background"
               >
-                <RefreshCw size={12} />
+                <Maximize2 size={12} />
               </div>
             </div>
           )}
@@ -2078,6 +2340,78 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
               background: 'transparent'
             }}
           />
+
+          {/* Interactive Active Stamp Selection & Transformation Box */}
+          {activeStamp && tool === 'stamp' && !isStamping && (
+            <div
+              onPointerDown={(e) => handleStampTransformStart(e, 'drag')}
+              onPointerMove={handleStampTransformMove}
+              onPointerUp={handleStampTransformEnd}
+              style={{
+                position: 'absolute',
+                border: '2px dashed #f59e0b', // Amber/orange border for active stamp
+                width: `${activeStamp.size * 2}px`,
+                height: `${activeStamp.size * 2}px`,
+                left: `${activeStamp.x - activeStamp.size}px`,
+                top: `${activeStamp.y - activeStamp.size}px`,
+                transform: `rotate(${(activeStamp.angle * 180) / Math.PI}deg)`,
+                cursor: 'move',
+                zIndex: 35,
+                pointerEvents: 'auto'
+              }}
+            >
+              {/* Quick Action Confirmation / Delete floating menu inside bounding box */}
+              <div 
+                className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-brand-900 text-white px-2.5 py-1.5 rounded-lg border border-brand-800 shadow-2xl pointer-events-auto z-40"
+                onPointerDown={(e) => e.stopPropagation()} // Stop propagation so clicking menu buttons doesn't trigger drag
+              >
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    flattenActiveStamp();
+                  }}
+                  className="w-6 h-6 bg-emerald-600 hover:bg-emerald-500 rounded flex items-center justify-center transition-colors cursor-pointer"
+                  title="Apply / Bake Stamp permanent"
+                >
+                  <Check size={12} className="text-white font-bold" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveStamp(null);
+                  }}
+                  className="w-6 h-6 bg-red-600 hover:bg-red-500 rounded flex items-center justify-center transition-colors cursor-pointer"
+                  title="Delete Stamp"
+                >
+                  <X size={12} className="text-white font-bold" />
+                </button>
+              </div>
+
+              {/* Rotation Handle (top-right) */}
+              <div
+                onPointerDown={(e) => handleStampTransformStart(e, 'rotate')}
+                onPointerMove={handleStampTransformMove}
+                onPointerUp={handleStampTransformEnd}
+                className="absolute -top-3.5 -right-3.5 w-7 h-7 bg-brand-800 text-brand-gold rounded-full border border-brand-gold flex items-center justify-center cursor-alias shadow-lg select-none pointer-events-auto z-40"
+                title="Rotate Stamp"
+              >
+                <RotateCw size={12} />
+              </div>
+
+              {/* Scale Handle (bottom-right) */}
+              <div
+                onPointerDown={(e) => handleStampTransformStart(e, 'scale')}
+                onPointerMove={handleStampTransformMove}
+                onPointerUp={handleStampTransformEnd}
+                className="absolute -bottom-3.5 -right-3.5 w-7 h-7 bg-brand-gold text-brand-900 rounded-full border border-white flex items-center justify-center cursor-se-resize shadow-lg select-none pointer-events-auto z-40"
+                title="Scale Stamp"
+              >
+                <Maximize2 size={12} />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Floating Zoom Control (Top Right of Stage) */}
@@ -2398,6 +2732,14 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
               </button>
               <button
                 type="button"
+                onClick={() => selectTool('line')}
+                className={`p-2.5 md:p-3 rounded-lg transition-all min-w-[42px] min-h-[42px] flex items-center justify-center ${tool === 'line' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-100'}`}
+                title="Straight Line Tool"
+              >
+                <Minus size={15} className="rotate-45" />
+              </button>
+              <button
+                type="button"
                 onClick={() => selectTool('eraser')}
                 className={`p-2.5 md:p-3 rounded-lg transition-all min-w-[42px] min-h-[42px] flex items-center justify-center ${tool === 'eraser' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-100'}`}
                 title="Eraser"
@@ -2462,9 +2804,9 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
 
  
           {/* Color palette & Pen thickness slider (Tablet layout optimized) */}
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto justify-end shrink-0">
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto justify-start sm:justify-start lg:justify-start shrink-0">
             {/* Color palette */}
-            <div className="flex items-center gap-1.5 px-2.5 py-2 bg-brand-50/50 rounded-xl border border-brand-100/80 overflow-x-auto max-w-[280px] scrollbar-none shrink-0" title="Precious Metals & Fine Gemstones Palette">
+            <div className="flex items-center gap-1.5 px-2.5 py-2 bg-brand-50/50 rounded-xl border border-brand-100/80 overflow-x-auto max-w-[320px] scrollbar-none shrink-0" title="Precious Metals & Fine Gemstones Palette">
               {jewelryColors.map(c => (
                 <button
                   key={c.name}

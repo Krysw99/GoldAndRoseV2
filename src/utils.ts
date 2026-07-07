@@ -39,9 +39,10 @@ export function getEmptyRing(category: CategoryType): JewelryItem {
   if (category === 'mensBand') {
     return {
       ...base,
-      mbSize: '',
-      mbWidth: '',
-      mbThickness: '',
+      mbSize: '8.0',
+      mbWidth: '5.0',
+      mbThickness: '1.7',
+      mbProfile: 'Flat',
       goldGrams: ''
     };
   }
@@ -130,6 +131,12 @@ export function upgradeRingData(r: any): JewelryItem {
   if (!base.referencePhotos) {
     base.referencePhotos = base.referencePhoto ? [base.referencePhoto] : [];
   }
+  if (base.category === 'mensBand') {
+    if (base.mbSize === undefined || base.mbSize === '') base.mbSize = '8.0';
+    if (base.mbWidth === undefined || base.mbWidth === '') base.mbWidth = '5.0';
+    if (base.mbThickness === undefined || base.mbThickness === '') base.mbThickness = '1.7';
+    if (base.mbProfile === undefined || base.mbProfile === '') base.mbProfile = 'Flat';
+  }
   return base as JewelryItem;
 }
 
@@ -198,9 +205,9 @@ export function getTennisEstimates(r: JewelryItem): TennisEstimateResult {
 
 export function calculateBandWeight(r: JewelryItem): string {
   if (r.category === 'mensBand') {
-    const sz = Number(r.mbSize) || 0;
-    const w = Number(r.mbWidth) || 0;
-    const tk = Number(r.mbThickness) || 0;
+    const sz = Number(r.mbSize) || 8.0;
+    const w = Number(r.mbWidth) || 5.0;
+    const tk = Number(r.mbThickness) || 1.7;
     
     if (sz && w && tk) {
       const d = 11.63 + (0.8128 * sz);
@@ -515,6 +522,8 @@ export function calculateRingCost(r: JewelryItem, settings: AppSettings, spotPri
   r.clientStones.forEach(c => {
     if (c.type === 'Center') {
       cCF += (Number(c.carats) || 0) * Number(settings.settingFeeCenterPerCt);
+    } else if (c.type === 'Fancy') {
+      cCF += (Number(c.qty) || 0) * Number(settings.settingFeeFancyPerSt !== undefined ? settings.settingFeeFancyPerSt : 25);
     } else {
       cCF += (Number(c.qty) || 0) * Number(settings.settingFeeMeleePerSt);
     }

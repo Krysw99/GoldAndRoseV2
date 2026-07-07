@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { 
   Save, Download, Trash2, Calendar, Settings, ShieldAlert, Key, 
-  DollarSign, Wrench, Gem, HardDrive, EyeOff
+  DollarSign, Wrench, Gem, HardDrive, EyeOff, Upload, FileJson
 } from 'lucide-react';
 import { AppSettings } from '../types';
 import { ROUND_MELEE, FANCY_SHAPES } from '../constants';
@@ -67,6 +67,61 @@ export default function SettingsView({
   
   // Raw cost custom sizes
   const [activeRawFancyShapeTab, setActiveRawFancyShapeTab] = useState<string>('Princess');
+
+  // Cross-Device Synchronization Backup/Restore Utilities
+  const handleExportBackupJSON = () => {
+    const backupData = {
+      scrapLedger: localStorage.getItem('gr_scrap_ledger') || '[]',
+      quoteLedger: localStorage.getItem('gr_quote_ledger') || '[]',
+      wholesaleLedger: localStorage.getItem('gr_wholesale_ledger') || '[]',
+      masterSettings: localStorage.getItem('gr_master_settings') || '{}',
+      cubanEstimates: localStorage.getItem('gr_cuban_estimates') || '[]',
+      goldApiKey: localStorage.getItem('gr_gold_api_key') || '',
+      exportDate: new Date().toISOString(),
+      appVersion: '1.0.0'
+    };
+
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `GoldAndRose_Ledger_Sync_Backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportBackupJSON = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const json = JSON.parse(e.target?.result as string);
+        if (!json.scrapLedger && !json.quoteLedger && !json.wholesaleLedger) {
+          alert("Invalid backup file format. Could not find ledger keys.");
+          return;
+        }
+
+        if (window.confirm("This will merge or overwrite your current local ledger history and settings with the data in this backup file. Proceed?")) {
+          if (json.scrapLedger) localStorage.setItem('gr_scrap_ledger', json.scrapLedger);
+          if (json.quoteLedger) localStorage.setItem('gr_quote_ledger', json.quoteLedger);
+          if (json.wholesaleLedger) localStorage.setItem('gr_wholesale_ledger', json.wholesaleLedger);
+          if (json.masterSettings && json.masterSettings !== '{}') localStorage.setItem('gr_master_settings', json.masterSettings);
+          if (json.cubanEstimates) localStorage.setItem('gr_cuban_estimates', json.cubanEstimates);
+          if (json.goldApiKey) localStorage.setItem('gr_gold_api_key', json.goldApiKey);
+
+          alert("Sync data successfully imported! The application will now reload to apply all synced records.");
+          window.location.reload();
+        }
+      } catch (err) {
+        alert("Error parsing backup file: " + (err instanceof Error ? err.message : String(err)));
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const handleSaveAll = () => {
     // Apply manual spot rate updates
@@ -398,7 +453,7 @@ export default function SettingsView({
             </div>
 
             {/* Basic setting fees */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="text-[10px] font-bold text-brand-500 mb-1 block">Setting Fee (Center / ct)</label>
                 <input
@@ -406,6 +461,15 @@ export default function SettingsView({
                   className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                   value={localSettings.settingFeeCenterPerCt}
                   onChange={(e) => setLocalSettings(prev => ({ ...prev, settingFeeCenterPerCt: parseFloat(e.target.value) || 0 }))}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-brand-500 mb-1 block">Setting Fee (Fancy / stone)</label>
+                <input
+                  type="number"
+                  className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
+                  value={localSettings.settingFeeFancyPerSt !== undefined ? localSettings.settingFeeFancyPerSt : 25}
+                  onChange={(e) => setLocalSettings(prev => ({ ...prev, settingFeeFancyPerSt: parseFloat(e.target.value) || 0 }))}
                 />
               </div>
               <div>
@@ -1269,6 +1333,60 @@ export default function SettingsView({
                   <Download size={13} className="text-blue-600" />
                   Wholesale Ledger CSV
                 </button>
+              </div>
+            </div>
+
+            {/* Cross-Device Sync Backup */}
+            <div className="bg-brand-50 p-5 rounded-2xl border border-brand-200/80 space-y-4">
+              <div>
+                <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest flex items-center gap-1.5 border-b border-brand-100 pb-2">
+                  <FileJson size={14} className="text-brand-gold" />
+                  Cross-Device Sync & Ledger Backup
+                </h4>
+                <p className="text-[11px] text-brand-600 leading-relaxed mt-1">
+                  Since you opted out of cloud databases, you can synchronize your complete calculator history, custom jewellery designs, and settings between your <strong>computers and iPad</strong> entirely for free.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Export Section */}
+                <div className="bg-white p-4 rounded-xl border border-brand-100 space-y-2">
+                  <span className="text-[10px] font-black uppercase text-brand-700 tracking-wider block">1. Export Sync File</span>
+                  <p className="text-[10px] text-brand-400">
+                    Download your entire application history as a single file. Send it to your other devices using AirDrop, email, or a flash drive.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleExportBackupJSON}
+                    className="w-full bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-2.5 rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                  >
+                    <Download size={12} />
+                    Download Sync File
+                  </button>
+                </div>
+
+                {/* Import Section */}
+                <div className="bg-white p-4 rounded-xl border border-brand-100 space-y-2">
+                  <span className="text-[10px] font-black uppercase text-brand-700 tracking-wider block">2. Import Sync File</span>
+                  <p className="text-[10px] text-brand-400">
+                    Choose a sync backup file on your target device (iPad or another computer) to import and merge your full ledger histories instantly.
+                  </p>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleImportBackupJSON}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <button
+                      type="button"
+                      className="w-full bg-brand-50 hover:bg-brand-100 text-brand-800 border border-brand-200 font-black py-2.5 rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all shadow-sm pointer-events-none"
+                    >
+                      <Upload size={12} className="text-brand-gold" />
+                      Select Sync File
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 

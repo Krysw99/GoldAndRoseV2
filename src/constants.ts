@@ -136,6 +136,7 @@ export const PURITY_OPTIONS: Record<MaterialType, number[]> = {
 export const DEFAULT_SETTINGS = {
   settingFeeCenterPerCt: 250,
   settingFeeMeleePerSt: 15,
+  settingFeeFancyPerSt: 25,
   meleePricePerCt: 2400,
   fancyPricePerCt: 700,
   earringMeleePricePerCt: 2400,

@@ -180,6 +180,7 @@ export interface WholesaleSettings {
 export interface AppSettings {
   settingFeeCenterPerCt: number;
   settingFeeMeleePerSt: number;
+  settingFeeFancyPerSt: number;
   meleePricePerCt: number;
   fancyPricePerCt: number;
   earringMeleePricePerCt: number;

@@ -1829,7 +1829,7 @@ export default function QuoteCalculator({
                     <div className="flex justify-between text-[10px] font-bold">
                       <span className="text-brand-700 uppercase tracking-wider font-black">Ring Size (US)</span>
                       <span className="text-brand-900 font-mono font-black bg-white px-1.5 py-0.5 rounded border border-brand-100">
-                        {(parseFloat(activeRing.mbSize) || 9.0).toFixed(2)}
+                        {(parseFloat(activeRing.mbSize) || 8.0).toFixed(2)}
                       </span>
                     </div>
                     <input
@@ -1837,13 +1837,13 @@ export default function QuoteCalculator({
                       min="4.0"
                       max="15.0"
                       step="0.25"
-                      value={parseFloat(activeRing.mbSize) || 9.0}
+                      value={parseFloat(activeRing.mbSize) || 8.0}
                       onChange={(e) => updateActiveRing('mbSize', e.target.value)}
                       className="w-full accent-brand-900 cursor-pointer h-1.5 bg-brand-200/60 rounded-lg appearance-none"
                     />
                     <div className="flex justify-between text-[7px] text-brand-400 font-black font-mono">
                       <span>Size 4.0 (Small)</span>
-                      <span>9.0 (Average)</span>
+                      <span>8.0 (Average)</span>
                       <span>15.0 (Large)</span>
                     </div>
                   </div>
@@ -1853,7 +1853,7 @@ export default function QuoteCalculator({
                     <div className="flex justify-between text-[10px] font-bold">
                       <span className="text-brand-700 uppercase tracking-wider font-black">Band Width</span>
                       <span className="text-brand-900 font-mono font-black bg-white px-1.5 py-0.5 rounded border border-brand-100">
-                        {(parseFloat(activeRing.mbWidth) || 6.0).toFixed(1)} mm
+                        {(parseFloat(activeRing.mbWidth) || 5.0).toFixed(1)} mm
                       </span>
                     </div>
                     <input
@@ -1861,13 +1861,13 @@ export default function QuoteCalculator({
                       min="2.0"
                       max="12.0"
                       step="0.1"
-                      value={parseFloat(activeRing.mbWidth) || 6.0}
+                      value={parseFloat(activeRing.mbWidth) || 5.0}
                       onChange={(e) => updateActiveRing('mbWidth', e.target.value)}
                       className="w-full accent-brand-900 cursor-pointer h-1.5 bg-brand-200/60 rounded-lg appearance-none"
                     />
                     <div className="flex justify-between text-[7px] text-brand-400 font-black font-mono">
                       <span>2.0mm (Sleek)</span>
-                      <span>6.0mm (Classic)</span>
+                      <span>5.0mm (Classic)</span>
                       <span>12.0mm (Statement)</span>
                     </div>
                   </div>
@@ -1877,7 +1877,7 @@ export default function QuoteCalculator({
                     <div className="flex justify-between text-[10px] font-bold">
                       <span className="text-brand-700 uppercase tracking-wider font-black">Band Thickness</span>
                       <span className="text-brand-900 font-mono font-black bg-white px-1.5 py-0.5 rounded border border-brand-100">
-                        {(parseFloat(activeRing.mbThickness) || 1.8).toFixed(1)} mm
+                        {(parseFloat(activeRing.mbThickness) || 1.7).toFixed(1)} mm
                       </span>
                     </div>
                     <input
@@ -1885,13 +1885,13 @@ export default function QuoteCalculator({
                       min="1.0"
                       max="3.5"
                       step="0.1"
-                      value={parseFloat(activeRing.mbThickness) || 1.8}
+                      value={parseFloat(activeRing.mbThickness) || 1.7}
                       onChange={(e) => updateActiveRing('mbThickness', e.target.value)}
                       className="w-full accent-brand-900 cursor-pointer h-1.5 bg-brand-200/60 rounded-lg appearance-none"
                     />
                     <div className="flex justify-between text-[7px] text-brand-400 font-black font-mono">
                       <span>1.0mm (Ultra-thin)</span>
-                      <span>1.8mm (Medium)</span>
+                      <span>1.7mm (Medium)</span>
                       <span>3.5mm (Heavy-duty)</span>
                     </div>
                   </div>
@@ -1952,8 +1952,8 @@ export default function QuoteCalculator({
                     </div>
                     {/* Live Profile Simulator (2D Cross-Section Viewer) */}
                     {(() => {
-                      const widthVal = parseFloat(activeRing.mbWidth) || 6.0;
-                      const thicknessVal = parseFloat(activeRing.mbThickness) || 1.8;
+                      const widthVal = parseFloat(activeRing.mbWidth) || 5.0;
+                      const thicknessVal = parseFloat(activeRing.mbThickness) || 1.7;
                       const activeProfileId = activeRing.mbProfile || 'Flat';
                       const selectedProfile = PROFILE_SHAPES.find(s => s.id === activeProfileId) || PROFILE_SHAPES[0];
                       const profileColors = getMetalGradientColors(activeRing.material, activeRing.metalColor);
@@ -3594,7 +3594,7 @@ export default function QuoteCalculator({
                             <div className="bg-slate-50/30 p-2.5 rounded-xl border border-slate-100 print:p-2 print:rounded-lg">
                               <span className="text-[8px] font-black text-slate-400 uppercase block mb-1 print:text-[7px]">Band Profile / Finish Style</span>
                               <span className="font-bold text-brand-900 block print:text-[11px]">
-                                {r.category === 'mensBand' ? (r.mbProfile || 'Step Edge Beveled') : (r.bandStyle || 'Solid plain shank / standard')}
+                                {r.category === 'mensBand' ? (r.mbProfile || 'Flat') : (r.bandStyle || 'Solid plain shank / standard')}
                               </span>
                             </div>
                             <div className="bg-slate-50/30 p-2.5 rounded-xl border border-slate-100 print:p-2 print:rounded-lg">
