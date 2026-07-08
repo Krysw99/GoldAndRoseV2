@@ -1194,7 +1194,7 @@ export default function QuoteCalculator({
   const addClientStone = () => {
     if (!activeRing) return;
     const current = activeRing.clientStones || [];
-    updateActiveRing('clientStones', [...current, { qty: '', carats: '', type: 'Melee' }]);
+    updateActiveRing('clientStones', [...current, { qty: '', carats: '', size: '1.5', type: 'Melee' }]);
   };
 
   const removeClientStone = (idx: number) => {
@@ -1202,9 +1202,32 @@ export default function QuoteCalculator({
     updateActiveRing('clientStones', activeRing.clientStones.filter((_, i) => i !== idx));
   };
 
-  const updateClientStone = (idx: number, field: keyof ClientStoneItem, val: string) => {
+  const updateClientStone = (idx: number, field: keyof ClientStoneItem, val: any) => {
     if (!activeRing) return;
-    updateActiveRing('clientStones', activeRing.clientStones.map((cs, i) => i === idx ? { ...cs, [field]: val } : cs));
+    updateActiveRing('clientStones', activeRing.clientStones.map((cs, i) => {
+      if (i === idx) {
+        const updated = { ...cs, [field]: val };
+        if (field === 'type') {
+          if (val === 'Fancy') {
+            if (!updated.shape) updated.shape = 'Princess';
+            if (updated.sizeIdx === undefined) updated.sizeIdx = 0;
+          } else if (val === 'Melee') {
+            if (!updated.size) updated.size = '1.5';
+          }
+        }
+
+        // Auto calculate carats for Melee type
+        if (updated.type === 'Melee') {
+          const currentSize = updated.size || '1.5';
+          const perStoneCarat = ROUND_MELEE[currentSize] || 0.015;
+          const qtyVal = parseInt(updated.qty) || 0;
+          updated.carats = (qtyVal * perStoneCarat).toFixed(3);
+        }
+
+        return updated;
+      }
+      return cs;
+    }));
   };
 
   const addAddon = () => {
@@ -1311,6 +1334,151 @@ export default function QuoteCalculator({
   };
 
   const totals = compileSessionCost();
+
+  const getConsolidatedStones = () => {
+    const list: Array<{
+      source: 'customer' | 'company';
+      category: string;
+      shape: string;
+      sizeLabel: string;
+      qty: number;
+      totalCarats: number;
+      pieces: number[];
+    }> = [];
+
+    session.rings.filter(r => hasRingData(r)).forEach((r, ri) => {
+      const pNum = ri + 1;
+
+      // 1. Center Stone 1
+      if (r.centerStone?.carats) {
+        const qty = 1;
+        const source = r.stoneSource === 'customer' ? 'customer' : 'company';
+        const totalCarats = parseFloat(r.centerStone.carats) || 0;
+        const shape = r.centerStone.shape || 'Round';
+        const category = 'Center Stone';
+        const sizeLabel = r.centerStone.type ? `${r.centerStone.type} (${r.centerStone.origin})` : 'Center';
+
+        list.push({ source, category, shape, sizeLabel, qty, totalCarats, pieces: [pNum] });
+      }
+
+      // 2. Center Stone 2 (Pair)
+      if (r.centerStone2?.carats) {
+        const qty = 1;
+        const source = r.stoneSource === 'customer' ? 'customer' : 'company';
+        const totalCarats = parseFloat(r.centerStone2.carats) || 0;
+        const shape = r.centerStone2.shape || 'Round';
+        const category = 'Center Stone (Pair)';
+        const sizeLabel = r.centerStone2.type ? `${r.centerStone2.type} (${r.centerStone2.origin})` : 'Center 2';
+
+        list.push({ source, category, shape, sizeLabel, qty, totalCarats, pieces: [pNum] });
+      }
+
+      // 3. Melee Accent Stones
+      r.melee.filter(m => parseInt(m.qty) > 0).forEach(m => {
+        const qty = parseInt(m.qty) || 0;
+        const caratPerStone = parseFloat(m.carat) || 0;
+        const totalCarats = qty * caratPerStone;
+        const sizeLabel = m.size ? `${m.size}mm` : 'Round Melee';
+
+        list.push({
+          source: 'company',
+          category: 'Melee Accent',
+          shape: 'Round Brilliant',
+          sizeLabel,
+          qty,
+          totalCarats,
+          pieces: [pNum]
+        });
+      });
+
+      // 4. Fancy Accent Stones
+      r.fancy.filter(f => parseInt(f.qty) > 0).forEach(f => {
+        const qty = parseInt(f.qty) || 0;
+        const currentShape = f.shape || 'Princess';
+        const sizes = FANCY_SHAPES[currentShape] || [];
+        const activeSize = sizes[f.sizeIdx] || { label: 'Fancy Melee', carat: 0 };
+        const totalCarats = qty * (activeSize.carat || 0);
+
+        list.push({
+          source: 'company',
+          category: 'Fancy Accent',
+          shape: currentShape,
+          sizeLabel: activeSize.label,
+          qty,
+          totalCarats,
+          pieces: [pNum]
+        });
+      });
+
+      // 5. Client Owned Stones
+      if (Array.isArray(r.clientStones)) {
+        r.clientStones.filter(cs => parseInt(cs.qty) > 0).forEach(cs => {
+          const qty = parseInt(cs.qty) || 0;
+          const isFancy = cs.type === 'Fancy';
+          let shape = 'Round Brilliant';
+          let sizeLabel = cs.size || '--';
+          let totalCarats = cs.carats ? (parseFloat(cs.carats) || 0) : 0;
+          const category = cs.type === 'Center' ? 'Center Stone' : cs.type === 'Fancy' ? 'Fancy Accent' : 'Melee Accent';
+
+          if (isFancy) {
+            const currentShape = cs.shape || 'Princess';
+            const sizes = FANCY_SHAPES[currentShape] || [];
+            const activeSize = sizes[cs.sizeIdx !== undefined ? cs.sizeIdx : 0];
+            shape = currentShape;
+            sizeLabel = activeSize ? activeSize.label : 'Fancy Melee';
+            totalCarats = qty * (activeSize ? activeSize.carat : 0);
+          } else if (cs.type === 'Melee') {
+            shape = 'Round Brilliant';
+            sizeLabel = cs.size ? `${cs.size}mm` : 'Round Melee';
+            totalCarats = qty * (ROUND_MELEE[cs.size || '1.5'] || 0.015);
+          } else if (cs.type === 'Center') {
+            shape = r.centerStone?.shape || 'Round';
+          }
+
+          list.push({
+            source: 'customer',
+            category,
+            shape,
+            sizeLabel,
+            qty,
+            totalCarats,
+            pieces: [pNum]
+          });
+        });
+      }
+    });
+
+    const grouped: Record<string, typeof list[number]> = {};
+    list.forEach(item => {
+      const key = `${item.source}_${item.category}_${item.shape}_${item.sizeLabel}`;
+      if (!grouped[key]) {
+        grouped[key] = { ...item };
+      } else {
+        grouped[key].qty += item.qty;
+        grouped[key].totalCarats += item.totalCarats;
+        item.pieces.forEach(p => {
+          if (!grouped[key].pieces.includes(p)) {
+            grouped[key].pieces.push(p);
+          }
+        });
+      }
+    });
+
+    return Object.values(grouped).sort((a, b) => {
+      if (a.source !== b.source) {
+        return a.source === 'company' ? -1 : 1;
+      }
+      const order = ['Center Stone', 'Center Stone (Pair)', 'Fancy Accent', 'Melee Accent'];
+      const idxA = order.indexOf(a.category);
+      const idxB = order.indexOf(b.category);
+      if (idxA !== idxB) {
+        return idxA - idxB;
+      }
+      return a.shape.localeCompare(b.shape) || a.sizeLabel.localeCompare(b.sizeLabel);
+    });
+  };
+
+  const consolidatedStones = getConsolidatedStones();
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fadeIn">
@@ -2987,52 +3155,113 @@ export default function QuoteCalculator({
                 {activeRing.clientStones && activeRing.clientStones.length > 0 && (
                   <div className="grid grid-cols-12 gap-2 px-2.5 text-[8px] font-black text-brand-400 uppercase tracking-wider">
                     <div className="col-span-2">Stones Qty</div>
-                    <div className="col-span-5">Stone Type Category</div>
-                    <div className="col-span-4">Total Carats (ctw)</div>
+                    <div className="col-span-3">Category</div>
+                    <div className="col-span-6">Stone Details / Size / Carats</div>
                     <div className="col-span-1"></div>
                   </div>
                 )}
-                {activeRing.clientStones?.map((c, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-brand-50/20 p-2.5 rounded-xl border border-brand-100">
-                    <div className="col-span-2">
-                      <input
-                        type="number"
-                        className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
-                        value={c.qty}
-                        onChange={(e) => updateClientStone(idx, 'qty', e.target.value)}
-                      />
+                {activeRing.clientStones?.map((c, idx) => {
+                  const isFancy = c.type === 'Fancy';
+                  const shapes = Object.keys(FANCY_SHAPES);
+                  const currentShape = c.shape || 'Princess';
+                  const sizes = FANCY_SHAPES[currentShape] || [];
+                  const currentSizeIdx = c.sizeIdx !== undefined ? c.sizeIdx : 0;
+
+                  return (
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-brand-50/20 p-2.5 rounded-xl border border-brand-100">
+                      <div className="col-span-2">
+                        <input
+                          type="number"
+                          className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                          value={c.qty}
+                          onChange={(e) => updateClientStone(idx, 'qty', e.target.value)}
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <select
+                          className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                          value={c.type}
+                          onChange={(e) => updateClientStone(idx, 'type', e.target.value as any)}
+                        >
+                          <option value="Center">Center Stone</option>
+                          <option value="Fancy">Fancy Melee</option>
+                          <option value="Melee">Round Melee</option>
+                        </select>
+                      </div>
+                      
+                      <div className="col-span-6">
+                        {isFancy ? (
+                          <div className="grid grid-cols-2 gap-2">
+                            <select
+                              className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                              value={currentShape}
+                              onChange={(e) => {
+                                updateClientStone(idx, 'shape', e.target.value);
+                                updateClientStone(idx, 'sizeIdx', 0);
+                              }}
+                            >
+                              {shapes.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                            <select
+                              className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                              value={currentSizeIdx}
+                              onChange={(e) => updateClientStone(idx, 'sizeIdx', parseInt(e.target.value))}
+                            >
+                              {sizes.map((sz, sidx) => (
+                                <option key={sidx} value={sidx}>{sz.label} ({sz.carat}ct)</option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : c.type === 'Melee' ? (
+                          <div className="grid grid-cols-2 gap-2">
+                            <select
+                              className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                              value={c.size || '1.5'}
+                              onChange={(e) => updateClientStone(idx, 'size', e.target.value)}
+                            >
+                              {Object.keys(ROUND_MELEE).map(sz => (
+                                <option key={sz} value={sz}>{sz}mm ({ROUND_MELEE[sz]}ct)</option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              className="w-full bg-slate-50 border border-brand-200 p-1.5 rounded text-xs font-bold text-slate-500"
+                              value={c.carats ? `${c.carats} ctw` : '0.000 ctw'}
+                              disabled
+                            />
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              type="text"
+                              placeholder="Size (e.g. 6.5mm)"
+                              className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                              value={c.size || ''}
+                              onChange={(e) => updateClientStone(idx, 'size', e.target.value)}
+                            />
+                            <input
+                              type="number"
+                              placeholder="Total Carats"
+                              className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                              value={c.carats}
+                              onChange={(e) => updateClientStone(idx, 'carats', e.target.value)}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="col-span-1 text-center">
+                        <button
+                          type="button"
+                          onClick={() => removeClientStone(idx)}
+                          className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded flex items-center justify-center mx-auto"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="col-span-5">
-                      <select
-                        className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
-                        value={c.type}
-                        onChange={(e) => updateClientStone(idx, 'type', e.target.value as any)}
-                      >
-                        <option value="Center">Center Stone</option>
-                        <option value="Fancy">Fancy Melee</option>
-                        <option value="Melee">Round Melee</option>
-                      </select>
-                    </div>
-                    <div className="col-span-4">
-                      <input
-                        type="number"
-                        placeholder="Optional"
-                        className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
-                        value={c.carats}
-                        onChange={(e) => updateClientStone(idx, 'carats', e.target.value)}
-                      />
-                    </div>
-                    <div className="col-span-1 text-center">
-                      <button
-                        type="button"
-                        onClick={() => removeClientStone(idx)}
-                        className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded flex items-center justify-center mx-auto"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -3387,6 +3616,140 @@ export default function QuoteCalculator({
                   </div>
                 </div>
 
+                {/* Consolidated Stones & Gemstones Manifest */}
+                {consolidatedStones.length > 0 && (
+                  <div className="space-y-4 print:space-y-2 border-t border-brand-100 pt-6 print:pt-3">
+                    <h3 className="text-xs font-black text-brand-900 uppercase tracking-widest pl-1 flex items-center gap-2 print:text-[9px]">
+                      <span>💎 Consolidated Manufacturing Stones & Procurement Manifest</span>
+                      <span className="text-[9px] font-black uppercase text-brand-500 font-mono tracking-normal print:text-[7.5px]">
+                        ({consolidatedStones.reduce((acc, s) => acc + s.qty, 0)} stones total)
+                      </span>
+                    </h3>
+                    <div className="border border-brand-200 rounded-2xl overflow-hidden shadow-sm print:rounded-xl">
+                      <table className="w-full text-left border-collapse text-xs print:text-[10px]">
+                        <thead>
+                          <tr className="bg-brand-900 text-brand-gold border-b border-brand-800 uppercase text-[9px] tracking-wider font-black">
+                            <th className="p-2.5 pl-4 print:p-1.5 print:pl-3">Procurement Source</th>
+                            <th className="p-2.5 print:p-1.5">Stone Type</th>
+                            <th className="p-2.5 print:p-1.5">Shape/Cut</th>
+                            <th className="p-2.5 print:p-1.5">Size/Dimension</th>
+                            <th className="p-2.5 print:p-1.5 text-center">Qty</th>
+                            <th className="p-2.5 print:p-1.5">Total Weight</th>
+                            <th className="p-2.5 pr-4 text-right print:p-1.5 print:pr-3">Used in Pieces</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-brand-100">
+                          {consolidatedStones.map((stone, sIdx) => (
+                            <tr key={sIdx} className={`${stone.source === 'customer' ? 'bg-amber-50/20' : 'hover:bg-brand-50/30'} transition-colors`}>
+                              <td className="p-2.5 pl-4 print:p-1.5 print:pl-3 font-medium">
+                                {stone.source === 'customer' ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full print:text-[8px] print:px-1.5">
+                                    ⚠️ Client Supplied
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full print:text-[8px] print:px-1.5">
+                                    🏢 Stock Supplied
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-2.5 print:p-1.5 font-bold text-brand-900">{stone.category}</td>
+                              <td className="p-2.5 print:p-1.5 font-semibold text-brand-800">{stone.shape}</td>
+                              <td className="p-2.5 print:p-1.5 font-mono text-brand-600">{stone.sizeLabel}</td>
+                              <td className="p-2.5 print:p-1.5 text-center font-bold font-mono text-brand-950">{stone.qty} pcs</td>
+                              <td className="p-2.5 print:p-1.5 font-bold font-mono text-brand-900">
+                                {stone.totalCarats > 0 ? `${stone.totalCarats.toFixed(2)} ctw` : '--'}
+                              </td>
+                              <td className="p-2.5 pr-4 text-right font-bold text-brand-600 print:p-1.5 print:pr-3">
+                                {stone.pieces.map(p => `#${p}`).join(', ')}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Wholesale Session Cost Breakdown */}
+                {isWholesale && (
+                  <div className="space-y-4 print:space-y-2 border-t border-brand-100 pt-6 print:pt-3">
+                    <h3 className="text-xs font-black text-brand-900 uppercase tracking-widest pl-1 flex items-center gap-2 print:text-[9px]">
+                      <span>🛠️ Wholesale Manufacturing Session Cost Breakdown</span>
+                    </h3>
+                    {(() => {
+                      const wb = getWholesaleBreakdown();
+                      const categories = [
+                        {
+                          title: 'Raw Metal Cost',
+                          cost: wb.rawMetalCost,
+                          details: wb.rawMetalDetails,
+                          bgColor: 'bg-[#f4fbf9]/60',
+                          borderColor: 'border-[#e2f5f0]',
+                          textColor: 'text-emerald-800'
+                        },
+                        {
+                          title: 'Fabrication Labor',
+                          cost: wb.fabLabor,
+                          details: wb.fabLaborDetails,
+                          bgColor: 'bg-[#f4fbf9]/60',
+                          borderColor: 'border-[#e2f5f0]',
+                          textColor: 'text-emerald-800'
+                        },
+                        {
+                          title: 'Setting Labor',
+                          cost: wb.settingLabor,
+                          details: wb.settingLaborDetails,
+                          bgColor: 'bg-[#f4fbf9]/60',
+                          borderColor: 'border-[#e2f5f0]',
+                          textColor: 'text-emerald-800'
+                        },
+                        {
+                          title: 'Stone Supply Cost',
+                          cost: wb.stoneSupplyCost,
+                          details: wb.stoneSupplyDetails,
+                          bgColor: 'bg-[#f4fbf9]/60',
+                          borderColor: 'border-[#e2f5f0]',
+                          textColor: 'text-emerald-800'
+                        },
+                        {
+                          title: 'Design / Addons',
+                          cost: wb.designAddons,
+                          details: wb.designAddonsDetails,
+                          bgColor: 'bg-[#f4fbf9]/60',
+                          borderColor: 'border-[#e2f5f0]',
+                          textColor: 'text-emerald-800'
+                        }
+                      ];
+
+                      return (
+                        <div className="space-y-3.5 print:space-y-2">
+                          {categories.map((cat, cidx) => (
+                            <div key={cidx} className={`p-4 rounded-2xl border ${cat.bgColor} ${cat.borderColor} print:p-3 print:rounded-xl`}>
+                              <div className="flex justify-between items-center border-b border-brand-100/30 pb-2 mb-2 print:pb-1.5 print:mb-1.5">
+                                <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider print:text-[8.5px]">{cat.title}</span>
+                                <span className={`font-mono font-black text-base ${cat.textColor} print:text-xs`}>
+                                  ${cat.cost.toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 print:grid-cols-2 print:gap-x-4">
+                                {cat.details.map((det, detIdx) => (
+                                  <p key={detIdx} className="text-[10.5px] text-slate-600 leading-normal font-medium print:text-[8.5px] print:leading-tight flex items-start gap-1">
+                                    <span className="text-emerald-500 mt-0.5">•</span>
+                                    <span>{det}</span>
+                                  </p>
+                                ))}
+                                {cat.details.length === 0 && (
+                                  <p className="text-[10px] text-slate-400 italic font-medium print:text-[8px]">No charges recorded</p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
                 {/* Dynamic Mockups Thumbnail Anchors side-by-side inside the Invoice */}
                 {session.rings.some(r => r.referenceSketch || r.referencePhoto || (Array.isArray(r.referenceSketches) && r.referenceSketches.length > 0) || (Array.isArray(r.referencePhotos) && r.referencePhotos.length > 0)) && (
                   <div className="border-t border-brand-100 pt-6 space-y-4 print:pt-3 print:space-y-1.5">
@@ -3666,29 +4029,56 @@ export default function QuoteCalculator({
                                 {/* Fancy Stones */}
                                 {r.fancy.filter(f => parseInt(f.qty) > 0).map((f, fIdx) => {
                                   const count = parseInt(f.qty) || 0;
+                                  const sizes = FANCY_SHAPES[f.shape] || [];
+                                  const activeSize = sizes[f.sizeIdx] || { label: 'Fancy Melee', carat: 0 };
+                                  const totalCarats = count * (activeSize.carat || 0);
                                   return (
                                     <tr key={`f-${fIdx}`}>
                                       <td className="p-2.5 pl-3 font-sans print:py-1 print:px-2 print:pl-2.5">Fancy Accent ({fIdx + 1})</td>
                                       <td className="p-2.5 font-sans font-bold print:py-1 print:px-2">{f.shape}</td>
                                       <td className="p-2.5 print:py-1 print:px-2">{count}</td>
-                                      <td className="p-2.5 print:py-1 print:px-2">--</td>
-                                      <td className="p-2.5 print:py-1 print:px-2">--</td>
+                                      <td className="p-2.5 print:py-1 print:px-2">{activeSize.label}</td>
+                                      <td className="p-2.5 font-bold print:py-1 print:px-2">{totalCarats.toFixed(2)} ctw</td>
                                       <td className="p-2.5 font-sans print:py-1 print:px-2">Company Inventory</td>
                                     </tr>
                                   );
                                 })}
 
                                 {/* Client Provided Custom Stones list if custom sources exist */}
-                                {Array.isArray(r.clientStones) && r.clientStones.filter(cs => parseInt(cs.qty) > 0).map((cs, csIdx) => (
-                                  <tr key={`cs-${csIdx}`} className="bg-amber-50/50">
-                                    <td className="p-2.5 pl-3 font-bold font-sans text-amber-900 print:py-1 print:px-2 print:pl-2.5">Client Supplied ({cs.type})</td>
-                                    <td className="p-2.5 font-sans font-bold text-amber-800 print:py-1 print:px-2">--</td>
-                                    <td className="p-2.5 text-amber-900 print:py-1 print:px-2">{cs.qty}</td>
-                                    <td className="p-2.5 text-amber-900 print:py-1 print:px-2">{cs.size || '--'}</td>
-                                    <td className="p-2.5 font-bold text-amber-900 print:py-1 print:px-2">{cs.carats || '--'} ct</td>
-                                    <td className="p-2.5 font-sans font-bold text-amber-800 print:py-1 print:px-2">Client Provided</td>
-                                  </tr>
-                                ))}
+                                {Array.isArray(r.clientStones) && r.clientStones.filter(cs => parseInt(cs.qty) > 0).map((cs, csIdx) => {
+                                  const isFancy = cs.type === 'Fancy';
+                                  const isMelee = cs.type === 'Melee';
+                                  let shapeDisplay = '--';
+                                  let sizeDisplay = cs.size || '--';
+                                  let caratDisplay = cs.carats ? `${cs.carats} ct` : '--';
+
+                                  if (isFancy) {
+                                    const currentShape = cs.shape || 'Princess';
+                                    const sizes = FANCY_SHAPES[currentShape] || [];
+                                    const activeSize = sizes[cs.sizeIdx !== undefined ? cs.sizeIdx : 0];
+                                    shapeDisplay = currentShape;
+                                    sizeDisplay = activeSize ? activeSize.label : '--';
+                                    const qtyNum = parseInt(cs.qty) || 0;
+                                    caratDisplay = activeSize ? `${(qtyNum * activeSize.carat).toFixed(2)} ctw` : '--';
+                                  } else if (isMelee) {
+                                    shapeDisplay = 'Round Brilliant';
+                                    sizeDisplay = cs.size ? `${cs.size}mm` : '--';
+                                    const qtyNum = parseInt(cs.qty) || 0;
+                                    const stoneCarat = ROUND_MELEE[cs.size || '1.5'] || 0.015;
+                                    caratDisplay = `${(qtyNum * stoneCarat).toFixed(2)} ctw`;
+                                  }
+
+                                  return (
+                                    <tr key={`cs-${csIdx}`} className="bg-amber-50/50">
+                                      <td className="p-2.5 pl-3 font-bold font-sans text-amber-900 print:py-1 print:px-2 print:pl-2.5">Client Supplied ({cs.type === 'Melee' ? 'Round Melee' : cs.type === 'Fancy' ? 'Fancy Melee' : 'Center Stone'})</td>
+                                      <td className="p-2.5 font-sans font-bold text-amber-800 print:py-1 print:px-2">{shapeDisplay}</td>
+                                      <td className="p-2.5 text-amber-900 print:py-1 print:px-2">{cs.qty}</td>
+                                      <td className="p-2.5 text-amber-900 print:py-1 print:px-2">{sizeDisplay}</td>
+                                      <td className="p-2.5 font-bold text-amber-900 print:py-1 print:px-2">{caratDisplay}</td>
+                                      <td className="p-2.5 font-sans font-bold text-amber-800 print:py-1 print:px-2">Client Provided</td>
+                                    </tr>
+                                  );
+                                })}
 
                                 {/* If no stones whatsoever */}
                                 {!r.centerStone?.carats && !r.centerStone2?.carats && !r.melee.some(m => parseInt(m.qty) > 0) && !r.fancy.some(f => parseInt(f.qty) > 0) && (!Array.isArray(r.clientStones) || r.clientStones.filter(cs => parseInt(cs.qty) > 0).length === 0) && (
@@ -3754,6 +4144,60 @@ export default function QuoteCalculator({
                     );
                   })}
                 </div>
+
+                {/* Consolidated Stones & Gemstones Manifest */}
+                {consolidatedStones.length > 0 && (
+                  <div className="space-y-4 print:space-y-2 border-t border-slate-200 pt-6 print:pt-3">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest pl-1 flex items-center gap-2 print:text-[9px]">
+                      <span>🛠️ Consolidated Manufacturing Stones & Procurement Manifest</span>
+                      <span className="text-[9px] font-black uppercase text-slate-400 font-mono tracking-normal print:text-[7.5px]">
+                        ({consolidatedStones.reduce((acc, s) => acc + s.qty, 0)} stones total)
+                      </span>
+                    </h3>
+                    <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm print:rounded-xl">
+                      <table className="w-full text-left border-collapse text-xs print:text-[10px]">
+                        <thead>
+                          <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 uppercase text-[9px] tracking-wider font-black">
+                            <th className="p-2.5 pl-4 print:p-1.5 print:pl-3">Procurement Source</th>
+                            <th className="p-2.5 print:p-1.5">Stone Type</th>
+                            <th className="p-2.5 print:p-1.5">Shape/Cut</th>
+                            <th className="p-2.5 print:p-1.5">Size/Dimension</th>
+                            <th className="p-2.5 print:p-1.5 text-center">Qty</th>
+                            <th className="p-2.5 print:p-1.5">Total Weight</th>
+                            <th className="p-2.5 pr-4 text-right print:p-1.5 print:pr-3">Used in Pieces</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {consolidatedStones.map((stone, sIdx) => (
+                            <tr key={sIdx} className={`${stone.source === 'customer' ? 'bg-amber-50/10' : 'hover:bg-slate-50/20'} transition-colors`}>
+                              <td className="p-2.5 pl-4 print:p-1.5 print:pl-3 font-medium">
+                                {stone.source === 'customer' ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full print:text-[8px] print:px-1.5">
+                                    ⚠️ Client Supplied
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full print:text-[8px] print:px-1.5">
+                                    🏢 Stock Supplied
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-2.5 print:p-1.5 font-bold text-slate-900">{stone.category}</td>
+                              <td className="p-2.5 print:p-1.5 font-semibold text-slate-700">{stone.shape}</td>
+                              <td className="p-2.5 print:p-1.5 font-mono text-slate-600">{stone.sizeLabel}</td>
+                              <td className="p-2.5 print:p-1.5 text-center font-bold font-mono text-slate-950">{stone.qty} pcs</td>
+                              <td className="p-2.5 print:p-1.5 font-bold font-mono text-slate-900">
+                                {stone.totalCarats > 0 ? `${stone.totalCarats.toFixed(2)} ctw` : '--'}
+                              </td>
+                              <td className="p-2.5 pr-4 text-right font-bold text-slate-600 print:p-1.5 print:pr-3">
+                                {stone.pieces.map(p => `#${p}`).join(', ')}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
 
                 {/* Signature / Approval block for CAD Designer */}
                 <div className="border-t border-brand-200 pt-6 print:pt-3">

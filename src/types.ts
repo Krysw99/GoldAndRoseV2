@@ -33,6 +33,8 @@ export interface ClientStoneItem {
   carats: string;
   size?: string;
   type: 'Center' | 'Fancy' | 'Melee';
+  shape?: string;
+  sizeIdx?: number;
 }
 
 export interface AddonItem {
