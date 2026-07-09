@@ -575,6 +575,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stencilCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRectRef = useRef<DOMRect | null>(null);
 
   // Drawing tool state
   const [tool, setTool] = useState<'pen' | 'highlighter' | 'eraser' | 'transform' | 'stamp' | 'ruler' | 'line'>('pen');
@@ -1331,10 +1332,13 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
   };
 
   // Helper to map screen coordinates to the actual internal coordinate system of the drawing canvas
-  const getCanvasCoords = (clientX: number, clientY: number) => {
+  const getCanvasCoords = (clientX: number, clientY: number, forceFreshRect = false) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
+    if (forceFreshRect || !canvasRectRef.current) {
+      canvasRectRef.current = canvas.getBoundingClientRect();
+    }
+    const rect = canvasRectRef.current;
     const x = rect.width > 0 ? (clientX - rect.left) * (canvas.width / rect.width) : clientX - rect.left;
     const y = rect.height > 0 ? (clientY - rect.top) * (canvas.height / rect.height) : clientY - rect.top;
     return { x, y };
@@ -1387,7 +1391,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       return;
     }
 
-    const { x, y } = getCanvasCoords(e.clientX, e.clientY);
+    const { x, y } = getCanvasCoords(e.clientX, e.clientY, true);
 
     const ctx = getCanvasContext();
     if (!ctx) return;
@@ -1509,9 +1513,21 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     const ctx = getCanvasContext();
     if (!ctx) return;
 
-    if (lastPosRef.current) {
-      drawSegment(lastPosRef.current.x, lastPosRef.current.y, x, y, ctx, canvas.width, canvas.height);
-      lastPosRef.current = { x, y };
+    // Use high-precision coalesced pointer events for S Pen smoothness if available
+    let coalesced = (e.nativeEvent && typeof e.nativeEvent.getCoalescedEvents === 'function')
+      ? e.nativeEvent.getCoalescedEvents()
+      : (typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : []);
+    
+    if (!coalesced || coalesced.length === 0) {
+      coalesced = [e];
+    }
+
+    for (const ev of coalesced) {
+      const coords = getCanvasCoords(ev.clientX, ev.clientY);
+      if (lastPosRef.current) {
+        drawSegment(lastPosRef.current.x, lastPosRef.current.y, coords.x, coords.y, ctx, canvas.width, canvas.height);
+      }
+      lastPosRef.current = { x: coords.x, y: coords.y };
     }
   };
 

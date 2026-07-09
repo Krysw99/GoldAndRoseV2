@@ -25,6 +25,7 @@ import SettingsView from './components/SettingsView';
 import Sketchpad from './components/Sketchpad';
 import SpotPriceView from './components/SpotPriceView';
 import CubanBraceletBuilder from './components/CubanBraceletBuilder';
+import NumpadCalculator from './components/NumpadCalculator';
 
 export default function App() {
   // Navigation State
@@ -793,6 +794,9 @@ export default function App() {
           title={editingImageType === 'sketch' ? "Interactive Design Sketchpad" : "Configure Reference Background Photograph"}
         />
       )}
+
+      {/* 4. GLOBAL DRAGGABLE NUMERIC CALCULATOR FOR IPADS */}
+      <NumpadCalculator />
     </div>
   );
 }

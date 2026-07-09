@@ -55,13 +55,46 @@ body {
     display: none !important;
   }
 
-  /* Reset main layouts to simple blocks */
+  /* Reset main layouts to simple blocks and optimize for black, white, and grey prints */
   body, html, #root {
     background: #ffffff !important;
-    color: #12151a !important;
+    color: #000000 !important;
     padding: 0 !important;
     margin: 0 !important;
     font-size: 10pt !important;
+  }
+
+  /* Map brand colors to high-contrast black, white, and greyscale */
+  .text-brand-gold, .text-brand-gold-hover, .text-amber-500, .text-amber-600 {
+    color: #374151 !important; /* solid slate-700/dark grey */
+  }
+  .text-brand-900, .text-brand-950, .text-slate-900, .text-slate-950, .text-slate-800 {
+    color: #000000 !important; /* solid black */
+  }
+  .text-slate-500, .text-slate-600, .text-brand-500, .text-brand-600, .text-slate-400, .text-brand-400 {
+    color: #4b5563 !important; /* clear medium gray */
+  }
+  .text-emerald-700, .text-emerald-800, .text-emerald-900, .text-emerald-600 {
+    color: #111827 !important; /* solid dark gray for metrics/highlights */
+  }
+
+  .bg-brand-900, .bg-brand-950, .bg-slate-900, .bg-slate-800 {
+    background-color: #f3f4f6 !important; /* light grey for print header blocks instead of dark black */
+    color: #000000 !important;
+  }
+  .bg-brand-50, .bg-brand-100, .bg-slate-50, .bg-slate-100, .bg-slate-200 {
+    background-color: #f9fafb !important; /* light grey backgrounds */
+  }
+  .bg-emerald-50, .bg-emerald-100 {
+    background-color: #f9fafb !important;
+  }
+
+  .border-brand-100, .border-brand-200, .border-slate-100, .border-slate-200, .border-slate-300 {
+    border-color: #d1d5db !important; /* defined gray borders */
+  }
+
+  .border, .border-t, .border-b, .border-l, .border-r {
+    border-color: #d1d5db !important;
   }
 
   /* Force browsers to print original brand background colors & borders */

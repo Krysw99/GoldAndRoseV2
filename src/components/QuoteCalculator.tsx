@@ -1492,6 +1492,9 @@ export default function QuoteCalculator({
               <input
                 type="text"
                 placeholder="Required for billing"
+                autoComplete="name"
+                autoCorrect="off"
+                spellCheck={false}
                 className="w-full bg-white border border-slate-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-slate-400"
                 value={session.cName}
                 onChange={(e) => onChangeSession(prev => ({ ...prev, cName: e.target.value }))}
@@ -1500,8 +1503,9 @@ export default function QuoteCalculator({
             <div>
               <label className="text-[10px] font-bold text-slate-500 mb-1 block">PHONE</label>
               <input
-                type="text"
+                type="tel"
                 placeholder="604-555-5555"
+                autoComplete="tel"
                 className="w-full bg-white border border-slate-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-slate-400"
                 value={session.cPhone}
                 onChange={(e) => onChangeSession(prev => ({ ...prev, cPhone: e.target.value }))}
@@ -1512,6 +1516,9 @@ export default function QuoteCalculator({
               <input
                 type="email"
                 placeholder="name@gmail.com"
+                autoComplete="email"
+                autoCorrect="off"
+                autoCapitalize="none"
                 className="w-full bg-white border border-slate-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-slate-400"
                 value={session.cEmail}
                 onChange={(e) => onChangeSession(prev => ({ ...prev, cEmail: e.target.value }))}
@@ -1548,6 +1555,9 @@ export default function QuoteCalculator({
               <input
                 type="text"
                 placeholder="Store / Name"
+                autoComplete="name"
+                autoCorrect="off"
+                spellCheck={false}
                 className="w-full bg-white border border-emerald-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-emerald-400"
                 value={session.cName}
                 onChange={(e) => onChangeSession(prev => ({ ...prev, cName: e.target.value }))}
@@ -1556,8 +1566,9 @@ export default function QuoteCalculator({
             <div>
               <label className="text-[10px] font-bold text-emerald-700 mb-1 block">PHONE</label>
               <input
-                type="text"
+                type="tel"
                 placeholder="604-555-5555"
+                autoComplete="tel"
                 className="w-full bg-white border border-emerald-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-emerald-400"
                 value={session.cPhone}
                 onChange={(e) => onChangeSession(prev => ({ ...prev, cPhone: e.target.value }))}
@@ -3475,6 +3486,143 @@ export default function QuoteCalculator({
         {/* SUMMARY & TAX CONFIGURATION TAB */}
         {session.activeSubTab === 'summary' && (
           <div className="space-y-6 animate-fadeIn print:bg-white print:p-0">
+            {(() => {
+              const printPiecesCount = session.rings.filter(r => hasRingData(r)).length;
+              const shouldFitOnePage = printPiecesCount <= 2;
+              if (shouldFitOnePage) {
+                return (
+                  <style dangerouslySetInnerHTML={{ __html: `
+                    @media print {
+                      @page {
+                        size: letter portrait !important;
+                        margin: 0.15in !important;
+                      }
+                      body, html, #root {
+                        font-size: 7.5pt !important;
+                        background: #ffffff !important;
+                        color: #000000 !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                      }
+                      
+                      /* Grayscale and high-contrast color mappings for printing */
+                      .text-brand-gold, .text-brand-gold-hover, .text-amber-500, .text-amber-600 {
+                        color: #374151 !important;
+                      }
+                      .text-brand-900, .text-brand-950, .text-slate-900, .text-slate-950, .text-slate-800 {
+                        color: #000000 !important;
+                      }
+                      .text-slate-500, .text-slate-600, .text-brand-500, .text-brand-600, .text-slate-400, .text-brand-400 {
+                        color: #4b5563 !important;
+                      }
+                      .text-emerald-700, .text-emerald-800, .text-emerald-900, .text-emerald-600 {
+                        color: #111827 !important;
+                      }
+                      .bg-brand-900, .bg-brand-950, .bg-slate-900, .bg-slate-800 {
+                        background-color: #f3f4f6 !important;
+                        color: #000000 !important;
+                      }
+                      .bg-brand-50, .bg-brand-100, .bg-slate-50, .bg-slate-100, .bg-slate-200 {
+                        background-color: #f9fafb !important;
+                      }
+                      .bg-emerald-50, .bg-emerald-100 {
+                        background-color: #f9fafb !important;
+                      }
+                      .border-brand-100, .border-brand-200, .border-slate-100, .border-slate-200, .border-slate-300 {
+                        border-color: #d1d5db !important;
+                      }
+                      .border, .border-t, .border-b, .border-l, .border-r {
+                        border-color: #d1d5db !important;
+                      }
+                      
+                      /* Drastically tighten padding, margins, and gaps for 1-page fit */
+                      .print\\:p-0 { padding: 0 !important; }
+                      .print\\:p-1 { padding: 1px !important; }
+                      .print\\:p-1\\.5 { padding: 2px !important; }
+                      .print\\:p-2 { padding: 3px !important; }
+                      .print\\:p-2\\.5 { padding: 3px !important; }
+                      .print\\:p-3 { padding: 4px !important; }
+                      .print\\:p-4 { padding: 5px !important; }
+                      .print\\:p-5 { padding: 5px !important; }
+                      .print\\:p-6 { padding: 5px !important; }
+                      .print\\:p-8 { padding: 0 !important; }
+                      
+                      .print\\:pt-1 { padding-top: 1px !important; }
+                      .print\\:pt-2 { padding-top: 2px !important; }
+                      .print\\:pt-3 { padding-top: 3px !important; }
+                      .print\\:pt-6 { padding-top: 4px !important; }
+                      
+                      .print\\:pb-1 { padding-bottom: 1px !important; }
+                      .print\\:pb-1\\.5 { padding-bottom: 2px !important; }
+                      .print\\:pb-2 { padding-bottom: 2px !important; }
+                      .print\\:pb-2\\.5 { padding-bottom: 2px !important; }
+                      .print\\:pb-3 { padding-bottom: 3px !important; }
+                      .print\\:pb-6 { padding-bottom: 4px !important; }
+                      
+                      .print\\:space-y-1 { margin-top: 1px !important; }
+                      .print\\:space-y-1\\.5 { margin-top: 2px !important; }
+                      .print\\:space-y-2 { margin-top: 2px !important; }
+                      .print\\:space-y-3 { margin-top: 3px !important; }
+                      .print\\:space-y-4 { margin-top: 4px !important; }
+                      .print\\:space-y-5 { margin-top: 4px !important; }
+                      .print\\:space-y-8 { margin-top: 5px !important; }
+                      
+                      .print\\:gap-1\\.5 { gap: 2px !important; }
+                      .print\\:gap-2 { gap: 3px !important; }
+                      .print\\:gap-3 { gap: 3px !important; }
+                      .print\\:gap-4 { gap: 4px !important; }
+                      
+                      .print\\:rounded-none { border-radius: 0 !important; }
+                      .print\\:rounded-lg { border-radius: 4px !important; }
+                      .print\\:rounded-xl { border-radius: 6px !important; }
+                      
+                      /* Tighter grid spacing and margins */
+                      .grid { gap: 4px !important; }
+                      .space-y-6 > * + * { margin-top: 3px !important; }
+                      .space-y-4 > * + * { margin-top: 2px !important; }
+                      .space-y-3 > * + * { margin-top: 2px !important; }
+                      .space-y-2 > * + * { margin-top: 1px !important; }
+                      .space-y-5 > * + * { margin-top: 3px !important; }
+                      
+                      /* Scales for images inside specs & references */
+                      .print\\:h-12 { height: 1.5rem !important; }
+                      .print\\:h-16 { height: 1.8rem !important; }
+                      .print\\:h-20 { height: 2.2rem !important; }
+                      .print\\:h-28 { height: 3.2rem !important; }
+                      .print\\:h-44 { height: 4.2rem !important; }
+                      
+                      /* Make text and layout extremely condensed */
+                      h1 { font-size: 12pt !important; margin: 0 !important; }
+                      h2 { font-size: 10pt !important; margin: 0 !important; }
+                      h3 { font-size: 8pt !important; margin: 0 !important; padding-top: 1px !important; }
+                      h4 { font-size: 7.5pt !important; margin: 0 !important; }
+                      p, span, li, td, th { font-size: 7pt !important; line-height: 1.15 !important; }
+                      
+                      th, td {
+                        padding: 2px 4px !important;
+                      }
+                      
+                      /* Border/divider margins */
+                      .border-t {
+                        margin-top: 3px !important;
+                        padding-top: 3px !important;
+                      }
+                      
+                      /* Reduce signature block height */
+                      .print\\:w-32 { width: 5.5rem !important; }
+                      .print\\:h-8 { height: 1.2rem !important; }
+                      .print\\:h-10 { height: 1.5rem !important; }
+                      
+                      /* Prevent page breaks inside container blocks */
+                      .page-break-inside-avoid {
+                        page-break-inside: avoid !important;
+                      }
+                    }
+                  ` }} />
+                );
+              }
+              return null;
+            })()}
             {/* Print Mode Selector Bar */}
             <div className="bg-white p-4 rounded-2xl border border-brand-200 shadow-sm flex flex-wrap gap-4 items-center justify-between print:hidden">
               <div>
@@ -3673,9 +3821,25 @@ export default function QuoteCalculator({
                 {/* Wholesale Session Cost Breakdown */}
                 {isWholesale && (
                   <div className="space-y-4 print:space-y-2 border-t border-brand-100 pt-6 print:pt-3">
-                    <h3 className="text-xs font-black text-brand-900 uppercase tracking-widest pl-1 flex items-center gap-2 print:text-[9px]">
-                      <span>🛠️ Wholesale Manufacturing Session Cost Breakdown</span>
-                    </h3>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-brand-100/50 pb-3 print:pb-1.5">
+                      <h3 className="text-xs font-black text-brand-900 uppercase tracking-widest pl-1 flex items-center gap-2 print:text-[9px]">
+                        <span>🛠️ Wholesale Manufacturing Session Cost Breakdown</span>
+                      </h3>
+                      <div className="flex flex-wrap gap-4 text-[10px] font-bold text-slate-500 font-mono pl-1 sm:pl-0 print:text-[8px] print:gap-3">
+                        <div>
+                          <span className="text-slate-400">GOLD:</span>{' '}
+                          <span className="text-brand-950">${(session.overridePrices?.gold ?? spotPrices.gold).toFixed(2)}/oz</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">PLATINUM:</span>{' '}
+                          <span className="text-brand-950">${(session.overridePrices?.platinum ?? spotPrices.platinum).toFixed(2)}/oz</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">SILVER:</span>{' '}
+                          <span className="text-brand-950">${(session.overridePrices?.silver ?? spotPrices.silver).toFixed(2)}/oz</span>
+                        </div>
+                      </div>
+                    </div>
                     {(() => {
                       const wb = getWholesaleBreakdown();
                       const categories = [

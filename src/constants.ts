@@ -39,6 +39,7 @@ export const DENSITIES = {
 };
 
 export const ROUND_MELEE: Record<string, number> = {
+  '0.9': 0.004,
   '1.0': 0.005,
   '1.2': 0.008,
   '1.3': 0.010,
@@ -137,8 +138,8 @@ export const DEFAULT_SETTINGS = {
   settingFeeCenterPerCt: 250,
   settingFeeMeleePerSt: 15,
   settingFeeFancyPerSt: 25,
-  meleePricePerCt: 2400,
-  fancyPricePerCt: 700,
+  meleePricePerCt: 1500,
+  fancyPricePerCt: 3000,
   earringMeleePricePerCt: 2400,
   earringFancyPricePerCt: 700,
   tennisMeleePricePerCt: 2600,
@@ -146,10 +147,10 @@ export const DEFAULT_SETTINGS = {
   tennisLaborRetail: 0,
   
   centerStoneRates: {
-    Diamond: { Natural: 6000, Lab: 1500 },
-    Sapphire: { Natural: 2000, Lab: 500 },
-    Emerald: { Natural: 3000, Lab: 600 },
-    Topaz: { Natural: 300, Lab: 100 }
+    Diamond: { Natural: 6000, Lab: 1250 },
+    Sapphire: { Natural: 2000, Lab: 1250 },
+    Emerald: { Natural: 3000, Lab: 1250 },
+    Topaz: { Natural: 300, Lab: 1250 }
   },
   centerStoneRawRates: {
     Diamond: { Natural: 4000, Lab: 800 },
@@ -158,11 +159,11 @@ export const DEFAULT_SETTINGS = {
     Topaz: { Natural: 100, Lab: 30 }
   },
   rawCostRates: { melee: 300, fancy: 380, center: 400 },
-  goldPricesPerGram: { 10: 200, 14: 233, 18: 280, 19: 290, 22: 320, 24: 350 },
+  goldPricesPerGram: { 10: 200, 14: 230, 18: 280, 19: 300, 22: 320, 24: 350 },
   platinumPricePerGram: 380,
   silverPricePerGram: 100,
   
-  earringGoldPricesPerGram: { 10: 200, 14: 233, 18: 280, 19: 290, 22: 320, 24: 350 },
+  earringGoldPricesPerGram: { 10: 200, 14: 230, 18: 280, 19: 300, 22: 320, 24: 350 },
   earringPlatinumPricePerGram: 380,
   earringSilverPricePerGram: 100,
   
