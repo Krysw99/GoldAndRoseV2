@@ -862,6 +862,7 @@ interface QuoteCalculatorProps {
   spotPrices: { gold: number; silver: number; platinum: number };
   isWholesale: boolean;
   scrapTransactions?: ScrapTransaction[];
+  onTriggerPrint?: (printFn: () => void) => void;
 }
 
 export default function QuoteCalculator({
@@ -872,7 +873,8 @@ export default function QuoteCalculator({
   settings,
   spotPrices,
   isWholesale,
-  scrapTransactions
+  scrapTransactions,
+  onTriggerPrint
 }: QuoteCalculatorProps) {
   const getWholesaleBreakdown = () => {
     let rawMetalCost = 0;
@@ -4672,7 +4674,13 @@ export default function QuoteCalculator({
               </button>
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() => {
+                  if (onTriggerPrint) {
+                    onTriggerPrint(() => window.print());
+                  } else {
+                    window.print();
+                  }
+                }}
                 className="bg-brand-100 text-brand-900 hover:bg-brand-200 font-bold py-3 px-6 rounded-2xl text-xs uppercase tracking-wider shadow-sm transition-all flex items-center gap-2 cursor-pointer"
               >
                 <FileText size={14} className="text-brand-gold" />

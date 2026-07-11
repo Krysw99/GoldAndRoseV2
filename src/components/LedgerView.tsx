@@ -24,6 +24,7 @@ interface LedgerViewProps {
   onLoadScrapIntoEditor?: (id: string) => void;
   settings: AppSettings;
   onAddDemoTransaction?: () => void;
+  onTriggerPrint?: (printFn: () => void) => void;
 }
 
 function getQuoteTransactionScore(tx: QuoteTransaction, queryWords: string[], fullSearchStr: string): number {
@@ -169,7 +170,8 @@ export default function LedgerView({
   onLoadIntoEditor,
   onLoadScrapIntoEditor,
   settings,
-  onAddDemoTransaction
+  onAddDemoTransaction,
+  onTriggerPrint
 }: LedgerViewProps) {
   const [activeLedger, setActiveLedger] = useState<'scrap' | 'retail' | 'wholesale'>('retail');
   const [search, setSearch] = useState('');
@@ -214,7 +216,11 @@ export default function LedgerView({
 
   // PDF Export Trigger using browser's native high-fidelity print engine (prevents canvas parsing issues with oklab/oklch colors)
   const exportPdf = async (elementId: string, name: string) => {
-    window.print();
+    if (onTriggerPrint) {
+      onTriggerPrint(() => window.print());
+    } else {
+      window.print();
+    }
   };
 
   const currentTxData = () => {

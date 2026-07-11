@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Coins, FileCheck, Landmark, Library, Settings, RefreshCw, 
-  HelpCircle, Sparkles, Scale, Info, AlertCircle 
+  HelpCircle, Sparkles, Scale, Info, AlertCircle, ExternalLink, Printer, X 
 } from 'lucide-react';
 
 // Types & Constants
@@ -63,6 +63,24 @@ export default function App() {
   const [isSketching, setIsSketching] = useState(false);
   const [editingImageType, setEditingImageType] = useState<'sketch' | 'photo'>('sketch');
   const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null);
+
+  // iPad specific cross-origin iframe print helper state
+  const [showIframePrintDialog, setShowIframePrintDialog] = useState(false);
+  const [pendingPrintFn, setPendingPrintFn] = useState<(() => void) | null>(null);
+
+  // Trigger optimized printing on iPad/Safari
+  const handleTriggerPrint = (printFn: () => void) => {
+    const isIframe = window.self !== window.top;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if (isIframe && isIOS) {
+      setPendingPrintFn(() => printFn);
+      setShowIframePrintDialog(true);
+    } else {
+      printFn();
+    }
+  };
 
   const isLoadedRef = useRef(false);
   const [isPersistenceLoaded, setIsPersistenceLoaded] = useState(false);
@@ -877,6 +895,21 @@ export default function App() {
               {syncStatus && <span className="text-[9px] text-brand-400 font-bold uppercase hidden sm:inline">{syncStatus}</span>}
             </div>
 
+            {window.self !== window.top && (
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound('click');
+                  window.open(window.location.href, '_blank');
+                }}
+                className="bg-brand-gold text-brand-950 hover:bg-brand-400 font-bold px-3 py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md shrink-0 border border-brand-300 cursor-pointer"
+                title="Open app in a separate browser tab to print instantly without iPad delay"
+              >
+                <ExternalLink size={14} />
+                <span className="hidden sm:inline">Open in New Tab</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setActiveTab('settings')}
@@ -1031,6 +1064,7 @@ export default function App() {
               spotPrices={spotPrices}
               isWholesale={false}
               scrapTransactions={scrapTransactions}
+              onTriggerPrint={handleTriggerPrint}
             />
           )}
 
@@ -1048,6 +1082,7 @@ export default function App() {
               spotPrices={spotPrices}
               isWholesale={true}
               scrapTransactions={scrapTransactions}
+              onTriggerPrint={handleTriggerPrint}
             />
           )}
 
@@ -1061,6 +1096,7 @@ export default function App() {
               onLoadScrapIntoEditor={handleLoadScrap}
               settings={settings}
               onAddDemoTransaction={handleCreateDemoTransaction}
+              onTriggerPrint={handleTriggerPrint}
             />
           )}
 
@@ -1087,6 +1123,70 @@ export default function App() {
           onCancel={() => setIsSketching(false)}
           title={editingImageType === 'sketch' ? "Interactive Design Sketchpad" : "Configure Reference Background Photograph"}
         />
+      )}
+
+      {/* 4. IPAD PRINT OPTIMIZATION MODAL */}
+      {showIframePrintDialog && (
+        <div className="fixed inset-0 bg-brand-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn print:hidden">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-brand-100 flex flex-col relative text-center">
+            <button
+              type="button"
+              onClick={() => {
+                playClickSound('click');
+                setShowIframePrintDialog(false);
+                setPendingPrintFn(null);
+              }}
+              className="absolute top-4 right-4 text-brand-400 hover:text-brand-700 p-1 cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="mx-auto bg-amber-50 text-brand-gold p-3 rounded-2xl mb-4 border border-amber-100 w-12 h-12 flex items-center justify-center">
+              <Printer size={24} className="text-brand-gold" />
+            </div>
+
+            <h3 className="font-serif text-lg font-bold italic text-brand-900 mb-2">
+              Optimize iPad Print Speed
+            </h3>
+            
+            <p className="text-xs text-brand-600 mb-6 leading-relaxed">
+              iPadOS restricts printing from inside website frames, which causes Safari's print preview to lag or freeze for 10-20 seconds.
+              <br /><br />
+              Since your Gold & Rose app utilizes <strong>Live Cloud Sync</strong>, you can open this app in its own browser tab to print <strong>instantly</strong> with zero delay!
+            </p>
+
+            <div className="flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound('click');
+                  window.open(window.location.href, '_blank');
+                  setShowIframePrintDialog(false);
+                  setPendingPrintFn(null);
+                }}
+                className="w-full bg-brand-gold hover:bg-brand-400 text-brand-950 font-black py-3.5 px-6 rounded-xl text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all border border-brand-300"
+              >
+                <ExternalLink size={14} />
+                Open in New Tab & Print Instantly
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound('click');
+                  setShowIframePrintDialog(false);
+                  if (pendingPrintFn) {
+                    pendingPrintFn();
+                  }
+                  setPendingPrintFn(null);
+                }}
+                className="w-full bg-brand-50 hover:bg-brand-100 text-brand-800 font-bold py-3 px-6 rounded-xl text-[10px] uppercase tracking-wider transition-colors cursor-pointer border border-brand-100"
+              >
+                Continue printing here (10-20s delay)
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
