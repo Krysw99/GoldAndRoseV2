@@ -33,6 +33,11 @@ import { listenCollection, saveDocument, deleteDocument, syncLocalToCloud } from
 import { playClickSound } from './utils/audio';
 
 export default function App() {
+  // iPad specific cross-origin iframe check (for print optimization)
+  const isIframe = window.self !== window.top;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
   // Navigation State
   const [activeTab, setActiveTab] = useState<'scrap' | 'quote' | 'wholesale' | 'spot' | 'cuban' | 'ledger' | 'settings'>('scrap');
 
@@ -70,10 +75,6 @@ export default function App() {
 
   // Trigger optimized printing on iPad/Safari
   const handleTriggerPrint = (printFn: () => void) => {
-    const isIframe = window.self !== window.top;
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
     if (isIframe && isIOS) {
       setPendingPrintFn(() => printFn);
       setShowIframePrintDialog(true);
@@ -850,6 +851,29 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100 text-brand-800 flex flex-col font-sans selection:bg-brand-gold selection:text-brand-900 pb-12">
       
+      {/* iPad / iOS Safari print-blocking iframe warning banner */}
+      {isIframe && isIOS && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 text-xs py-2.5 px-4 font-sans flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn print:hidden shadow-sm">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} className="text-brand-gold shrink-0 animate-pulse" />
+            <span>
+              <strong>iPad Safari Block Detected:</strong> Apple restricts printing inside builder preview frames, resulting in a print block or lag. Open the app in a <strong>New Tab</strong> to print <strong>instantly</strong> with zero delay!
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              playClickSound('click');
+              window.open(window.location.href, '_blank');
+            }}
+            className="bg-brand-gold hover:bg-brand-400 text-brand-950 font-black px-4 py-1.5 rounded-lg text-[10px] uppercase tracking-wider flex items-center gap-1 transition-all shadow-sm shrink-0 border border-brand-300 cursor-pointer"
+          >
+            <ExternalLink size={11} />
+            Open in New Tab
+          </button>
+        </div>
+      )}
+
       {/* 1. TOP BRANDING NAV HEADER */}
       <header className="bg-brand-900 text-white shadow-md border-b border-brand-800 py-4 px-6 sticky top-0 z-50 print:hidden">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
@@ -1136,7 +1160,7 @@ export default function App() {
                 setShowIframePrintDialog(false);
                 setPendingPrintFn(null);
               }}
-              className="absolute top-4 right-4 text-brand-400 hover:text-brand-700 p-1 cursor-pointer"
+              className="absolute top-4 right-4 text-brand-400 hover:text-brand-700 p-1 cursor-pointer container-close-btn"
             >
               <X size={20} />
             </button>
@@ -1146,11 +1170,11 @@ export default function App() {
             </div>
 
             <h3 className="font-serif text-lg font-bold italic text-brand-900 mb-2">
-              Optimize iPad Print Speed
+              Fix iPad Print Block & Delay
             </h3>
             
             <p className="text-xs text-brand-600 mb-6 leading-relaxed">
-              iPadOS restricts printing from inside website frames, which causes Safari's print preview to lag or freeze for 10-20 seconds.
+              iPadOS Safari blocks or severely delays printing from inside website frames. This results in the warning <strong>"website has been blocked from automatically printing"</strong> or causes a 10-20s freeze.
               <br /><br />
               Since your Gold & Rose app utilizes <strong>Live Cloud Sync</strong>, you can open this app in its own browser tab to print <strong>instantly</strong> with zero delay!
             </p>
@@ -1175,14 +1199,11 @@ export default function App() {
                 onClick={() => {
                   playClickSound('click');
                   setShowIframePrintDialog(false);
-                  if (pendingPrintFn) {
-                    pendingPrintFn();
-                  }
                   setPendingPrintFn(null);
                 }}
                 className="w-full bg-brand-50 hover:bg-brand-100 text-brand-800 font-bold py-3 px-6 rounded-xl text-[10px] uppercase tracking-wider transition-colors cursor-pointer border border-brand-100"
               >
-                Continue printing here (10-20s delay)
+                Cancel
               </button>
             </div>
           </div>
