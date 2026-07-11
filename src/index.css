@@ -44,6 +44,17 @@ body {
 
 /* Print Optimization for High-Quality Brand Colors and Layouts */
 @media print {
+  /* Disable all transitions, animations, and transforms to prevent Safari/iPadOS print engine delays */
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    backdrop-filter: none !important;
+    filter: none !important;
+  }
+
   /* Hide UI elements */
   header,
   footer,
