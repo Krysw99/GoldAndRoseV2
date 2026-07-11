@@ -3,26 +3,31 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Camera, Shield, DollarSign, Scale, ArrowRight } from 'lucide-react';
-import { ScrapItem, MaterialType } from '../types';
+import { ScrapItem, MaterialType, ScrapTransaction } from '../types';
 import { PURITY_OPTIONS, TROY_ONCE_GRAMS } from '../constants';
 import { calculateScrapItemValue, calculateScrapTotal } from '../utils';
 
 interface ScrapCalculatorProps {
   spotPrices: { gold: number; silver: number; platinum: number };
   onUpdateSpotPrices: (spot: { gold: number; silver: number; platinum: number }) => void;
-  onSaveTransaction: (data: {
-    name: string;
-    phone: string;
-    address: string;
-    driversLicense: string;
-    stoneRemovalQty: string;
-    items: ScrapItem[];
-    image: string | null;
-  }) => void;
+  onSaveTransaction: (
+    data: {
+      name: string;
+      phone: string;
+      address: string;
+      driversLicense: string;
+      stoneRemovalQty: string;
+      items: ScrapItem[];
+      image: string | null;
+    },
+    existingId?: string
+  ) => void;
   syncStatus: string | null;
   onFetchLivePrices: () => void;
+  editingTransaction?: ScrapTransaction | null;
+  onCancelEdit?: () => void;
 }
 
 export default function ScrapCalculator({ 
@@ -30,7 +35,9 @@ export default function ScrapCalculator({
   onUpdateSpotPrices,
   onSaveTransaction,
   syncStatus,
-  onFetchLivePrices
+  onFetchLivePrices,
+  editingTransaction,
+  onCancelEdit
 }: ScrapCalculatorProps) {
   // Scrap State
   const [customerName, setCustomerName] = useState('');
@@ -43,6 +50,26 @@ export default function ScrapCalculator({
   const [items, setItems] = useState<ScrapItem[]>([
     { weight: '', material: 'gold', purity: 14, rate: 85 }
   ]);
+
+  useEffect(() => {
+    if (editingTransaction) {
+      setCustomerName(editingTransaction.name || '');
+      setPhoneNumber(editingTransaction.phone || '');
+      setAddress(editingTransaction.address || '');
+      setDriversLicense(editingTransaction.driversLicense || '');
+      setStoneRemovalQty(editingTransaction.stoneRemovalQty || '');
+      setScrapImage(editingTransaction.image || null);
+      setItems(editingTransaction.items && editingTransaction.items.length > 0 ? editingTransaction.items : [{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
+    } else {
+      setCustomerName('');
+      setPhoneNumber('');
+      setAddress('');
+      setDriversLicense('');
+      setStoneRemovalQty('');
+      setScrapImage(null);
+      setItems([{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
+    }
+  }, [editingTransaction]);
 
   // Handle adding rows
   const addRow = () => {
@@ -124,21 +151,41 @@ export default function ScrapCalculator({
       stoneRemovalQty,
       items: activeItems,
       image: scrapImage
-    });
+    }, editingTransaction?.id);
 
-    // Reset Form
-    setCustomerName('');
-    setPhoneNumber('');
-    setAddress('');
-    setDriversLicense('');
-    setStoneRemovalQty('');
-    setScrapImage(null);
-    setItems([{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
-    alert("Scrap payout logged successfully to Ledger!");
+    // Reset Form if not editing
+    if (!editingTransaction) {
+      setCustomerName('');
+      setPhoneNumber('');
+      setAddress('');
+      setDriversLicense('');
+      setStoneRemovalQty('');
+      setScrapImage(null);
+      setItems([{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
+    }
   };
 
   return (
     <div className="p-4 md:p-8 bg-white rounded-b-2xl rounded-tr-2xl shadow-lg border border-brand-100 space-y-8 animate-fadeIn">
+      {editingTransaction && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-4 animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <span className="p-2 rounded-xl bg-amber-100 text-amber-800 font-bold text-xs uppercase font-mono">ADJUSTING MODE</span>
+            <div>
+              <p className="text-xs font-bold text-brand-900">Adjusting Scrap Buyback Record</p>
+              <p className="text-[10px] text-brand-500 font-mono">Transaction ID: {editingTransaction.id} (Original Date: {editingTransaction.date})</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            className="text-[10px] uppercase font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* 1. Final Cash Offer Card */}
       <div className="relative bg-brand-900 rounded-[2rem] py-10 px-6 shadow-2xl text-center border border-brand-800 overflow-hidden">
         <div className="absolute right-5 top-5 flex items-center gap-2">
@@ -343,13 +390,24 @@ export default function ScrapCalculator({
         </button>
       </div>
 
-      <button
-        type="button"
-        onClick={handleSave}
-        className="w-full bg-brand-800 text-brand-gold font-black text-sm tracking-widest uppercase py-4 rounded-xl shadow-md hover:bg-brand-900 transition-colors"
-      >
-        Commit Payout Log
-      </button>
+      <div className="flex flex-col sm:flex-row gap-3">
+        {editingTransaction && (
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            className="flex-1 bg-brand-100 hover:bg-brand-200 text-brand-800 font-bold text-sm tracking-widest uppercase py-4 rounded-xl transition-colors cursor-pointer"
+          >
+            Cancel Adjust
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={handleSave}
+          className={`${editingTransaction ? 'flex-1 bg-amber-600 hover:bg-amber-700 text-white' : 'w-full bg-brand-800 text-brand-gold hover:bg-brand-900'} font-black text-sm tracking-widest uppercase py-4 rounded-xl shadow-md transition-colors cursor-pointer`}
+        >
+          {editingTransaction ? 'Save Adjusted Buyback' : 'Commit Payout Log'}
+        </button>
+      </div>
     </div>
   );
 }

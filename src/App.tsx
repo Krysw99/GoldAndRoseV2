@@ -37,7 +37,7 @@ export default function App() {
   const [spotPrices, setSpotPrices] = useState({ gold: 2350, silver: 30, platinum: 1050 });
   const [lastUpdated, setLastUpdated] = useState('Manual Default');
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const [goldApiKey, setGoldApiKey] = useState('goldapi-472c240569490d4d25bde6da08749829-io');
+  const [goldApiKey, setGoldApiKey] = useState('');
 
   // Quick Calculator state
   const [quickPurity, setQuickPurity] = useState('gold_14');
@@ -54,6 +54,7 @@ export default function App() {
   // Active custom quote sessions
   const [retailSession, setRetailSession] = useState<QuoteSession>(getEmptyQuoteSession());
   const [wholesaleSession, setWholesaleSession] = useState<QuoteSession>(getEmptyQuoteSession());
+  const [editingScrapTx, setEditingScrapTx] = useState<ScrapTransaction | null>(null);
 
   // Sketchpad state triggers
   const [isSketching, setIsSketching] = useState(false);
@@ -314,15 +315,18 @@ export default function App() {
   };
 
   // PERSISTENCE MUTATORS
-  const handleSaveScrap = (data: {
-    name: string;
-    phone: string;
-    address: string;
-    driversLicense: string;
-    stoneRemovalQty: string;
-    items: ScrapItem[];
-    image: string | null;
-  }) => {
+  const handleSaveScrap = (
+    data: {
+      name: string;
+      phone: string;
+      address: string;
+      driversLicense: string;
+      stoneRemovalQty: string;
+      items: ScrapItem[];
+      image: string | null;
+    },
+    existingId?: string
+  ) => {
     const logStr = data.items.map(i => `${i.weight}g ${i.material} (${i.purity}${i.material==='gold'?'k':''})`).join(', ');
     const totalVal = data.items.reduce((total, item) => {
       const w = parseFloat(item.weight) || 0;
@@ -332,29 +336,59 @@ export default function App() {
     }, 0);
     const finalTotal = Math.max(0, totalVal - (Number(data.stoneRemovalQty || 0) * 5)).toFixed(2);
 
-    const newTx: ScrapTransaction = {
-      id: Math.random().toString(36).substring(2, 11),
-      date: new Date().toLocaleString(),
-      name: data.name,
-      phone: data.phone,
-      address: data.address,
-      driversLicense: data.driversLicense,
-      stoneRemovalQty: data.stoneRemovalQty,
-      spotPrices: { ...spotPrices },
-      items: data.items,
-      summary: logStr,
-      total: finalTotal,
-      image: data.image
-    };
+    if (existingId) {
+      const original = scrapTransactions.find(t => t.id === existingId);
+      const updatedTx: ScrapTransaction = {
+        id: existingId,
+        date: original ? original.date : new Date().toLocaleString(),
+        name: data.name,
+        phone: data.phone,
+        address: data.address,
+        driversLicense: data.driversLicense,
+        stoneRemovalQty: data.stoneRemovalQty,
+        spotPrices: original ? original.spotPrices : { ...spotPrices },
+        items: data.items,
+        summary: logStr,
+        total: finalTotal,
+        image: data.image
+      };
 
-    setScrapTransactions(prev => {
-      const updated = [newTx, ...prev];
-      localStorage.setItem('gr_scrap_ledger', JSON.stringify(updated));
-      return updated;
-    });
+      setScrapTransactions(prev => {
+        const updated = prev.map(t => t.id === existingId ? updatedTx : t);
+        localStorage.setItem('gr_scrap_ledger', JSON.stringify(updated));
+        return updated;
+      });
 
-    // Sync to cloud Firestore
-    saveDocument('scrap_ledger', newTx.id, newTx);
+      // Sync to cloud Firestore
+      saveDocument('scrap_ledger', existingId, updatedTx);
+      setEditingScrapTx(null);
+      alert("Scrap payout adjusted and updated successfully in Ledger!");
+    } else {
+      const newTx: ScrapTransaction = {
+        id: Math.random().toString(36).substring(2, 11),
+        date: new Date().toLocaleString(),
+        name: data.name,
+        phone: data.phone,
+        address: data.address,
+        driversLicense: data.driversLicense,
+        stoneRemovalQty: data.stoneRemovalQty,
+        spotPrices: { ...spotPrices },
+        items: data.items,
+        summary: logStr,
+        total: finalTotal,
+        image: data.image
+      };
+
+      setScrapTransactions(prev => {
+        const updated = [newTx, ...prev];
+        localStorage.setItem('gr_scrap_ledger', JSON.stringify(updated));
+        return updated;
+      });
+
+      // Sync to cloud Firestore
+      saveDocument('scrap_ledger', newTx.id, newTx);
+      alert("Scrap payout logged successfully to Ledger!");
+    }
   };
 
   const handleSaveQuote = (isWholesale: boolean) => {
@@ -530,6 +564,14 @@ export default function App() {
       setRetailSession(fullData);
       setActiveTab('quote');
     }
+  };
+
+  const handleLoadScrap = (id: string) => {
+    const item = scrapTransactions.find(t => t.id === id);
+    if (!item) return;
+
+    setEditingScrapTx(item);
+    setActiveTab('scrap');
   };
 
   // Exporters
@@ -892,6 +934,8 @@ export default function App() {
               onSaveTransaction={handleSaveScrap}
               syncStatus={syncStatus}
               onFetchLivePrices={fetchLivePrices}
+              editingTransaction={editingScrapTx}
+              onCancelEdit={() => setEditingScrapTx(null)}
             />
           )}
 
@@ -924,6 +968,7 @@ export default function App() {
               settings={settings}
               spotPrices={spotPrices}
               isWholesale={false}
+              scrapTransactions={scrapTransactions}
             />
           )}
 
@@ -940,6 +985,7 @@ export default function App() {
               settings={settings}
               spotPrices={spotPrices}
               isWholesale={true}
+              scrapTransactions={scrapTransactions}
             />
           )}
 
@@ -950,6 +996,7 @@ export default function App() {
               wholesaleTransactions={wholesaleTransactions}
               onDeleteTransaction={handleDeleteLedgerItem}
               onLoadIntoEditor={handleLoadQuote}
+              onLoadScrapIntoEditor={handleLoadScrap}
               settings={settings}
               onAddDemoTransaction={handleCreateDemoTransaction}
             />

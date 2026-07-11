@@ -21,6 +21,7 @@ interface LedgerViewProps {
   wholesaleTransactions: QuoteTransaction[];
   onDeleteTransaction: (type: 'scrap' | 'retail' | 'wholesale', id: string) => void;
   onLoadIntoEditor: (id: string, isWholesale: boolean) => void;
+  onLoadScrapIntoEditor?: (id: string) => void;
   settings: AppSettings;
   onAddDemoTransaction?: () => void;
 }
@@ -166,6 +167,7 @@ export default function LedgerView({
   wholesaleTransactions,
   onDeleteTransaction,
   onLoadIntoEditor,
+  onLoadScrapIntoEditor,
   settings,
   onAddDemoTransaction
 }: LedgerViewProps) {
@@ -353,7 +355,7 @@ export default function LedgerView({
         <div className="relative mb-4">
           <input
             type="text"
-            placeholder="Search by client, job #, or specs (e.g., 2.2 emerald)..."
+            placeholder="Search by client, job #, or specs..."
             className="w-full bg-brand-50/50 border border-brand-200 pl-9 pr-4 py-2.5 rounded-xl text-xs font-bold focus:bg-white focus:ring-1 focus:ring-brand-gold outline-none"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -366,14 +368,14 @@ export default function LedgerView({
           {activeLedger === 'retail' && (
             <>
               {onAddDemoTransaction && (
-                <div className="mb-3">
+                <div className="mb-2">
                   <button
                     type="button"
                     onClick={onAddDemoTransaction}
-                    className="w-full py-2.5 px-3 bg-brand-900 hover:bg-brand-gold text-brand-gold hover:text-brand-900 border border-brand-800 hover:border-brand-gold/50 rounded-xl text-[11px] font-black tracking-wider uppercase shadow-sm transition-all flex items-center justify-center gap-1.5"
+                    className="w-full py-1.5 px-2 bg-brand-900 hover:bg-brand-gold text-brand-gold hover:text-brand-900 border border-brand-800 hover:border-brand-gold/30 rounded-lg text-[9px] font-bold tracking-widest uppercase shadow-sm transition-all flex items-center justify-center gap-1 cursor-pointer"
                   >
-                    <Sparkles size={12} />
-                    Generate Wedding Set Demo Quote
+                    <Sparkles size={10} />
+                    Generate Demo Quote (Wedding Set)
                   </button>
                 </div>
               )}
@@ -500,11 +502,22 @@ export default function LedgerView({
             <div className="flex justify-between items-center border-b border-brand-100 pb-3 mb-5 print:hidden">
               <span className="text-[10px] font-black uppercase text-brand-400 tracking-wider">Inline Document Preview</span>
               <div className="flex gap-2">
-                {selectedTx.type !== 'scrap' && (
+                {selectedTx.type === 'scrap' ? (
+                  onLoadScrapIntoEditor && (
+                    <button
+                      type="button"
+                      onClick={() => onLoadScrapIntoEditor(activeTx.id)}
+                      className="bg-brand-50 hover:bg-brand-100 text-brand-800 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl border border-brand-200 transition-all flex items-center gap-1 shadow-sm cursor-pointer"
+                    >
+                      <FileText size={12} />
+                      Adjust Scrap Buyback
+                    </button>
+                  )
+                ) : (
                   <button
                     type="button"
                     onClick={() => onLoadIntoEditor(activeTx.id, selectedTx.type === 'wholesale')}
-                    className="bg-brand-50 hover:bg-brand-100 text-brand-800 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl border border-brand-200 transition-all flex items-center gap-1 shadow-sm"
+                    className="bg-brand-50 hover:bg-brand-100 text-brand-800 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl border border-brand-200 transition-all flex items-center gap-1 shadow-sm cursor-pointer"
                   >
                     <FileText size={12} />
                     Load in Editor

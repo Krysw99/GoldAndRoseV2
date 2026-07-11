@@ -11,7 +11,8 @@ import {
 } from 'lucide-react';
 import { 
   QuoteSession, JewelryItem, MeleeItem, FancyItem, ClientStoneItem, 
-  AddonItem, DesignNote, AppSettings, CategoryType, MaterialType, MetalColorType, StoneSourceType
+  AddonItem, DesignNote, AppSettings, CategoryType, MaterialType, MetalColorType, StoneSourceType,
+  ScrapTransaction
 } from '../types';
 import { 
   CENTER_SHAPES, FANCY_SHAPES, ROUND_MELEE, SETTING_STYLES, PURITY_OPTIONS 
@@ -860,6 +861,7 @@ interface QuoteCalculatorProps {
   settings: AppSettings;
   spotPrices: { gold: number; silver: number; platinum: number };
   isWholesale: boolean;
+  scrapTransactions?: ScrapTransaction[];
 }
 
 export default function QuoteCalculator({
@@ -869,7 +871,8 @@ export default function QuoteCalculator({
   onLaunchSketch,
   settings,
   spotPrices,
-  isWholesale
+  isWholesale,
+  scrapTransactions
 }: QuoteCalculatorProps) {
   const getWholesaleBreakdown = () => {
     let rawMetalCost = 0;
@@ -1045,6 +1048,33 @@ export default function QuoteCalculator({
 
   // Modal for category selection
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showScrapLinkModal, setShowScrapLinkModal] = useState(false);
+  const [scrapSearchQuery, setScrapSearchQuery] = useState('');
+
+  const getScrapTransactionsList = (): ScrapTransaction[] => {
+    if (scrapTransactions && scrapTransactions.length > 0) {
+      return scrapTransactions;
+    }
+    try {
+      const raw = localStorage.getItem('gr_scrap_ledger');
+      if (raw) {
+        return JSON.parse(raw) as ScrapTransaction[];
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  };
+
+  const handleLinkScrapTransaction = (tx: ScrapTransaction) => {
+    const payout = parseFloat(tx.total) || 0;
+    onChangeSession(prev => ({ 
+      ...prev, 
+      scrapCredit: parseFloat(payout.toFixed(2))
+    }));
+    alert(`Successfully linked scrap buyout of $${payout.toFixed(2)} CAD for client "${tx.name || 'Unnamed'}" as a credit!`);
+    setShowScrapLinkModal(false);
+  };
   const [activeCADStyle, setActiveCADStyle] = useState<string | null>(null);
   const [simViewMode, setSimViewMode] = useState<'realistic' | 'blueprint'>('realistic');
   const [isDesignerMode, setIsDesignerMode] = useState(false);
@@ -4164,7 +4194,21 @@ export default function QuoteCalculator({
                   <div className="space-y-2 text-xs font-mono text-brand-700 print:space-y-1 print:text-[10px]">
                     <div className="flex justify-between"><span>Gross Total Cost:</span><span>${totals.grossTotal.toFixed(2)}</span></div>
                     {totals.totalDiscount > 0 && <div className="flex justify-between text-red-600"><span>Client Deduction Reductions:</span><span>-${totals.totalDiscount.toFixed(2)}</span></div>}
-                    {Number(session.scrapCredit) > 0 && <div className="flex justify-between text-green-600"><span>Connected Scrap Payout Credit:</span><span>-${Number(session.scrapCredit).toFixed(2)}</span></div>}
+                    {Number(session.scrapCredit) > 0 && (
+                      <div className="flex justify-between text-green-600 items-center">
+                        <span>Connected Scrap Payout Credit:</span>
+                        <span className="flex items-center gap-1.5">
+                          -${Number(session.scrapCredit).toFixed(2)}
+                          <button 
+                            type="button" 
+                            onClick={() => onChangeSession(prev => ({ ...prev, scrapCredit: 0 }))}
+                            className="text-red-500 hover:text-red-700 ml-1 font-sans font-bold text-[9px] uppercase border border-red-200 bg-red-50 hover:bg-red-100 rounded px-1.5 py-0.5 print:hidden cursor-pointer"
+                          >
+                            unlink
+                          </button>
+                        </span>
+                      </div>
+                    )}
                     <div className="border-t border-brand-200 my-1 print:my-0.5"></div>
                     <div className="flex justify-between"><span>Subtotal Value:</span><span>${totals.subtotal.toFixed(2)}</span></div>
                     {session.applyTax && <div className="flex justify-between"><span>BC Taxes & GST (12%):</span><span>+${totals.tax.toFixed(2)}</span></div>}
@@ -4612,7 +4656,7 @@ export default function QuoteCalculator({
             <div className="flex flex-wrap gap-3 items-center justify-center p-2 print:hidden">
               <button
                 type="button"
-                onClick={handleLinkLatestScrap}
+                onClick={() => setShowScrapLinkModal(true)}
                 className="bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-800 font-bold py-3 px-6 rounded-2xl text-xs uppercase tracking-wider shadow-sm transition-all flex items-center gap-2 cursor-pointer"
               >
                 <Calculator size={14} className="text-brand-gold" />
@@ -4637,6 +4681,103 @@ export default function QuoteCalculator({
             </div>
           </div>
         )}
+
+
+
+      {/* SCRAP CREDIT LINKING MODAL */}
+      {showScrapLinkModal && (
+        <div className="fixed inset-0 bg-brand-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-xl shadow-2xl border border-brand-100 flex flex-col max-h-[80vh]">
+            <div className="flex items-center justify-between pb-4 border-b border-brand-100">
+              <div>
+                <h3 className="font-serif text-lg font-bold italic text-brand-900">Link Scrap Buyback Credit</h3>
+                <p className="text-[10px] text-brand-400 font-mono uppercase tracking-wider">Select a client's scrap buyout to connect as a credit deduction</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowScrapLinkModal(false);
+                  setScrapSearchQuery('');
+                }}
+                className="text-brand-400 hover:text-brand-700 p-1 text-2xl font-bold cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Search Input inside Modal */}
+            <div className="mt-4 mb-3 relative">
+              <input
+                type="text"
+                placeholder="Search by client name, phone or summary..."
+                value={scrapSearchQuery}
+                onChange={(e) => setScrapSearchQuery(e.target.value)}
+                className="w-full bg-brand-50/50 border border-brand-200 pl-9 pr-4 py-2.5 rounded-xl text-xs font-bold focus:bg-white focus:ring-1 focus:ring-brand-gold outline-none"
+              />
+              <span className="absolute left-3 top-3.5 text-brand-400">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </span>
+            </div>
+
+            {/* List of transactions */}
+            <div className="overflow-y-auto flex-1 pr-1 space-y-2 mt-2">
+              {(() => {
+                const txs = getScrapTransactionsList();
+                const filtered = txs.filter(tx => {
+                  const query = scrapSearchQuery.toLowerCase();
+                  return (
+                    (tx.name || '').toLowerCase().includes(query) ||
+                    (tx.phone || '').toLowerCase().includes(query) ||
+                    (tx.summary || '').toLowerCase().includes(query) ||
+                    (tx.date || '').toLowerCase().includes(query)
+                  );
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-brand-400 text-xs font-medium">
+                      No matching scrap transactions found in ledger.
+                    </div>
+                  );
+                }
+
+                return filtered.map(tx => {
+                  const amt = parseFloat(tx.total) || 0;
+                  return (
+                    <div 
+                      key={tx.id}
+                      className="p-3 bg-brand-50/40 hover:bg-brand-50 border border-brand-100 rounded-xl transition-all flex items-center justify-between gap-4"
+                    >
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-brand-900 truncate">{tx.name || 'Unnamed Client'}</span>
+                          {tx.phone && <span className="text-[9px] text-brand-400 font-mono">{tx.phone}</span>}
+                        </div>
+                        <p className="text-[9px] text-brand-400 font-mono">{tx.date}</p>
+                        <p className="text-[10px] text-brand-600 truncate italic">{tx.summary || 'No items listed'}</p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="font-mono font-bold text-xs text-brand-gold bg-brand-900 px-2 py-1 rounded">
+                          ${amt.toFixed(2)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleLinkScrapTransaction(tx)}
+                          className="bg-brand-gold hover:bg-brand-500 text-brand-950 font-bold px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-wider transition-colors cursor-pointer"
+                        >
+                          Link Credit
+                        </button>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
 
 
