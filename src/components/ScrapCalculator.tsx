@@ -8,6 +8,7 @@ import { Plus, Trash2, Camera, Shield, DollarSign, Scale, ArrowRight } from 'luc
 import { ScrapItem, MaterialType, ScrapTransaction } from '../types';
 import { PURITY_OPTIONS, TROY_ONCE_GRAMS } from '../constants';
 import { calculateScrapItemValue, calculateScrapTotal } from '../utils';
+import SignaturePad from './SignaturePad';
 
 interface ScrapCalculatorProps {
   spotPrices: { gold: number; silver: number; platinum: number };
@@ -21,6 +22,7 @@ interface ScrapCalculatorProps {
       stoneRemovalQty: string;
       items: ScrapItem[];
       image: string | null;
+      signature: string | null;
     },
     existingId?: string
   ) => void;
@@ -46,6 +48,7 @@ export default function ScrapCalculator({
   const [driversLicense, setDriversLicense] = useState('');
   const [stoneRemovalQty, setStoneRemovalQty] = useState('');
   const [scrapImage, setScrapImage] = useState<string | null>(null);
+  const [customerSignature, setCustomerSignature] = useState<string | null>(null);
   
   const [items, setItems] = useState<ScrapItem[]>([
     { weight: '', material: 'gold', purity: 14, rate: 85 }
@@ -59,6 +62,7 @@ export default function ScrapCalculator({
       setDriversLicense(editingTransaction.driversLicense || '');
       setStoneRemovalQty(editingTransaction.stoneRemovalQty || '');
       setScrapImage(editingTransaction.image || null);
+      setCustomerSignature(editingTransaction.signature || null);
       setItems(editingTransaction.items && editingTransaction.items.length > 0 ? editingTransaction.items : [{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
     } else {
       setCustomerName('');
@@ -67,6 +71,7 @@ export default function ScrapCalculator({
       setDriversLicense('');
       setStoneRemovalQty('');
       setScrapImage(null);
+      setCustomerSignature(null);
       setItems([{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
     }
   }, [editingTransaction]);
@@ -150,7 +155,8 @@ export default function ScrapCalculator({
       driversLicense,
       stoneRemovalQty,
       items: activeItems,
-      image: scrapImage
+      image: scrapImage,
+      signature: customerSignature
     }, editingTransaction?.id);
 
     // Reset Form if not editing
@@ -161,6 +167,7 @@ export default function ScrapCalculator({
       setDriversLicense('');
       setStoneRemovalQty('');
       setScrapImage(null);
+      setCustomerSignature(null);
       setItems([{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
     }
   };
@@ -388,6 +395,21 @@ export default function ScrapCalculator({
         >
           + Add Entry
         </button>
+      </div>
+
+      {/* 5. Customer Signature */}
+      <div className="bg-brand-50 p-5 rounded-2xl border border-brand-200 space-y-3">
+        <h3 className="text-xs font-bold text-brand-600 uppercase tracking-widest pl-1">
+          Customer Signature Authorization
+        </h3>
+        <p className="text-[10px] text-brand-500 pl-1">
+          By signing below, the customer certifies that they are the legal owner of the items listed above and authorize this payout transaction.
+        </p>
+        <SignaturePad
+          initialSignature={customerSignature}
+          onSave={(dataUrl) => setCustomerSignature(dataUrl)}
+          onClear={() => setCustomerSignature(null)}
+        />
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">

@@ -149,6 +149,7 @@ export interface ScrapTransaction {
   summary: string;
   total: string;
   image: string | null;
+  signature?: string | null;
 }
 
 export interface QuoteTransaction {

@@ -617,11 +617,22 @@ export default function LedgerView({
                   )}
 
                   {/* Sign-off terms */}
-                  <div className="border-t border-brand-200 pt-5 text-center space-y-6">
+                  <div className="border-t border-brand-200 pt-5 text-center space-y-4">
                     <p className="text-[8px] text-brand-400 italic leading-relaxed">
                       I declare that I am the legal owner of the scrap items presented above and have full right to transact and sell them to Gold & Rose Jewellery Corp. All buyout transactions are absolute and final.
                     </p>
-                    <div className="flex flex-col items-center">
+                    <div className="flex flex-col items-center justify-center">
+                      {(activeTx as ScrapTransaction).signature ? (
+                        <div className="h-16 w-40 flex items-center justify-center relative overflow-hidden mb-1">
+                          <img 
+                            src={(activeTx as ScrapTransaction).signature!} 
+                            alt="Client signature" 
+                            className="max-h-16 max-w-full object-contain filter brightness-95" 
+                          />
+                        </div>
+                      ) : (
+                        <div className="h-12"></div>
+                      )}
                       <div className="w-40 border-b border-brand-300"></div>
                       <p className="text-[8px] uppercase tracking-wider text-brand-500 mt-1">Client Authorization Signature</p>
                     </div>

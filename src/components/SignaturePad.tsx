@@ -27,8 +27,10 @@ export default function SignaturePad({ initialSignature, onSave, onClear }: Sign
 
     // Set high DPI scale
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
+    const width = rect.width || canvas.parentElement?.clientWidth || 300;
+    const height = rect.height || canvas.parentElement?.clientHeight || 144;
+    canvas.width = width;
+    canvas.height = height;
 
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';

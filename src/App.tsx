@@ -29,6 +29,9 @@ import CubanBraceletBuilder from './components/CubanBraceletBuilder';
 // Firebase cloud sync helpers
 import { listenCollection, saveDocument, deleteDocument, syncLocalToCloud } from './firebase';
 
+// Tactile Click Audio Feedback Utility
+import { playClickSound } from './utils/audio';
+
 export default function App() {
   // Navigation State
   const [activeTab, setActiveTab] = useState<'scrap' | 'quote' | 'wholesale' | 'spot' | 'cuban' | 'ledger' | 'settings'>('scrap');
@@ -37,7 +40,7 @@ export default function App() {
   const [spotPrices, setSpotPrices] = useState({ gold: 2350, silver: 30, platinum: 1050 });
   const [lastUpdated, setLastUpdated] = useState('Manual Default');
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const [goldApiKey, setGoldApiKey] = useState('goldapi-472c240569490d4d25bde6da08749829-io');
+  const [goldApiKey, setGoldApiKey] = useState('');
 
   // Quick Calculator state
   const [quickPurity, setQuickPurity] = useState('gold_14');
@@ -76,6 +79,59 @@ export default function App() {
         }
       });
     }
+  }, []);
+
+  // Set up global tactile click feedback listener for all buttons, tabs, dropdowns, and checkboxes
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target) return;
+
+      // Detect closest clickable element up the DOM tree
+      const clickable = target.closest('button, select, [role="button"], [role="tab"], .cursor-pointer, input[type="radio"], input[type="checkbox"], input[type="submit"]');
+      if (!clickable) return;
+
+      const text = clickable.textContent?.toLowerCase() || '';
+      const html = clickable.innerHTML.toLowerCase();
+
+      // Check if it's a delete/destructive action
+      const isDelete = html.includes('trash') || 
+                       html.includes('delete') || 
+                       text.includes('delete') || 
+                       text.includes('remove') ||
+                       clickable.classList.contains('text-red-600') ||
+                       clickable.classList.contains('bg-red-600');
+
+      // Check if it's a clear/reset action
+      const isClear = text.includes('clear') || text.includes('reset');
+
+      // Check if it's a tab or sub-navigation tab
+      const isTab = clickable.getAttribute('role') === 'tab' ||
+                    clickable.classList.contains('px-5') && clickable.classList.contains('py-3') ||
+                    text.includes('scrap buyback') ||
+                    text.includes('custom quote') ||
+                    text.includes('spot price') ||
+                    text.includes('manufacturing') ||
+                    text.includes('handmade cubans') ||
+                    text.includes('ledger histories') ||
+                    text.includes('master parameters') ||
+                    text.includes('subtab');
+
+      if (isDelete) {
+        playClickSound('delete');
+      } else if (isClear) {
+        playClickSound('clear');
+      } else if (isTab) {
+        playClickSound('tab');
+      } else {
+        playClickSound('click');
+      }
+    };
+
+    document.addEventListener('click', handleGlobalClick);
+    return () => {
+      document.removeEventListener('click', handleGlobalClick);
+    };
   }, []);
 
   // Load persistence data on initialization
@@ -324,6 +380,7 @@ export default function App() {
       stoneRemovalQty: string;
       items: ScrapItem[];
       image: string | null;
+      signature: string | null;
     },
     existingId?: string
   ) => {
@@ -350,7 +407,8 @@ export default function App() {
         items: data.items,
         summary: logStr,
         total: finalTotal,
-        image: data.image
+        image: data.image,
+        signature: data.signature
       };
 
       setScrapTransactions(prev => {
@@ -362,6 +420,7 @@ export default function App() {
       // Sync to cloud Firestore
       saveDocument('scrap_ledger', existingId, updatedTx);
       setEditingScrapTx(null);
+      playClickSound('success');
       alert("Scrap payout adjusted and updated successfully in Ledger!");
     } else {
       const newTx: ScrapTransaction = {
@@ -376,7 +435,8 @@ export default function App() {
         items: data.items,
         summary: logStr,
         total: finalTotal,
-        image: data.image
+        image: data.image,
+        signature: data.signature
       };
 
       setScrapTransactions(prev => {
@@ -387,6 +447,7 @@ export default function App() {
 
       // Sync to cloud Firestore
       saveDocument('scrap_ledger', newTx.id, newTx);
+      playClickSound('success');
       alert("Scrap payout logged successfully to Ledger!");
     }
   };
@@ -526,6 +587,7 @@ export default function App() {
       saveDocument('retail_ledger', newTx.id, newTx);
     }
 
+    playClickSound('success');
     alert("Quote successfully logged into ledger ledger!");
   };
 

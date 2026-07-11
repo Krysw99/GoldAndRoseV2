@@ -741,6 +741,17 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
 
       const rect = container.getBoundingClientRect();
       
+      // If the container is currently hidden (e.g., display: none during printing, or in an inactive tab)
+      // do not resize the canvas as rect.width/rect.height will be 0 and erase the sketch or waste CPU cycles.
+      if (rect.width === 0 || rect.height === 0) {
+        return;
+      }
+
+      // Skip resizing if dimensions haven't actually changed to avoid clearing/redrawing unnecessarily
+      if (canvas.width === rect.width && canvas.height === rect.height) {
+        return;
+      }
+
       // Keep existing drawing content on resize if possible
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = canvas.width;
