@@ -179,6 +179,16 @@ export const DEFAULT_SETTINGS = {
   ],
   showRawCostOnQuoteTab: false,
   
+  storeName: "Gold & Rose",
+  storeSubName: "Jewellery Corporation",
+  storeAddress: "4501 North Rd #209, Burnaby, BC V3N 4J5",
+  storeContact: "info@goldandrosejewellery.com | (604) 420-9077",
+  
+  wixStoreUrl: "https://www.goldandrosejewellery.com",
+  wixAccessToken: "",
+  wixIntegrationMode: "deeplink",
+  wixWebhookUrl: "",
+  
   retailGoldPremium: 100,
   retailSilverPremium: 20,
   retailPlatinumPremium: 100,
@@ -202,5 +212,6 @@ export const DEFAULT_SETTINGS = {
     stoneCenterPerCt: 800,
     meleeRates: { '1.0': 400 },
     fancyRates: { 'Princess': 500 }
-  }
+  },
+  wholesaleProfiles: []
 };

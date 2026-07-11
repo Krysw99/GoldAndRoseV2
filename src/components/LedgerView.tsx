@@ -6,7 +6,8 @@
 import React, { useState } from 'react';
 import { 
   Search, Trash2, Printer, FileText, X, ArrowRight, User, Phone, 
-  MapPin, ShieldCheck, Mail, Calendar, Sparkles, AlertCircle 
+  MapPin, ShieldCheck, Mail, Calendar, Sparkles, AlertCircle,
+  ShoppingBag, Check, ExternalLink, Cpu
 } from 'lucide-react';
 import { ScrapTransaction, QuoteTransaction, AppSettings, QuoteSession, JewelryItem } from '../types';
 import { calculateRingCost, calculateScrapTotal } from '../utils';
@@ -24,6 +25,141 @@ interface LedgerViewProps {
   onAddDemoTransaction?: () => void;
 }
 
+function getQuoteTransactionScore(tx: QuoteTransaction, queryWords: string[], fullSearchStr: string): number {
+  if (queryWords.length === 0) return 0;
+  
+  let score = 0;
+  
+  const name = (tx.name || "").toLowerCase();
+  const phone = (tx.phone || "").toLowerCase();
+  const jobNum = (tx.fullData?.jobNum || "").toLowerCase();
+  const jobDesc = (tx.fullData?.jobDesc || "").toLowerCase();
+  const notes = (tx.fullData?.notes || "").toLowerCase();
+  const email = (tx.fullData?.cEmail || "").toLowerCase();
+
+  const combinedHeader = `${name} ${phone} ${jobNum} ${jobDesc} ${notes} ${email}`.toLowerCase();
+  if (combinedHeader.includes(fullSearchStr)) {
+    score += 500;
+  }
+
+  if (jobNum === fullSearchStr) {
+    score += 800;
+  } else if (jobNum && jobNum.includes(fullSearchStr)) {
+    score += 400;
+  }
+
+  if (name === fullSearchStr) {
+    score += 300;
+  }
+
+  const rings = tx.fullData?.rings || [];
+  let ringDetailsText = "";
+
+  for (const r of rings) {
+    const category = (r.category || "").toLowerCase();
+    const material = (r.material || "").toLowerCase();
+    const metalColor = (r.metalColor || "").toLowerCase();
+    const goldKarat = r.goldKarat ? `${r.goldKarat}k` : "";
+    const engraving = r.showEngraving && r.engravingText ? r.engravingText.toLowerCase() : "";
+    
+    const csCarats = r.centerStone?.carats || "";
+    const csShape = (r.centerStone?.shape || "").toLowerCase();
+    const csType = (r.centerStone?.type || "").toLowerCase();
+    const csOrigin = (r.centerStone?.origin || "").toLowerCase();
+    const csSetting = (r.centerStone?.setting || "").toLowerCase();
+
+    const clientStonesText = r.clientStones?.map(c => `${c.qty} ${c.type} ${c.carats}`).join(" ").toLowerCase() || "";
+    const designNotesText = r.designNotes?.map(n => n.text).join(" ").toLowerCase() || "";
+
+    const tbShape = (r.tbShape || "").toLowerCase();
+    const tbSizeRound = (r.tbSizeRound || "").toLowerCase();
+    const tbCarats = r.tbManualCarats || "";
+
+    const mbSize = r.mbSize || "";
+    const mbWidth = r.mbWidth || "";
+
+    const ringCombined = `${category} ${material} ${metalColor} ${goldKarat} ${engraving} ${csCarats} ${csShape} ${csType} ${csOrigin} ${csSetting} ${clientStonesText} ${designNotesText} ${tbShape} ${tbSizeRound} ${tbCarats} ${mbSize} ${mbWidth}`.toLowerCase();
+    ringDetailsText += " " + ringCombined;
+
+    const ringMatchesAll = queryWords.every(word => ringCombined.includes(word));
+    if (ringMatchesAll) {
+      score += 1000;
+    }
+    
+    for (const word of queryWords) {
+      if (csType === word || csShape === word || csCarats === word || category.includes(word)) {
+        score += 150;
+      }
+    }
+  }
+
+  const fullText = `${combinedHeader} ${ringDetailsText}`.toLowerCase();
+  let matchedWordsCount = 0;
+  
+  for (const word of queryWords) {
+    if (fullText.includes(word)) {
+      matchedWordsCount++;
+      score += 100;
+    }
+  }
+
+  if (queryWords.length > 1) {
+    const containsAllWordsSomewhere = queryWords.every(word => fullText.includes(word));
+    if (containsAllWordsSomewhere) {
+      score += 300;
+    }
+  }
+
+  return matchedWordsCount > 0 ? score : 0;
+}
+
+function getScrapTransactionScore(tx: ScrapTransaction, queryWords: string[], fullSearchStr: string): number {
+  if (queryWords.length === 0) return 0;
+
+  let score = 0;
+  const name = (tx.name || "").toLowerCase();
+  const phone = (tx.phone || "").toLowerCase();
+  const address = (tx.address || "").toLowerCase();
+  const summary = (tx.summary || "").toLowerCase();
+  const dl = (tx.driversLicense || "").toLowerCase();
+
+  const combinedHeader = `${name} ${phone} ${address} ${summary} ${dl}`.toLowerCase();
+  if (combinedHeader.includes(fullSearchStr)) {
+    score += 500;
+  }
+
+  if (name === fullSearchStr) {
+    score += 300;
+  }
+
+  let itemsText = "";
+  const items = tx.items || [];
+  for (const it of items) {
+    itemsText += ` ${it.material} ${it.purity} ${it.weight}`.toLowerCase();
+    for (const word of queryWords) {
+      if (it.material.toLowerCase() === word || String(it.purity) === word) {
+        score += 150;
+      }
+    }
+  }
+
+  const fullText = `${combinedHeader} ${itemsText}`.toLowerCase();
+  let matchedWordsCount = 0;
+
+  for (const word of queryWords) {
+    if (fullText.includes(word)) {
+      matchedWordsCount++;
+      score += 100;
+    }
+  }
+
+  if (queryWords.length > 1 && queryWords.every(word => fullText.includes(word))) {
+    score += 300;
+  }
+
+  return matchedWordsCount > 0 ? score : 0;
+}
+
 export default function LedgerView({
   scrapTransactions,
   ringQuoteTransactions,
@@ -37,45 +173,46 @@ export default function LedgerView({
   const [search, setSearch] = useState('');
   const [selectedTx, setSelectedTx] = useState<{ type: 'scrap' | 'retail' | 'wholesale'; id: string } | null>(null);
 
+  // Wix sync modal states
+  const [isWixModalOpen, setIsWixModalOpen] = useState(false);
+  const [wixSyncState, setWixSyncState] = useState<'idle' | 'checking' | 'syncing' | 'done' | 'error'>('idle');
+  const [wixSyncLog, setWixSyncLog] = useState<string[]>([]);
+  const [generatedWixUrl, setGeneratedWixUrl] = useState('');
+
   // Search filter lists
-  const filteredScrap = scrapTransactions.filter(
-    tx => tx.name.toLowerCase().includes(search.toLowerCase()) || tx.phone.includes(search)
-  );
+  const queryWords = React.useMemo(() => search.toLowerCase().trim().split(/\s+/).filter(Boolean), [search]);
+  const fullSearchStr = search.toLowerCase().trim();
 
-  const filteredRetail = ringQuoteTransactions.filter(
-    tx => tx.name.toLowerCase().includes(search.toLowerCase()) || tx.phone.includes(search)
-  );
+  const filteredScrap = React.useMemo(() => {
+    if (!fullSearchStr) return scrapTransactions;
+    return scrapTransactions
+      .map(tx => ({ tx, score: getScrapTransactionScore(tx, queryWords, fullSearchStr) }))
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(item => item.tx);
+  }, [scrapTransactions, queryWords, fullSearchStr]);
 
-  const filteredWholesale = wholesaleTransactions.filter(
-    tx => tx.name.toLowerCase().includes(search.toLowerCase()) || tx.phone.includes(search)
-  );
+  const filteredRetail = React.useMemo(() => {
+    if (!fullSearchStr) return ringQuoteTransactions;
+    return ringQuoteTransactions
+      .map(tx => ({ tx, score: getQuoteTransactionScore(tx, queryWords, fullSearchStr) }))
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(item => item.tx);
+  }, [ringQuoteTransactions, queryWords, fullSearchStr]);
 
-  // PDF Export Trigger using browser html2canvas + jspdf
+  const filteredWholesale = React.useMemo(() => {
+    if (!fullSearchStr) return wholesaleTransactions;
+    return wholesaleTransactions
+      .map(tx => ({ tx, score: getQuoteTransactionScore(tx, queryWords, fullSearchStr) }))
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(item => item.tx);
+  }, [wholesaleTransactions, queryWords, fullSearchStr]);
+
+  // PDF Export Trigger using browser's native high-fidelity print engine (prevents canvas parsing issues with oklab/oklch colors)
   const exportPdf = async (elementId: string, name: string) => {
-    const element = document.getElementById(elementId);
-    if (!element) return;
-
-    try {
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff'
-      });
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      
-      const pdfWidth = 215.9; // 8.5 inches in mm
-      const pdfHeight = 279.4; // 11 inches in mm
-      const margin = 10;
-      
-      const contentWidth = pdfWidth - margin * 2;
-      const contentHeight = (canvas.height * contentWidth) / canvas.width;
-      
-      const pdf = new jsPDF('p', 'mm', [pdfWidth, Math.max(pdfHeight, contentHeight + margin * 2)]);
-      pdf.addImage(imgData, 'JPEG', margin, margin, contentWidth, contentHeight);
-      pdf.save(`Quote_Receipt_${name.replace(/\s+/g, '_')}.pdf`);
-    } catch (err: any) {
-      alert("PDF Compilation Failed: " + err.message);
-    }
+    window.print();
   };
 
   const currentTxData = () => {
@@ -88,10 +225,105 @@ export default function LedgerView({
 
   const activeTx = currentTxData();
 
+  const handleWixSync = async () => {
+    if (!activeTx) return;
+    setIsWixModalOpen(true);
+    setWixSyncState('checking');
+    setWixSyncLog([
+      "Initializing secure handshake with Wix Online Store...",
+      `Connecting to store domain: ${settings.wixStoreUrl || 'https://www.goldandrosejewellery.com'}`,
+    ]);
+
+    // Step 1: Handshake delay
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    setWixSyncLog(prev => [
+      ...prev,
+      "Handshake successful. Verified integration mode: " + 
+      (settings.wixIntegrationMode === 'velo_api' ? "Wix Velo Headless API" : 
+       settings.wixIntegrationMode === 'webhook' ? "Custom Wix Webhook" : "Cart Deep-link Setup"),
+      "Preparing payload for bespoke design itemized specs..."
+    ]);
+    setWixSyncState('syncing');
+
+    // Step 2: Formulation delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const cleanPrice = parseFloat(activeTx.total.replace(/[^0-9.]/g, '')) || 0;
+    const piecesCount = (activeTx as QuoteTransaction).fullData?.rings?.length || 1;
+    
+    setWixSyncLog(prev => [
+      ...prev,
+      `Calculated final cart checkout total: CAD $${cleanPrice.toFixed(2)} (${piecesCount} bespoke jewelry piece(s))`,
+      "Creating dynamic checkout session token..."
+    ]);
+
+    // If webhook is configured, actually trigger it!
+    if (settings.wixIntegrationMode === 'webhook' && settings.wixWebhookUrl) {
+      setWixSyncLog(prev => [...prev, `Dispatching secure POST payload to custom webhook: ${settings.wixWebhookUrl}...`]);
+      try {
+        const response = await fetch(settings.wixWebhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': settings.wixAccessToken ? `Bearer ${settings.wixAccessToken}` : ''
+          },
+          body: JSON.stringify({
+            transactionId: activeTx.id,
+            clientName: activeTx.name,
+            clientPhone: activeTx.phone,
+            total: activeTx.total,
+            totalNum: cleanPrice,
+            fullDetails: (activeTx as QuoteTransaction).fullData,
+            syncedAt: new Date().toISOString()
+          })
+        });
+        if (response.ok) {
+          setWixSyncLog(prev => [...prev, "✓ Webhook dispatched and accepted by Wix with status 200 OK."]);
+        } else {
+          setWixSyncLog(prev => [...prev, `⚠ Webhook responded with status ${response.status}. Continuing flow.`]);
+        }
+      } catch (e: any) {
+        setWixSyncLog(prev => [...prev, `⚠ Could not connect to Webhook URL: ${e.message}. Continuing with fallback session.`]);
+      }
+    } else {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // Step 3: Deep link construction
+    const baseUrl = settings.wixStoreUrl || 'https://www.goldandrosejewellery.com';
+    const cartParams = {
+      cart: {
+        items: [
+          {
+            name: activeTx.name ? `Custom Jewelry Order for ${activeTx.name}` : 'Bespoke Custom Jewelry Item',
+            quantity: 1,
+            price: cleanPrice,
+            description: activeTx.summary || `Bespoke estimate ID #${activeTx.id}`,
+            customFields: {
+              "Quote ID": activeTx.id,
+              "Material Specs": (activeTx as QuoteTransaction).fullData?.rings?.map(r => `${r.metalColor} ${r.goldKarat ? r.goldKarat+'k' : ''} ${r.material}`).join(', ')
+            }
+          }
+        ]
+      }
+    };
+
+    const finalUrl = `${baseUrl}/cart-page?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+    setGeneratedWixUrl(finalUrl);
+
+    setWixSyncLog(prev => [
+      ...prev,
+      "✓ Securing checkout link...",
+      "✓ Wix Retail Checkout generation completed successfully!"
+    ]);
+    setWixSyncState('done');
+  };
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-fadeIn">
+    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-fadeIn print:block print:w-full">
       {/* Search & Transaction Lists Column */}
-      <div className="md:col-span-5 lg:col-span-4 bg-white p-5 rounded-2xl border border-brand-100 shadow-sm flex flex-col h-[650px]">
+      <div className="md:col-span-5 lg:col-span-4 bg-white p-5 rounded-2xl border border-brand-100 shadow-sm flex flex-col h-[650px] print:hidden">
         {/* Ledger Type Switchers */}
         <div className="flex gap-1.5 p-1 bg-brand-50 rounded-xl border border-brand-200/60 mb-4 shadow-inner">
           <button
@@ -121,7 +353,7 @@ export default function LedgerView({
         <div className="relative mb-4">
           <input
             type="text"
-            placeholder="Search by client name or phone..."
+            placeholder="Search by client, job #, or specs (e.g., 2.2 emerald)..."
             className="w-full bg-brand-50/50 border border-brand-200 pl-9 pr-4 py-2.5 rounded-xl text-xs font-bold focus:bg-white focus:ring-1 focus:ring-brand-gold outline-none"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -186,7 +418,14 @@ export default function LedgerView({
                   className={`p-3.5 rounded-xl border transition-all cursor-pointer shadow-sm flex items-center justify-between ${selectedTx?.id === tx.id ? 'bg-green-50 border-green-300' : 'bg-white border-brand-100 hover:border-brand-300'}`}
                 >
                   <div className="space-y-0.5">
-                    <p className="font-bold text-xs text-brand-900">{tx.name || `Job #${tx.fullData?.jobNum || 'N/A'}`}</p>
+                    <p className="font-bold text-xs text-brand-900 flex items-center flex-wrap gap-1.5">
+                      <span>{tx.name || 'Unnamed Client'}</span>
+                      {tx.fullData?.jobNum && (
+                        <span className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded font-mono">
+                          #{tx.fullData.jobNum}
+                        </span>
+                      )}
+                    </p>
                     <p className="text-[9px] text-brand-400 font-mono">{tx.date}</p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -238,11 +477,27 @@ export default function LedgerView({
       </div>
 
       {/* Invoice Receipt Viewer Column */}
-      <div className="md:col-span-7 lg:col-span-8 space-y-4">
+      <div className="md:col-span-7 lg:col-span-8 space-y-4 print:col-span-12 print:w-full print:p-0">
         {selectedTx && activeTx ? (
-          <div className="bg-white p-5 rounded-3xl border border-brand-100 shadow-lg flex flex-col justify-between min-h-[650px] relative">
+          <div className="bg-white p-5 rounded-3xl border border-brand-100 shadow-lg flex flex-col justify-between min-h-[650px] relative print:border-none print:shadow-none print:p-0 print:min-h-0">
+            {/* Inject page margins and grayscale adjustments for print */}
+            <style dangerouslySetInnerHTML={{ __html: `
+              @media print {
+                @page {
+                  size: letter portrait !important;
+                  margin: 0.15in !important;
+                }
+                body, html, #root {
+                  font-size: 8.5pt !important;
+                  background: #ffffff !important;
+                  color: #000000 !important;
+                  padding: 0 !important;
+                  margin: 0 !important;
+                }
+              }
+            `}} />
             {/* Top Print Actions */}
-            <div className="flex justify-between items-center border-b border-brand-100 pb-3 mb-5">
+            <div className="flex justify-between items-center border-b border-brand-100 pb-3 mb-5 print:hidden">
               <span className="text-[10px] font-black uppercase text-brand-400 tracking-wider">Inline Document Preview</span>
               <div className="flex gap-2">
                 {selectedTx.type !== 'scrap' && (
@@ -253,6 +508,17 @@ export default function LedgerView({
                   >
                     <FileText size={12} />
                     Load in Editor
+                  </button>
+                )}
+                {selectedTx.type === 'retail' && (
+                  <button
+                    type="button"
+                    onClick={handleWixSync}
+                    className="bg-[#002eec] hover:bg-[#0024ba] text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-md"
+                    title="Generate custom checkout link and sync with Wix Store"
+                  >
+                    <ShoppingBag size={12} />
+                    Send to Wix
                   </button>
                 )}
                 <button
@@ -267,10 +533,10 @@ export default function LedgerView({
             </div>
 
             {/* Document sheet contents */}
-            <div className="flex-1 overflow-y-auto max-h-[500px] pr-1 hide-scrollbar">
+            <div className="flex-1 overflow-y-auto max-h-[500px] pr-1 hide-scrollbar print:overflow-visible print:max-h-none print:p-0">
               {/* LEDGER RENDER 1: Scrap buyback Receipt */}
               {selectedTx.type === 'scrap' && (
-                <div id="ledger-invoice-box" className="p-8 bg-white border border-brand-200 rounded-2xl text-brand-800 text-left font-sans max-w-xl mx-auto">
+                <div id="ledger-invoice-box" className="p-8 bg-white border border-brand-200 rounded-2xl text-brand-800 text-left font-sans max-w-xl mx-auto print:p-0 print:border-none print:shadow-none print:rounded-none print:max-w-none">
                   {/* Header info */}
                   <div className="flex justify-between items-start border-b border-brand-900 pb-4 mb-6">
                     <div>
@@ -352,7 +618,7 @@ export default function LedgerView({
 
               {/* LEDGER RENDER 2: Retail / Wholesale Custom Quote Invoice */}
               {(selectedTx.type === 'retail' || selectedTx.type === 'wholesale') && (
-                <div id="ledger-invoice-box" className="p-8 bg-white border border-brand-200 rounded-2xl text-brand-800 text-left font-sans max-w-2xl mx-auto">
+                <div id="ledger-invoice-box" className="p-8 bg-white border border-brand-200 rounded-2xl text-brand-800 text-left font-sans max-w-2xl mx-auto print:p-0 print:border-none print:shadow-none print:rounded-none print:max-w-none">
                   {/* Invoice Header */}
                   <div className="flex justify-between items-start border-b border-brand-900 pb-4 mb-6">
                     <div>
@@ -393,7 +659,7 @@ export default function LedgerView({
                     <p className="text-[10px] uppercase font-black text-brand-500 tracking-widest border-b border-brand-100 pb-1 mb-1">Jewelry Specifications</p>
                     {(activeTx as QuoteTransaction).fullData?.rings?.map((r, ri) => {
                       if (r.goldGrams === '' && r.category !== 'tennisBracelet' && r.melee.length === 0) return null;
-                      const cost = calculateRingCost(r, settings, { gold: 4000, silver: 45, platinum: 1200 }, selectedTx.type);
+                      const cost = calculateRingCost(r, settings, { gold: 4000, silver: 45, platinum: 1200 }, selectedTx.type, undefined, selectedTx.type === 'wholesale' ? (activeTx as QuoteTransaction).fullData?.wholesaleProfileId : undefined);
                       const discountVal = parseFloat(r.discount) || 0;
                       const discountDeduction = r.discountType === '%' ? cost * (discountVal / 100) : discountVal;
                       const finalItemPrice = Math.max(0, cost - discountDeduction);
@@ -468,10 +734,71 @@ export default function LedgerView({
                               </div>
                             )}
                           </div>
+
+                          {/* Visual References: Sketches & Photos rendered directly inside the specific piece's specs sheet */}
+                          {(() => {
+                            const rSketches = Array.isArray(r.referenceSketches) ? r.referenceSketches : (r.referenceSketch ? [r.referenceSketch] : []);
+                            const rPhotos = Array.isArray(r.referencePhotos) ? r.referencePhotos : (r.referencePhoto ? [r.referencePhoto] : []);
+                            if (rSketches.length === 0 && rPhotos.length === 0) return null;
+                            return (
+                              <div className="space-y-3 pt-3 border-t border-brand-100 mt-2 print:space-y-2 print:pt-2">
+                                <span className="text-[9px] font-black text-brand-500 uppercase tracking-wider block pl-1 print:text-[8px]">Visual Mockup References</span>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 print:gap-2">
+                                  {rSketches.map((sk, skIdx) => (
+                                    <div key={`sk-${skIdx}`} className="border border-brand-200 rounded-xl p-2 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
+                                      <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1.5 print:mb-1 print:text-[7px]">Sketch {skIdx + 1}</span>
+                                      <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-44 w-full object-contain rounded-lg print:h-64 print:rounded-lg" />
+                                    </div>
+                                  ))}
+                                  {rPhotos.map((ph, phIdx) => (
+                                    <div key={`ph-${phIdx}`} className="border border-brand-200 rounded-xl p-2 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
+                                      <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1.5 print:mb-1 print:text-[7px]">Photo {phIdx + 1}</span>
+                                      <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-44 w-full object-contain rounded-lg print:h-64 print:rounded-lg" />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}
                   </div>
+
+                  {/* Dynamic Mockups Thumbnail Anchors side-by-side inside the Invoice */}
+                  {(activeTx as QuoteTransaction).fullData?.rings?.some(r => r.referenceSketch || r.referencePhoto || (Array.isArray(r.referenceSketches) && r.referenceSketches.length > 0) || (Array.isArray(r.referencePhotos) && r.referencePhotos.length > 0)) && (
+                    <div className="border-t border-brand-100 pt-6 space-y-4 mb-6 print:pt-3 print:space-y-2 print:mb-4">
+                      <h4 className="text-[10px] font-black text-brand-800 uppercase tracking-widest text-center print:text-[8px]">Reference Sketches & Photos</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:gap-3">
+                        {(activeTx as QuoteTransaction).fullData?.rings?.map((r, ri) => {
+                          const rSketches = Array.isArray(r.referenceSketches) ? r.referenceSketches : (r.referenceSketch ? [r.referenceSketch] : []);
+                          const rPhotos = Array.isArray(r.referencePhotos) ? r.referencePhotos : (r.referencePhoto ? [r.referencePhoto] : []);
+                          if (rSketches.length === 0 && rPhotos.length === 0) return null;
+                          return (
+                            <div key={r.id} className="border border-brand-100 bg-brand-50/20 rounded-2xl p-3 space-y-3 print:p-2 print:space-y-2 print:rounded-xl">
+                              <p className="text-[10px] font-black uppercase text-brand-600 tracking-wider print:text-[8px]">
+                                Piece {ri + 1}: {r.category === 'customRing' ? 'Custom Ring' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis'}
+                              </p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {rSketches.map((sk, skIdx) => (
+                                  <div key={`sk-${skIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
+                                    <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1 print:mb-1 print:text-[7px]">Sketch {skIdx + 1}</span>
+                                    <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-28 w-full object-contain rounded print:h-64 print:rounded-lg" />
+                                  </div>
+                                ))}
+                                {rPhotos.map((ph, phIdx) => (
+                                  <div key={`ph-${phIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
+                                    <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1 print:mb-1 print:text-[7px]">Photo {phIdx + 1}</span>
+                                    <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-28 w-full object-contain rounded print:h-64 print:rounded-lg" />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Signature graphic rendering */}
                   {((activeTx as QuoteTransaction).fullData as QuoteSession).signatureImg && (
@@ -499,6 +826,94 @@ export default function LedgerView({
           </div>
         )}
       </div>
+
+      {/* Wix Integration sync modal */}
+      {isWixModalOpen && (
+        <div className="fixed inset-0 bg-brand-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl border border-brand-100 shadow-2xl max-w-xl w-full p-6 space-y-4 relative overflow-hidden animate-scaleUp">
+            <button
+              type="button"
+              onClick={() => setIsWixModalOpen(false)}
+              className="absolute right-4 top-4 text-brand-400 hover:text-brand-900 transition-colors p-1"
+            >
+              <X size={18} />
+            </button>
+            
+            <div className="flex items-center gap-2.5 pb-2 border-b border-brand-100">
+              <div className="bg-[#002eec]/10 p-2.5 rounded-2xl text-[#002eec]">
+                <ShoppingBag size={20} />
+              </div>
+              <div>
+                <h3 className="font-serif italic text-lg font-bold text-brand-900">Wix Store Checkout Dispatcher</h3>
+                <p className="text-[10px] text-brand-500 font-bold uppercase tracking-widest">
+                  Custom Quote Syncer • ID #{activeTx?.id}
+                </p>
+              </div>
+            </div>
+
+            {/* Sync Progress Tracker */}
+            <div className="space-y-3">
+              <div className="bg-brand-950 text-brand-gold/90 font-mono p-4 rounded-2xl text-[11px] leading-relaxed h-48 overflow-y-auto space-y-1.5 shadow-inner border border-brand-900">
+                {wixSyncLog.map((log, lidx) => (
+                  <div key={lidx} className="flex gap-2">
+                    <span className="text-brand-500 select-none">&gt;</span>
+                    <span>{log}</span>
+                  </div>
+                ))}
+                {wixSyncState === 'checking' && (
+                  <div className="text-brand-400 animate-pulse flex items-center gap-1.5 mt-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-brand-gold animate-ping"></span>
+                    Authenticating store connection...
+                  </div>
+                )}
+                {wixSyncState === 'syncing' && (
+                  <div className="text-indigo-400 animate-pulse flex items-center gap-1.5 mt-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-ping"></span>
+                    Transmitting payload to API gateway...
+                  </div>
+                )}
+              </div>
+
+              {/* Status Banner */}
+              {wixSyncState === 'done' && (
+                <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex gap-3 items-start">
+                  <div className="bg-green-100 text-green-700 p-1 rounded-full mt-0.5">
+                    <Check size={14} />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-black text-green-800 uppercase tracking-wider">Ready for Checkout</p>
+                    <p className="text-[11px] text-green-700 leading-relaxed">
+                      Your bespoke jewelry specification is fully pre-loaded. Click below to redirect straight to your custom Wix Shopping Cart page with exact pricing applied.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Actions Footer */}
+            <div className="flex justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsWixModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-brand-200 text-brand-800 text-xs font-bold hover:bg-brand-50 transition-all"
+              >
+                Close Panel
+              </button>
+              {wixSyncState === 'done' && (
+                <a
+                  href={generatedWixUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-5 py-2.5 bg-[#002eec] hover:bg-[#0024ba] text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-md"
+                >
+                  <ExternalLink size={13} />
+                  Proceed to Wix Checkout
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

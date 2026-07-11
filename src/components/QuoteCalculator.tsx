@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Trash2, Camera, Compass, Type, Tag, HelpCircle, 
   Signature, CheckCircle, Calculator, Sparkles, AlertCircle, FileText,
-  Gem, UserCheck, User
+  Gem, UserCheck, User, Lock, Unlock
 } from 'lucide-react';
 import { 
   QuoteSession, JewelryItem, MeleeItem, FancyItem, ClientStoneItem, 
@@ -887,7 +887,8 @@ export default function QuoteCalculator({
     let designAddons = 0;
     const designAddonsDetails: string[] = [];
 
-    const w = settings.wholesale;
+    const w = (session.wholesaleProfileId && settings.wholesaleProfiles?.find(p => p.id === session.wholesaleProfileId)?.settings)
+              || settings.wholesale;
     const sPGold = Number(session.overridePrices?.gold ?? spotPrices.gold);
     const sPPlat = Number(session.overridePrices?.platinum ?? spotPrices.platinum);
     const sPSilv = Number(session.overridePrices?.silver ?? spotPrices.silver);
@@ -1047,6 +1048,7 @@ export default function QuoteCalculator({
   const [activeCADStyle, setActiveCADStyle] = useState<string | null>(null);
   const [simViewMode, setSimViewMode] = useState<'realistic' | 'blueprint'>('realistic');
   const [isDesignerMode, setIsDesignerMode] = useState(false);
+  const [openDiscounts, setOpenDiscounts] = useState<Record<string, boolean>>({});
 
   // Active ring being edited in the subtab
   const activeRing = session.rings.find(r => r.id === session.activeSubTab);
@@ -1056,9 +1058,11 @@ export default function QuoteCalculator({
     if (!activeRing) return;
     
     if (activeRing.category === 'mensBand') {
-      const calculated = calculateBandWeight(activeRing);
-      if (calculated !== activeRing.goldGrams) {
-        updateActiveRing('goldGrams', calculated);
+      if (!activeRing.mbOverrideWeight) {
+        const calculated = calculateBandWeight(activeRing);
+        if (calculated !== activeRing.goldGrams) {
+          updateActiveRing('goldGrams', calculated);
+        }
       }
     } else if (activeRing.category === 'tennisBracelet') {
       const calculated = getTennisEstimates(activeRing).estGrams;
@@ -1072,6 +1076,7 @@ export default function QuoteCalculator({
     activeRing?.mbWidth,
     activeRing?.mbThickness,
     activeRing?.mbProfile,
+    activeRing?.mbOverrideWeight,
     activeRing?.cRingSize,
     activeRing?.cBandWidth,
     activeRing?.cBandThickness,
@@ -1149,11 +1154,29 @@ export default function QuoteCalculator({
     });
   };
 
+  const addCenterStoneRow = () => {
+    if (!activeRing) return;
+    const current = activeRing.centerStones || [];
+    updateActiveRing('centerStones', [...current, { carats: '', shape: 'Round', setting: 'Round Prongs', type: 'Diamond', origin: 'Lab' }]);
+  };
+
+  const removeCenterStoneRow = (idx: number) => {
+    if (!activeRing) return;
+    const current = activeRing.centerStones || [];
+    updateActiveRing('centerStones', current.filter((_, i) => i !== idx));
+  };
+
+  const updateCenterStoneRow = (idx: number, field: string, value: string) => {
+    if (!activeRing) return;
+    const current = activeRing.centerStones || [];
+    updateActiveRing('centerStones', current.map((cs, i) => i === idx ? { ...cs, [field]: value } : cs));
+  };
+
   // Multi-item lists mutations
   const addMelee = () => {
     if (!activeRing) return;
     const current = activeRing.melee || [];
-    updateActiveRing('melee', [...current, { qty: '', carat: '', size: '1.5' }]);
+    updateActiveRing('melee', [...current, { qty: '', carat: '', size: '' }]);
   };
 
   const removeMelee = (idx: number) => {
@@ -1168,7 +1191,7 @@ export default function QuoteCalculator({
       const nm = { ...m, [field]: val };
       // if size changes, prefill estimated carat weight automatically
       if (field === 'size') {
-        nm.carat = String(ROUND_MELEE[val] || '0.015');
+        nm.carat = val ? String(ROUND_MELEE[val] || '0.000') : '';
       }
       return nm;
     });
@@ -1313,7 +1336,7 @@ export default function QuoteCalculator({
     
     session.rings.forEach(r => {
       if (!hasRingData(r)) return;
-      const cost = calculateRingCost(r, settings, spotPrices, isWholesale ? 'wholesale' : 'retail', session.overridePrices);
+      const cost = calculateRingCost(r, settings, spotPrices, isWholesale ? 'wholesale' : 'retail', session.overridePrices, isWholesale ? session.wholesaleProfileId : undefined);
       grossTotal += cost;
       
       const val = parseFloat(r.discount) || 0;
@@ -1486,7 +1509,7 @@ export default function QuoteCalculator({
       {!isWholesale ? (
         <div className="bg-[#f8fafc] rounded-2xl border border-slate-200/60 p-5 shadow-sm print:hidden">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4">Client Intake</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="text-[10px] font-bold text-slate-500 mb-1 block">CLIENT NAME *</label>
               <input
@@ -1524,13 +1547,33 @@ export default function QuoteCalculator({
                 onChange={(e) => onChangeSession(prev => ({ ...prev, cEmail: e.target.value }))}
               />
             </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 mb-1 block">PIECE DESCRIPTION</label>
+              <input
+                type="text"
+                placeholder="e.g. 1.5ct Solitaire Engagement Ring"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                className="w-full bg-white border border-slate-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-slate-400"
+                value={session.jobDesc}
+                onChange={(e) => onChangeSession(prev => ({ ...prev, jobDesc: e.target.value }))}
+              />
+            </div>
           </div>
         </div>
       ) : (
         <div className="bg-[#f0fdf4] rounded-2xl border border-emerald-100 p-5 shadow-sm space-y-4 print:hidden">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Wholesale Account Intake</h3>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <div>
+          <div className="flex justify-between items-center flex-wrap gap-2">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Wholesale Account Intake</h3>
+            {session.wholesaleProfileId && (
+              <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-2 py-0.5 rounded-full">
+                Custom Rates Active: {settings.wholesaleProfiles?.find(p => p.id === session.wholesaleProfileId)?.name}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+            <div className="md:col-span-2">
               <label className="text-[10px] font-bold text-emerald-700 mb-1 block">JOB # *</label>
               <input
                 type="text"
@@ -1540,7 +1583,7 @@ export default function QuoteCalculator({
                 onChange={(e) => onChangeSession(prev => ({ ...prev, jobNum: e.target.value }))}
               />
             </div>
-            <div className="md:col-span-2">
+            <div className="md:col-span-3">
               <label className="text-[10px] font-bold text-emerald-700 mb-1 block">ITEM DESCRIPTION</label>
               <input
                 type="text"
@@ -1550,7 +1593,30 @@ export default function QuoteCalculator({
                 onChange={(e) => onChangeSession(prev => ({ ...prev, jobDesc: e.target.value }))}
               />
             </div>
-            <div>
+            <div className="md:col-span-3">
+              <label className="text-[10px] font-bold text-emerald-700 mb-1 block">WHOLESALE PROFILE</label>
+              <select
+                className="w-full bg-white border border-emerald-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-emerald-400"
+                value={session.wholesaleProfileId || ""}
+                onChange={(e) => {
+                  const profileId = e.target.value;
+                  onChangeSession(prev => {
+                    const selectedProfile = settings.wholesaleProfiles?.find(p => p.id === profileId);
+                    return {
+                      ...prev,
+                      wholesaleProfileId: profileId || undefined,
+                      cName: selectedProfile ? selectedProfile.name : prev.cName
+                    };
+                  });
+                }}
+              >
+                <option value="">Default Rates</option>
+                {(settings.wholesaleProfiles || []).map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="md:col-span-2">
               <label className="text-[10px] font-bold text-emerald-700 mb-1 block">CLIENT NAME</label>
               <input
                 type="text"
@@ -1563,7 +1629,7 @@ export default function QuoteCalculator({
                 onChange={(e) => onChangeSession(prev => ({ ...prev, cName: e.target.value }))}
               />
             </div>
-            <div>
+            <div className="md:col-span-2">
               <label className="text-[10px] font-bold text-emerald-700 mb-1 block">PHONE</label>
               <input
                 type="tel"
@@ -1642,23 +1708,125 @@ export default function QuoteCalculator({
             <div className="space-y-3.5 border-r border-slate-700/40 pr-0 md:pr-6 text-left">
               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">PIECE BREAKDOWN</div>
               
-              <div className="space-y-2 max-h-56 overflow-y-auto font-mono text-xs">
+              <div className="space-y-2 max-h-64 overflow-y-auto font-mono text-xs">
                 {session.rings.map((r, ri) => {
                   if (!hasRingData(r)) return null;
                   const cost = calculateRingCost(r, settings, spotPrices, 'retail');
                   const discVal = parseFloat(r.discount) || 0;
                   const discDeduction = r.discountType === '%' ? cost * (discVal / 100) : discVal;
                   const finalPieceCost = Math.max(0, cost - discDeduction);
+                  const rawCost = calculateRawCost(r, settings, spotPrices);
+                  const showRawBreakdown = settings.showRawCostOnQuoteTab;
+                  const isDiscountOpen = !!openDiscounts[r.id];
 
                   return (
-                    <div key={r.id} className="flex justify-between items-center text-slate-300">
-                      <span className="truncate font-bold text-slate-200">
-                        Piece {ri + 1}: {r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis'}
-                      </span>
-                      <span className="font-bold text-[#f1c40f]">${finalPieceCost.toFixed(2)}</span>
+                    <div key={r.id} className="space-y-1.5 py-1.5 border-b border-slate-800/40 last:border-0 last:pb-0">
+                      <div className="flex justify-between items-center text-slate-300">
+                        <span className="truncate font-bold text-slate-200 flex items-center gap-1.5">
+                          Piece {ri + 1}: {r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis'}
+                          <button
+                            type="button"
+                            onClick={() => setOpenDiscounts(prev => ({ ...prev, [r.id]: !prev[r.id] }))}
+                            className={`p-1 rounded-lg transition-all cursor-pointer ${
+                              discVal > 0 
+                                ? 'bg-amber-400/20 text-amber-300 hover:bg-amber-400/30' 
+                                : isDiscountOpen
+                                  ? 'bg-slate-700 text-white'
+                                  : 'bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-700'
+                            }`}
+                            title="Apply Discount"
+                          >
+                            <Tag size={10} className={discVal > 0 ? "animate-pulse" : ""} />
+                          </button>
+                        </span>
+                        <div className="flex flex-col items-end">
+                          <span className="font-bold text-[#f1c40f]">${finalPieceCost.toFixed(2)}</span>
+                          {discVal > 0 && (
+                            <span className="text-[9px] text-red-400 font-bold font-mono">
+                              (Disc. -{r.discountType === '%' ? `${discVal}%` : `$${discVal}`})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Interactive Discount Area (Toggleable) */}
+                      {isDiscountOpen && (
+                        <div className="flex items-center gap-1.5 mt-1 bg-slate-950/80 border border-slate-800/80 px-2 py-1.5 rounded-xl transition-all animate-fadeIn">
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider shrink-0">Discount:</span>
+                          <div className="flex rounded-lg overflow-hidden border border-slate-700/80 shrink-0 bg-slate-950">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onChangeSession(prev => ({
+                                  ...prev,
+                                  rings: prev.rings.map(item => item.id === r.id ? { ...item, discountType: '$' } : item)
+                                }));
+                              }}
+                              className={`px-2 py-0.5 text-[10px] font-black transition-all ${r.discountType === '$' || !r.discountType ? 'bg-brand-gold text-slate-950 font-extrabold shadow-inner' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
+                            >
+                              $
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onChangeSession(prev => ({
+                                  ...prev,
+                                  rings: prev.rings.map(item => item.id === r.id ? { ...item, discountType: '%' } : item)
+                                }));
+                              }}
+                              className={`px-2 py-0.5 text-[10px] font-black transition-all ${r.discountType === '%' ? 'bg-brand-gold text-slate-950 font-extrabold shadow-inner' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
+                            >
+                              %
+                            </button>
+                          </div>
+                          <input
+                            type="number"
+                            value={r.discount || ''}
+                            placeholder="0"
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              onChangeSession(prev => ({
+                                ...prev,
+                                rings: prev.rings.map(item => item.id === r.id ? { ...item, discount: val } : item)
+                              }));
+                            }}
+                            className="w-16 bg-slate-950 border border-slate-800 text-[11px] text-[#f1c40f] font-mono font-bold text-center rounded-lg px-1.5 py-0.5 outline-none focus:border-brand-gold focus:ring-1 focus:ring-brand-gold"
+                          />
+                          {discVal > 0 && (
+                            <span className="text-[10px] text-red-400 font-bold ml-auto font-mono">
+                              -${discDeduction.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {showRawBreakdown && (
+                        <div className="flex justify-between items-center text-[10px] text-amber-400 bg-amber-950/40 border border-amber-900/50 px-2 py-1 rounded-lg mt-1 font-bold animate-fadeIn">
+                          <span className="uppercase tracking-wider flex items-center gap-1">
+                            <Sparkles size={10} className="text-brand-gold animate-pulse" />
+                            Internal Raw Cost:
+                          </span>
+                          <span>${rawCost.toFixed(2)}</span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
+
+                {settings.showRawCostOnQuoteTab && (() => {
+                  let totalSessionRawCost = 0;
+                  session.rings.forEach(r => {
+                    if (hasRingData(r)) {
+                      totalSessionRawCost += calculateRawCost(r, settings, spotPrices);
+                    }
+                  });
+                  return (
+                    <div className="flex justify-between items-center text-amber-300 font-bold border-t border-dashed border-amber-900/50 pt-2 pb-1 bg-amber-950/20 px-2.5 rounded-lg border border-amber-900/30 animate-fadeIn">
+                      <span className="uppercase text-[9px] tracking-wider">Total Est. Raw Cost:</span>
+                      <span>${totalSessionRawCost.toFixed(2)}</span>
+                    </div>
+                  );
+                })()}
 
                 {Number(session.scrapCredit) > 0 && (
                   <div className="flex justify-between items-center text-green-400 font-bold border-t border-slate-800 pt-1.5">
@@ -1987,6 +2155,59 @@ export default function QuoteCalculator({
                           value={activeRing.goldGrams}
                           onChange={(e) => updateActiveRing('goldGrams', e.target.value)}
                         />
+                      </div>
+                    ) : activeRing.category === 'mensBand' ? (
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[9px] font-black text-brand-400 uppercase tracking-wider block">Metal weight</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextOverride = !activeRing.mbOverrideWeight;
+                              updateActiveRing('mbOverrideWeight', nextOverride);
+                              if (!nextOverride) {
+                                // If locking it, reset back to calculated value immediately
+                                const calculated = calculateBandWeight(activeRing);
+                                updateActiveRing('goldGrams', calculated);
+                              }
+                            }}
+                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition-all ${
+                              activeRing.mbOverrideWeight
+                                ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300'
+                                : 'bg-brand-100 text-brand-800 hover:bg-brand-200 border border-brand-200'
+                            }`}
+                          >
+                            {activeRing.mbOverrideWeight ? (
+                              <>
+                                <Unlock size={10} className="text-amber-600 shrink-0" />
+                                Unlocked (Override)
+                              </>
+                            ) : (
+                              <>
+                                <Lock size={10} className="text-brand-600 shrink-0" />
+                                Locked (Calculated)
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        {activeRing.mbOverrideWeight ? (
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.01"
+                              placeholder="0.00"
+                              className="w-full bg-amber-50/30 border border-amber-300 p-2.5 pr-8 rounded-xl text-xs font-bold text-brand-900 no-spinner font-mono"
+                              value={activeRing.goldGrams}
+                              onChange={(e) => updateActiveRing('goldGrams', e.target.value)}
+                            />
+                            <span className="absolute right-3 top-2.5 text-xs text-brand-400 font-bold font-mono">g</span>
+                          </div>
+                        ) : (
+                          <div className="bg-brand-50/50 border border-brand-200/60 p-2.5 rounded-xl text-xs font-bold text-brand-800 font-mono flex justify-between items-center">
+                            <span>{activeRing.goldGrams || '0.00'}g</span>
+                            <span className="text-[9px] text-brand-400 font-black uppercase tracking-wider font-sans">Auto-Calculated</span>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div>
@@ -2861,146 +3082,90 @@ export default function QuoteCalculator({
               <div className="space-y-4">
               <div className="flex justify-between items-center border-b border-brand-50 pb-1">
                 <h3 className="text-[10px] font-black text-brand-400 uppercase tracking-wider block">2. Stone Supply & Setting</h3>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => updateActiveRing('stoneSource', 'our')}
-                    className={`px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-wider border transition-all flex items-center gap-1 ${activeRing.stoneSource === 'our' ? 'bg-brand-900 text-brand-gold border-brand-900 shadow-sm' : 'bg-brand-50 text-brand-500 border-brand-200 hover:bg-brand-100'}`}
-                  >
-                    <Gem size={10} className="shrink-0 text-brand-gold" />
-                    Our Stones
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateActiveRing('stoneSource', 'customer')}
-                    className={`px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-wider border transition-all flex items-center gap-1 ${activeRing.stoneSource === 'customer' ? 'bg-brand-900 text-brand-gold border-brand-900 shadow-sm' : 'bg-brand-50 text-brand-500 border-brand-200 hover:bg-brand-100'}`}
-                  >
-                    <UserCheck size={10} className="shrink-0 text-brand-gold" />
-                    Client Stones
-                  </button>
-                </div>
               </div>
 
               {/* CENTER STONE(S) PARAMETERS */}
-              {['customRing', 'pendant', 'earrings'].includes(activeRing.category) && activeRing.centerStone && (
-                <div className="space-y-3 p-4 bg-brand-50/50 rounded-2xl border border-brand-100">
-                  <p className="text-[9px] font-black text-brand-700 uppercase tracking-wider mb-1">Center Diamond Details</p>
-                  
-                  <div className="grid grid-cols-2 gap-3.5">
-                    <div>
-                      <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Carat Weight</label>
-                      <input
-                        type="number"
-                        placeholder="1.00"
-                        className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
-                        value={activeRing.centerStone.carats}
-                        onChange={(e) => updateCenterStone('carats', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Stone Type</label>
-                      <select
-                        className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
-                        value={activeRing.centerStone.type}
-                        onChange={(e) => updateCenterStone('type', e.target.value)}
-                      >
-                        {Object.keys(settings.centerStoneRates).map(st => <option key={st} value={st}>{st}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Shape (Cut)</label>
-                      <div className="flex gap-1.5 items-center">
-                        <select
-                          className="flex-1 min-w-0 bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
-                          value={activeRing.centerStone.shape}
-                          onChange={(e) => updateCenterStone('shape', e.target.value)}
-                        >
-                          {CENTER_SHAPES.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                        <div className="w-9 h-9 flex items-center justify-center bg-brand-50/80 border border-brand-200 rounded-lg shrink-0 p-1.5 text-brand-gold shadow-sm" title={activeRing.centerStone.shape}>
-                          <DiamondShapeIcon shape={activeRing.centerStone.shape} className="w-full h-full" />
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Setting Style</label>
-                      <select
-                        className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
-                        value={activeRing.centerStone.setting}
-                        onChange={(e) => updateCenterStone('setting', e.target.value)}
-                      >
-                        {SETTING_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                    <div className="col-span-2">
-                      <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Origin</label>
-                      <select
-                        className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
-                        value={activeRing.centerStone.origin}
-                        onChange={(e) => updateCenterStone('origin', e.target.value)}
-                      >
-                        <option value="Lab">Lab-grown</option>
-                        <option value="Natural">Natural</option>
-                      </select>
-                    </div>
+              {['customRing', 'pendant', 'earrings'].includes(activeRing.category) && (
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center bg-amber-50/70 p-2.5 rounded-xl border border-amber-200/70">
+                    <span className="text-[10px] font-extrabold text-amber-900 uppercase tracking-widest flex items-center gap-1.5">
+                      <Gem size={12} className="text-amber-500" /> Supplied Center Stones
+                    </span>
+                    <button
+                      type="button"
+                      onClick={addCenterStoneRow}
+                      className="text-[9px] font-bold uppercase tracking-widest bg-white hover:bg-amber-100/50 text-amber-900 border border-amber-200/80 hover:border-amber-300 px-3 py-1.5 rounded-lg shadow-sm hover:shadow transition-all duration-150 flex items-center gap-1 active:scale-[0.98] cursor-pointer"
+                    >
+                      <Plus size={10} /> Add Supplied Center Stone
+                    </button>
                   </div>
 
-                  {/* EARRING CENTER STONE 2 (IF PAIR) */}
-                  {activeRing.category === 'earrings' && activeRing.centerStone2 && (
-                    <div className="border-t border-brand-100 pt-3 mt-2 space-y-2">
-                      <p className="text-[9px] font-black text-brand-700 uppercase tracking-wider">Earring Stone 2 Details (Symmetrical match)</p>
+                  {activeRing.centerStones && activeRing.centerStones.map((cs, idx) => (
+                    <div key={idx} className="space-y-3 p-4 bg-amber-50/20 rounded-2xl border border-amber-200/40 mt-2 relative group/item">
+                      <div className="flex justify-between items-center mb-1 border-b border-amber-100/40 pb-2">
+                        <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-widest flex items-center gap-1">
+                          <Gem size={10} className="text-amber-500" /> Supplied Center Stone #{idx + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeCenterStoneRow(idx)}
+                          className="text-[9px] font-bold uppercase tracking-widest bg-white hover:bg-red-50 text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 px-2.5 py-1.5 rounded-lg shadow-sm hover:shadow transition-all duration-150 flex items-center gap-1 active:scale-[0.98] cursor-pointer"
+                        >
+                          <Trash2 size={10} /> Remove Stone
+                        </button>
+                      </div>
                       <div className="grid grid-cols-2 gap-3.5">
                         <div>
-                          <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Carat Weight</label>
+                          <label className="text-[9px] font-bold text-amber-800/60 block mb-0.5 uppercase tracking-wide">Carat Weight</label>
                           <input
                             type="number"
                             placeholder="1.00"
-                            className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
-                            value={activeRing.centerStone2.carats}
-                            onChange={(e) => updateCenterStone2('carats', e.target.value)}
+                            className="w-full bg-white border border-amber-200 p-2 rounded-lg text-xs font-bold focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                            value={cs.carats}
+                            onChange={(e) => updateCenterStoneRow(idx, 'carats', e.target.value)}
                           />
                         </div>
                         <div>
-                          <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Stone Type</label>
+                          <label className="text-[9px] font-bold text-amber-800/60 block mb-0.5 uppercase tracking-wide">Stone Type</label>
                           <select
-                            className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
-                            value={activeRing.centerStone2.type}
-                            onChange={(e) => updateCenterStone2('type', e.target.value)}
+                            className="w-full bg-white border border-amber-200 p-2 rounded-lg text-xs font-bold focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                            value={cs.type}
+                            onChange={(e) => updateCenterStoneRow(idx, 'type', e.target.value)}
                           >
                             {Object.keys(settings.centerStoneRates).map(st => <option key={st} value={st}>{st}</option>)}
                           </select>
                         </div>
                         <div>
-                          <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Shape (Cut)</label>
+                          <label className="text-[9px] font-bold text-amber-800/60 block mb-0.5 uppercase tracking-wide">Shape (Cut)</label>
                           <div className="flex gap-1.5 items-center">
                             <select
-                              className="flex-1 min-w-0 bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
-                              value={activeRing.centerStone2.shape}
-                              onChange={(e) => updateCenterStone2('shape', e.target.value)}
+                              className="flex-1 min-w-0 bg-white border border-amber-200 p-2 rounded-lg text-xs font-bold focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                              value={cs.shape}
+                              onChange={(e) => updateCenterStoneRow(idx, 'shape', e.target.value)}
                             >
                               {CENTER_SHAPES.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
-                            <div className="w-9 h-9 flex items-center justify-center bg-brand-50/80 border border-brand-200 rounded-lg shrink-0 p-1.5 text-brand-gold shadow-sm" title={activeRing.centerStone2.shape}>
-                              <DiamondShapeIcon shape={activeRing.centerStone2.shape} className="w-full h-full" />
+                            <div className="w-9 h-9 flex items-center justify-center bg-amber-50/80 border border-amber-200 rounded-lg shrink-0 p-1.5 text-amber-600 shadow-sm" title={cs.shape}>
+                              <DiamondShapeIcon shape={cs.shape} className="w-full h-full" />
                             </div>
                           </div>
                         </div>
                         <div>
-                          <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Setting Style</label>
+                          <label className="text-[9px] font-bold text-amber-800/60 block mb-0.5 uppercase tracking-wide">Setting Style</label>
                           <select
-                            className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
-                            value={activeRing.centerStone2.setting}
-                            onChange={(e) => updateCenterStone2('setting', e.target.value)}
+                            className="w-full bg-white border border-amber-200 p-2 rounded-lg text-xs font-bold focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                            value={cs.setting}
+                            onChange={(e) => updateCenterStoneRow(idx, 'setting', e.target.value)}
                           >
                             {SETTING_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
                         </div>
                         <div className="col-span-2">
-                          <label className="text-[9px] font-bold text-brand-400 block mb-0.5 uppercase tracking-wide">Origin</label>
+                          <label className="text-[9px] font-bold text-amber-800/60 block mb-0.5 uppercase tracking-wide">Origin</label>
                           <select
-                            className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
-                            value={activeRing.centerStone2.origin}
-                            onChange={(e) => updateCenterStone2('origin', e.target.value)}
+                            className="w-full bg-white border border-amber-200 p-2 rounded-lg text-xs font-bold focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                            value={cs.origin}
+                            onChange={(e) => updateCenterStoneRow(idx, 'origin', e.target.value)}
                           >
                             <option value="Lab">Lab-grown</option>
                             <option value="Natural">Natural</option>
@@ -3008,27 +3173,27 @@ export default function QuoteCalculator({
                         </div>
                       </div>
                     </div>
-                  )}
+                  ))}
                 </div>
               )}
 
               {/* MELEE DIAMONDS EXPANDABLE ROWS */}
               {activeRing.stoneSource === 'our' && activeRing.category !== 'tennisBracelet' && (
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center bg-brand-50/50 p-2.5 rounded-xl border border-brand-100">
-                    <span className="text-[9px] font-black text-brand-700 uppercase tracking-wider flex items-center gap-1.5">
-                      <Gem size={11} className="text-brand-500" /> Supplied Round Melee
+                  <div className="flex justify-between items-center bg-sky-50/70 p-2.5 rounded-xl border border-sky-200/70">
+                    <span className="text-[10px] font-extrabold text-sky-900 uppercase tracking-widest flex items-center gap-1.5">
+                      <Gem size={12} className="text-sky-500" /> Supplied Round Melee
                     </span>
                     <button
                       type="button"
                       onClick={addMelee}
-                      className="text-[9px] font-black bg-white hover:bg-brand-50 text-brand-800 border border-brand-200 px-2.5 py-1 rounded shadow-sm flex items-center gap-0.5"
+                      className="text-[9px] font-bold uppercase tracking-widest bg-white hover:bg-sky-100/50 text-sky-900 border border-sky-200/80 hover:border-sky-300 px-3 py-1.5 rounded-lg shadow-sm hover:shadow transition-all duration-150 flex items-center gap-1 active:scale-[0.98] cursor-pointer"
                     >
                       <Plus size={10} /> Add Melee Row
                     </button>
                   </div>
                   {activeRing.melee && activeRing.melee.length > 0 && (
-                    <div className="grid grid-cols-12 gap-2 px-2.5 text-[8px] font-black text-brand-400 uppercase tracking-wider">
+                    <div className="grid grid-cols-12 gap-2 px-2.5 text-[8px] font-black text-sky-800/60 uppercase tracking-wider">
                       <div className="col-span-2">Stones Qty</div>
                       <div className="col-span-5">Size (mm)</div>
                       <div className="col-span-4">Total Carats (ctw)</div>
@@ -3036,30 +3201,35 @@ export default function QuoteCalculator({
                     </div>
                   )}
                   {activeRing.melee?.map((m, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-brand-50/20 p-2.5 rounded-xl border border-brand-100">
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-sky-50/20 p-2.5 rounded-xl border border-sky-200/40">
                       <div className="col-span-2">
                         <input
                           type="number"
-                          className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                          className="w-full bg-white border border-sky-200/60 p-1.5 rounded text-xs font-bold focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
                           value={m.qty}
                           onChange={(e) => updateMelee(idx, 'qty', e.target.value)}
                         />
                       </div>
                       <div className="col-span-5">
                         <select
-                          className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                          className={`w-full bg-white border border-sky-200/60 p-1.5 rounded text-xs focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all ${
+                            m.size === '' ? 'text-slate-400 font-medium' : 'text-slate-800 font-bold'
+                          }`}
                           value={m.size}
                           onChange={(e) => updateMelee(idx, 'size', e.target.value)}
                         >
+                          <option value="" className="text-slate-400 font-medium bg-white">Select Size...</option>
                           {Object.keys(ROUND_MELEE).map(sz => (
-                            <option key={sz} value={sz}>{sz}mm ({ROUND_MELEE[sz]}ct)</option>
+                            <option key={sz} value={sz} className="text-slate-800 font-bold bg-white">
+                              {sz}mm ({ROUND_MELEE[sz]}ct)
+                            </option>
                           ))}
                         </select>
                       </div>
                       <div className="col-span-4">
                         <input
                           type="number"
-                          className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                          className="w-full bg-sky-50/50 border border-sky-200/40 p-1.5 rounded text-xs font-bold text-sky-900/60"
                           value={(Number(m.qty) * Number(m.carat)).toFixed(3)}
                           disabled
                         />
@@ -3068,7 +3238,7 @@ export default function QuoteCalculator({
                         <button
                           type="button"
                           onClick={() => removeMelee(idx)}
-                          className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded flex items-center justify-center mx-auto"
+                          className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded flex items-center justify-center mx-auto transition-all"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -3081,20 +3251,20 @@ export default function QuoteCalculator({
               {/* FANCY MELEE EXPANDABLE ROWS */}
               {activeRing.stoneSource === 'our' && activeRing.category !== 'tennisBracelet' && (
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center bg-brand-50/50 p-2.5 rounded-xl border border-brand-100">
-                    <span className="text-[9px] font-black text-brand-700 uppercase tracking-wider flex items-center gap-1.5">
-                      <Sparkles size={11} className="text-brand-500 animate-pulse" /> Supplied Fancy Melee
+                  <div className="flex justify-between items-center bg-violet-50/70 p-2.5 rounded-xl border border-violet-200/70">
+                    <span className="text-[10px] font-extrabold text-violet-900 uppercase tracking-widest flex items-center gap-1.5">
+                      <Sparkles size={12} className="text-violet-500 animate-pulse" /> Supplied Fancy Melee
                     </span>
                     <button
                       type="button"
                       onClick={addFancy}
-                      className="text-[9px] font-black bg-white hover:bg-brand-50 text-brand-800 border border-brand-200 px-2.5 py-1 rounded shadow-sm flex items-center gap-0.5"
+                      className="text-[9px] font-bold uppercase tracking-widest bg-white hover:bg-violet-100/50 text-violet-900 border border-violet-200/80 hover:border-violet-300 px-3 py-1.5 rounded-lg shadow-sm hover:shadow transition-all duration-150 flex items-center gap-1 active:scale-[0.98] cursor-pointer"
                     >
                       <Plus size={10} /> Add Fancy Row
                     </button>
                   </div>
                   {activeRing.fancy && activeRing.fancy.length > 0 && (
-                    <div className="grid grid-cols-12 gap-2 px-2.5 text-[8px] font-black text-brand-400 uppercase tracking-wider">
+                    <div className="grid grid-cols-12 gap-2 px-2.5 text-[8px] font-black text-violet-800/60 uppercase tracking-wider">
                       <div className="col-span-2">Stones Qty</div>
                       <div className="col-span-5">Cut/Shape</div>
                       <div className="col-span-4">Carat Size</div>
@@ -3105,18 +3275,18 @@ export default function QuoteCalculator({
                     const sizes = FANCY_SHAPES[f.shape] || [];
                     const activeSize = sizes[f.sizeIdx] || { carat: 0 };
                     return (
-                      <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-brand-50/20 p-2.5 rounded-xl border border-brand-100">
+                      <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-violet-50/20 p-2.5 rounded-xl border border-violet-200/40">
                         <div className="col-span-2">
                           <input
                             type="number"
-                            className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                            className="w-full bg-white border border-violet-200/60 p-1.5 rounded text-xs font-bold focus:border-violet-400 focus:ring-1 focus:ring-violet-400"
                             value={f.qty}
                             onChange={(e) => updateFancy(idx, 'qty', e.target.value)}
                           />
                         </div>
                         <div className="col-span-5">
                           <select
-                            className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                            className="w-full bg-white border border-violet-200/60 p-1.5 rounded text-xs font-bold focus:border-violet-400 focus:ring-1 focus:ring-violet-400"
                             value={f.shape}
                             onChange={(e) => updateFancy(idx, 'shape', e.target.value)}
                           >
@@ -3125,7 +3295,7 @@ export default function QuoteCalculator({
                         </div>
                         <div className="col-span-4">
                           <select
-                            className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                            className="w-full bg-white border border-violet-200/60 p-1.5 rounded text-xs font-bold focus:border-violet-400 focus:ring-1 focus:ring-violet-400"
                             value={f.sizeIdx}
                             onChange={(e) => updateFancy(idx, 'sizeIdx', parseInt(e.target.value))}
                           >
@@ -3138,7 +3308,7 @@ export default function QuoteCalculator({
                           <button
                             type="button"
                             onClick={() => removeFancy(idx)}
-                            className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded flex items-center justify-center mx-auto"
+                            className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded flex items-center justify-center mx-auto transition-all"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -3151,20 +3321,20 @@ export default function QuoteCalculator({
 
               {/* CLIENT STONES EXPANDABLE ROWS (SETTING LABOR ONLY) */}
               <div className="space-y-2">
-                <div className="flex justify-between items-center bg-brand-50/50 p-2.5 rounded-xl border border-brand-100">
-                  <span className="text-[9px] font-black text-brand-700 uppercase tracking-wider flex items-center gap-1.5">
-                    <UserCheck size={11} className="text-brand-500" /> Client-Owned Setting Fees
+                <div className="flex justify-between items-center bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200/70">
+                  <span className="text-[10px] font-extrabold text-emerald-900 uppercase tracking-widest flex items-center gap-1.5">
+                    <UserCheck size={12} className="text-emerald-500" /> Client-Owned Setting Fees
                   </span>
                   <button
                     type="button"
                     onClick={addClientStone}
-                    className="text-[9px] font-black bg-white hover:bg-brand-50 text-brand-800 border border-brand-200 px-2.5 py-1 rounded shadow-sm flex items-center gap-0.5"
+                    className="text-[9px] font-bold uppercase tracking-widest bg-white hover:bg-emerald-100/50 text-emerald-900 border border-emerald-200/80 hover:border-emerald-300 px-3 py-1.5 rounded-lg shadow-sm hover:shadow transition-all duration-150 flex items-center gap-1 active:scale-[0.98] cursor-pointer"
                   >
                     <Plus size={10} /> Add Client Setting Fee Row
                   </button>
                 </div>
                 {activeRing.clientStones && activeRing.clientStones.length > 0 && (
-                  <div className="grid grid-cols-12 gap-2 px-2.5 text-[8px] font-black text-brand-400 uppercase tracking-wider">
+                  <div className="grid grid-cols-12 gap-2 px-2.5 text-[8px] font-black text-emerald-800/60 uppercase tracking-wider">
                     <div className="col-span-2">Stones Qty</div>
                     <div className="col-span-3">Category</div>
                     <div className="col-span-6">Stone Details / Size / Carats</div>
@@ -3179,18 +3349,18 @@ export default function QuoteCalculator({
                   const currentSizeIdx = c.sizeIdx !== undefined ? c.sizeIdx : 0;
 
                   return (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-brand-50/20 p-2.5 rounded-xl border border-brand-100">
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-emerald-50/20 p-2.5 rounded-xl border border-emerald-200/40">
                       <div className="col-span-2">
                         <input
                           type="number"
-                          className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                          className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
                           value={c.qty}
                           onChange={(e) => updateClientStone(idx, 'qty', e.target.value)}
                         />
                       </div>
                       <div className="col-span-3">
                         <select
-                          className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                          className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
                           value={c.type}
                           onChange={(e) => updateClientStone(idx, 'type', e.target.value as any)}
                         >
@@ -3204,7 +3374,7 @@ export default function QuoteCalculator({
                         {isFancy ? (
                           <div className="grid grid-cols-2 gap-2">
                             <select
-                              className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                              className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
                               value={currentShape}
                               onChange={(e) => {
                                 updateClientStone(idx, 'shape', e.target.value);
@@ -3214,7 +3384,7 @@ export default function QuoteCalculator({
                               {shapes.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                             <select
-                              className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                              className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
                               value={currentSizeIdx}
                               onChange={(e) => updateClientStone(idx, 'sizeIdx', parseInt(e.target.value))}
                             >
@@ -3226,7 +3396,7 @@ export default function QuoteCalculator({
                         ) : c.type === 'Melee' ? (
                           <div className="grid grid-cols-2 gap-2">
                             <select
-                              className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                              className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
                               value={c.size || '1.5'}
                               onChange={(e) => updateClientStone(idx, 'size', e.target.value)}
                             >
@@ -3236,7 +3406,7 @@ export default function QuoteCalculator({
                             </select>
                             <input
                               type="text"
-                              className="w-full bg-slate-50 border border-brand-200 p-1.5 rounded text-xs font-bold text-slate-500"
+                              className="w-full bg-emerald-50/50 border border-emerald-200/40 p-1.5 rounded text-xs font-bold text-emerald-900/60"
                               value={c.carats ? `${c.carats} ctw` : '0.000 ctw'}
                               disabled
                             />
@@ -3246,14 +3416,14 @@ export default function QuoteCalculator({
                             <input
                               type="text"
                               placeholder="Size (e.g. 6.5mm)"
-                              className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                              className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
                               value={c.size || ''}
                               onChange={(e) => updateClientStone(idx, 'size', e.target.value)}
                             />
                             <input
                               type="number"
                               placeholder="Total Carats"
-                              className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                              className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
                               value={c.carats}
                               onChange={(e) => updateClientStone(idx, 'carats', e.target.value)}
                             />
@@ -3265,7 +3435,7 @@ export default function QuoteCalculator({
                         <button
                           type="button"
                           onClick={() => removeClientStone(idx)}
-                          className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded flex items-center justify-center mx-auto"
+                          className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded flex items-center justify-center mx-auto transition-all"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -3282,43 +3452,45 @@ export default function QuoteCalculator({
               
               {/* Addons List */}
               <div className="space-y-2">
-                <div className="flex justify-between items-center bg-brand-50/50 p-2.5 rounded-xl border border-brand-100">
-                  <span className="text-[9px] font-black text-brand-700 uppercase tracking-wider">Custom Addon</span>
+                <div className="flex justify-between items-center bg-rose-50/70 p-2.5 rounded-xl border border-rose-200/70">
+                  <span className="text-[10px] font-extrabold text-rose-900 uppercase tracking-widest flex items-center gap-1.5">
+                    <Tag size={12} className="text-rose-500" /> Custom Addon Fees
+                  </span>
                   <button
                     type="button"
                     onClick={addAddon}
-                    className="text-[9px] font-black bg-white hover:bg-brand-50 text-brand-800 border border-brand-200 px-2.5 py-1 rounded shadow-sm flex items-center gap-0.5"
+                    className="text-[9px] font-bold uppercase tracking-widest bg-white hover:bg-rose-100/50 text-rose-900 border border-rose-200/80 hover:border-rose-300 px-3 py-1.5 rounded-lg shadow-sm hover:shadow transition-all duration-150 flex items-center gap-1 active:scale-[0.98] cursor-pointer"
                   >
                     <Plus size={10} /> Add Fee Row
                   </button>
                 </div>
                 {activeRing.addons?.map((a, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-brand-50/20 p-2.5 rounded-xl border border-brand-100">
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-rose-50/20 p-2.5 rounded-xl border border-rose-200/40">
                     <div className="col-span-4">
-                      <label className="text-[8px] text-brand-400 uppercase">Fee Amount ($)</label>
+                      <label className="text-[8px] text-rose-800/70 font-bold uppercase block mb-0.5">Fee Amount ($)</label>
                       <input
                         type="number"
                         placeholder="100"
-                        className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                        className="w-full bg-white border border-rose-200/60 p-1.5 rounded text-xs font-bold focus:border-rose-400 focus:ring-1 focus:ring-rose-400"
                         value={a.fee}
                         onChange={(e) => updateAddon(idx, 'fee', e.target.value)}
                       />
                     </div>
                     <div className="col-span-7">
-                      <label className="text-[8px] text-brand-400 uppercase">Fee Description</label>
+                      <label className="text-[8px] text-rose-800/70 font-bold uppercase block mb-0.5">Fee Description</label>
                       <input
                         type="text"
                         placeholder="french pave, 2 tone, appraisal"
-                        className="w-full bg-white border border-brand-200 p-1.5 rounded text-xs font-bold"
+                        className="w-full bg-white border border-rose-200/60 p-1.5 rounded text-xs font-bold focus:border-rose-400 focus:ring-1 focus:ring-rose-400"
                         value={a.desc}
                         onChange={(e) => updateAddon(idx, 'desc', e.target.value)}
                       />
                     </div>
-                    <div className="col-span-1 text-center">
+                    <div className="col-span-1 text-center pt-4">
                       <button
                         type="button"
                         onClick={() => removeAddon(idx)}
-                        className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded"
+                        className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition-all"
                       >
                         <Trash2 size={13} />
                       </button>
@@ -3352,21 +3524,22 @@ export default function QuoteCalculator({
                         onChange={(e) => updateActiveRing('engravingText', e.target.value)}
                       />
                       <select
-                        className="w-full bg-white border border-brand-200 p-2 rounded-xl text-xs font-bold"
+                        className="w-full bg-white border border-brand-200 p-2 rounded-xl text-sm font-bold cursor-pointer transition-all focus:border-brand-300"
+                        style={{ fontFamily: activeRing.engravingFont }}
                         value={activeRing.engravingFont}
                         onChange={(e) => updateActiveRing('engravingFont', e.target.value)}
                       >
-                        <option value="'Times New Roman', Times, serif">Times New Roman</option>
-                        <option value="Tahoma, Geneva, sans-serif">Tahoma</option>
-                        <option value="'Great Vibes', cursive">Great Vibes (Calligraphy)</option>
-                        <option value="'Dancing Script', cursive">Dancing Script (Elegant Hand)</option>
-                        <option value="'Cinzel', serif">Cinzel (Roman Capital)</option>
-                        <option value="'Alex Brush', cursive">Alex Brush (Brush Script)</option>
-                        <option value="'Pinyon Script', cursive">Pinyon Script (Classic Script)</option>
-                        <option value="'Petit Formal Script', cursive">Petit Formal Script</option>
-                        <option value="'Allura', cursive">Allura (Satin Script)</option>
-                        <option value="'Parisienne', cursive">Parisienne (Romantic Calligraphy)</option>
-                        <option value="Georgia, serif">Georgia (Classic Serif)</option>
+                        <option style={{ fontFamily: "'Times New Roman', Times, serif" }} value="'Times New Roman', Times, serif">Times New Roman</option>
+                        <option style={{ fontFamily: "Tahoma, Geneva, sans-serif" }} value="Tahoma, Geneva, sans-serif">Tahoma</option>
+                        <option style={{ fontFamily: "'Great Vibes', cursive" }} value="'Great Vibes', cursive">Great Vibes (Calligraphy)</option>
+                        <option style={{ fontFamily: "'Dancing Script', cursive" }} value="'Dancing Script', cursive">Dancing Script (Elegant Hand)</option>
+                        <option style={{ fontFamily: "'Cinzel', serif" }} value="'Cinzel', serif">Cinzel (Roman Capital)</option>
+                        <option style={{ fontFamily: "'Alex Brush', cursive" }} value="'Alex Brush', cursive">Alex Brush (Brush Script)</option>
+                        <option style={{ fontFamily: "'Pinyon Script', cursive" }} value="'Pinyon Script', cursive">Pinyon Script (Classic Script)</option>
+                        <option style={{ fontFamily: "'Petit Formal Script', cursive" }} value="'Petit Formal Script', cursive">Petit Formal Script</option>
+                        <option style={{ fontFamily: "'Allura', cursive" }} value="'Allura', cursive">Allura (Satin Script)</option>
+                        <option style={{ fontFamily: "'Parisienne', cursive" }} value="'Parisienne', cursive">Parisienne (Romantic Calligraphy)</option>
+                        <option style={{ fontFamily: "Georgia, serif" }} value="Georgia, serif">Georgia (Classic Serif)</option>
                       </select>
                     </div>
 
@@ -3667,10 +3840,10 @@ export default function QuoteCalculator({
                 {/* Invoice Header */}
                 <div className="flex justify-between items-start border-b border-brand-200 pb-6 print:pb-3">
                   <div>
-                    <h1 className="font-serif italic font-black text-3xl text-brand-900 tracking-tight print:text-2xl">Gold & Rose</h1>
-                    <p className="text-[10px] text-brand-500 font-mono uppercase tracking-widest mt-1 print:text-[8px]">Jewellery Corporation</p>
-                    <p className="text-xs text-brand-600 mt-2 print:text-[10px] print:mt-1">Suite 120 - 4590 Kingsway, Burnaby, BC</p>
-                    <p className="text-xs text-brand-600 print:text-[10px]">info@goldandrose.com | 604-555-0192</p>
+                    <h1 className="font-serif italic font-black text-3xl text-brand-900 tracking-tight print:text-2xl">{settings.storeName || 'Gold & Rose'}</h1>
+                    <p className="text-[10px] text-brand-500 font-mono uppercase tracking-widest mt-1 print:text-[8px]">{settings.storeSubName || 'Jewellery Corporation'}</p>
+                    <p className="text-xs text-brand-600 mt-2 print:text-[10px] print:mt-1">{settings.storeAddress || '4501 North Rd #209, Burnaby, BC V3N 4J5'}</p>
+                    <p className="text-xs text-brand-600 print:text-[10px]">{settings.storeContact || 'info@goldandrosejewellery.com | (604) 420-9077'}</p>
                   </div>
                   <div className="text-right">
                     <span className="bg-brand-900 text-brand-gold px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md print:px-3 print:py-1 print:text-[8px]">
@@ -3691,7 +3864,9 @@ export default function QuoteCalculator({
                   </div>
                   {session.jobDesc && (
                     <div>
-                      <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2 print:mb-0.5 print:text-[8px]">Design Description</h3>
+                      <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2 print:mb-0.5 print:text-[8px]">
+                        {isWholesale ? 'Design Description' : 'Piece Description'}
+                      </h3>
                       <p className="text-xs text-brand-700 leading-relaxed italic print:text-[10px] print:leading-snug">"{session.jobDesc}"</p>
                     </div>
                   )}
@@ -3713,7 +3888,7 @@ export default function QuoteCalculator({
                       </thead>
                       <tbody className="divide-y divide-brand-100">
                         {session.rings.filter(r => hasRingData(r)).map((r, ri) => {
-                          const cost = calculateRingCost(r, settings, spotPrices, isWholesale ? 'wholesale' : 'retail', session.overridePrices);
+                          const cost = calculateRingCost(r, settings, spotPrices, isWholesale ? 'wholesale' : 'retail', session.overridePrices, isWholesale ? session.wholesaleProfileId : undefined);
                           const discVal = parseFloat(r.discount) || 0;
                           const discDeduction = r.discountType === '%' ? cost * (discVal / 100) : discVal;
                           const finalPieceCost = Math.max(0, cost - discDeduction);
@@ -3728,15 +3903,25 @@ export default function QuoteCalculator({
                                 <span className="text-[10px] text-brand-500 font-mono print:text-[9px]">{r.goldGrams || '0.0'}g</span>
                               </td>
                               <td className="p-3 space-y-1 print:p-2 print:space-y-0.5">
-                                {r.centerStone?.carats && (
-                                  <span className="block text-[11px] print:text-[10px]">
-                                    Center: {r.centerStone.carats}ct {r.centerStone.shape} {r.centerStone.type} ({r.centerStone.origin})
-                                  </span>
-                                )}
-                                {r.centerStone2?.carats && (
-                                  <span className="block text-[11px] print:text-[10px]">
-                                    Stone 2: {r.centerStone2.carats}ct {r.centerStone2.shape} {r.centerStone2.type} ({r.centerStone2.origin})
-                                  </span>
+                                {r.centerStones && r.centerStones.length > 0 ? (
+                                  r.centerStones.map((cs, csIdx) => cs.carats && (
+                                    <span key={csIdx} className="block text-[11px] print:text-[10px]">
+                                      Center #{csIdx + 1}: {cs.carats}ct {cs.shape} {cs.type} ({cs.origin})
+                                    </span>
+                                  ))
+                                ) : (
+                                  <>
+                                    {r.centerStone?.carats && (
+                                      <span className="block text-[11px] print:text-[10px]">
+                                        Center: {r.centerStone.carats}ct {r.centerStone.shape} {r.centerStone.type} ({r.centerStone.origin})
+                                      </span>
+                                    )}
+                                    {r.centerStone2?.carats && (
+                                      <span className="block text-[11px] print:text-[10px]">
+                                        Stone 2: {r.centerStone2.carats}ct {r.centerStone2.shape} {r.centerStone2.type} ({r.centerStone2.origin})
+                                      </span>
+                                    )}
+                                  </>
                                 )}
                                 {r.melee.some(m => m.qty) && (
                                   <span className="block text-[10px] text-brand-600 font-mono print:text-[9px]">
@@ -3754,7 +3939,19 @@ export default function QuoteCalculator({
                                 {r.designNotes.map((n, ni) => <span key={ni} className="block text-[10px] text-brand-500 leading-tight print:text-[9px]">• {n.text}</span>)}
                               </td>
                               <td className="p-3 pr-4 text-right font-mono font-bold text-brand-950 print:p-2 print:pr-3 print:text-[11px]">
-                                ${finalPieceCost.toFixed(2)}
+                                {discVal > 0 ? (
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-[10px] text-slate-400/90 line-through font-normal">
+                                      ${cost.toFixed(2)}
+                                    </span>
+                                    <span className="text-[9px] text-red-600 font-extrabold font-sans">
+                                      -{r.discountType === '%' ? `${discVal}%` : `$${discVal.toFixed(2)}`}
+                                    </span>
+                                    <span className="text-brand-950 font-bold">${finalPieceCost.toFixed(2)}</span>
+                                  </div>
+                                ) : (
+                                  <span>${finalPieceCost.toFixed(2)}</span>
+                                )}
                               </td>
                             </tr>
                           );
@@ -3930,15 +4127,15 @@ export default function QuoteCalculator({
                             </p>
                             <div className="grid grid-cols-2 gap-2">
                               {rSketches.map((sk, skIdx) => (
-                                <div key={`sk-${skIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center print:p-1 print:rounded-lg">
-                                  <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1 print:mb-0.5 print:text-[7px]">Sketch {skIdx + 1}</span>
-                                  <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-28 w-full object-contain rounded print:h-16" />
+                                <div key={`sk-${skIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
+                                  <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1 print:mb-1 print:text-[7px]">Sketch {skIdx + 1}</span>
+                                  <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-28 w-full object-contain rounded print:h-64 print:rounded-lg" />
                                 </div>
                               ))}
                               {rPhotos.map((ph, phIdx) => (
-                                <div key={`ph-${phIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center print:p-1 print:rounded-lg">
-                                  <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1 print:mb-0.5 print:text-[7px]">Photo {phIdx + 1}</span>
-                                  <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-28 w-full object-contain rounded print:h-16" />
+                                <div key={`ph-${phIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
+                                  <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1 print:mb-1 print:text-[7px]">Photo {phIdx + 1}</span>
+                                  <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-28 w-full object-contain rounded print:h-64 print:rounded-lg" />
                                 </div>
                               ))}
                             </div>
@@ -4026,7 +4223,9 @@ export default function QuoteCalculator({
                   </div>
                   {session.jobDesc && (
                     <div>
-                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 print:mb-0.5 print:text-[8px]">Design Overview Notes</h3>
+                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 print:mb-0.5 print:text-[8px]">
+                        {isWholesale ? 'Design Overview Notes' : 'Piece Description'}
+                      </h3>
                       <p className="text-xs text-brand-700 leading-relaxed italic print:text-[10px] print:leading-snug">"{session.jobDesc}"</p>
                     </div>
                   )}
@@ -4150,27 +4349,42 @@ export default function QuoteCalculator({
                               </thead>
                               <tbody className="divide-y divide-slate-100">
                                 {/* Center Stone 1 */}
-                                {r.centerStone?.carats && (
-                                  <tr>
-                                    <td className="p-2.5 pl-3 font-bold font-sans text-brand-950 print:py-1 print:px-2 print:pl-2.5">Center Stone</td>
-                                    <td className="p-2.5 font-bold font-sans print:py-1 print:px-2">{r.centerStone.shape}</td>
-                                    <td className="p-2.5 print:py-1 print:px-2">1</td>
-                                    <td className="p-2.5 print:py-1 print:px-2">--</td>
-                                    <td className="p-2.5 font-bold print:py-1 print:px-2">{r.centerStone.carats} ct</td>
-                                    <td className="p-2.5 font-sans print:py-1 print:px-2">{r.stoneSource === 'customer' ? 'Client' : `${r.centerStone.type} (${r.centerStone.origin})`}</td>
-                                  </tr>
-                                )}
+                                {r.centerStones && r.centerStones.length > 0 ? (
+                                  r.centerStones.map((cs, csIdx) => cs.carats && (
+                                    <tr key={`cs-row-${csIdx}`}>
+                                      <td className="p-2.5 pl-3 font-bold font-sans text-brand-950 print:py-1 print:px-2 print:pl-2.5">Center Stone #{csIdx + 1}</td>
+                                      <td className="p-2.5 font-bold font-sans print:py-1 print:px-2">{cs.shape}</td>
+                                      <td className="p-2.5 print:py-1 print:px-2">1</td>
+                                      <td className="p-2.5 print:py-1 print:px-2">--</td>
+                                      <td className="p-2.5 font-bold print:py-1 print:px-2">{cs.carats} ct</td>
+                                      <td className="p-2.5 font-sans print:py-1 print:px-2">{r.stoneSource === 'customer' ? 'Client' : `${cs.type} (${cs.origin})`}</td>
+                                    </tr>
+                                  ))
+                                ) : (
+                                  <>
+                                    {r.centerStone?.carats && (
+                                      <tr>
+                                        <td className="p-2.5 pl-3 font-bold font-sans text-brand-950 print:py-1 print:px-2 print:pl-2.5">Center Stone</td>
+                                        <td className="p-2.5 font-bold font-sans print:py-1 print:px-2">{r.centerStone.shape}</td>
+                                        <td className="p-2.5 print:py-1 print:px-2">1</td>
+                                        <td className="p-2.5 print:py-1 print:px-2">--</td>
+                                        <td className="p-2.5 font-bold print:py-1 print:px-2">{r.centerStone.carats} ct</td>
+                                        <td className="p-2.5 font-sans print:py-1 print:px-2">{r.stoneSource === 'customer' ? 'Client' : `${r.centerStone.type} (${r.centerStone.origin})`}</td>
+                                      </tr>
+                                    )}
 
-                                {/* Center Stone 2 for earrings */}
-                                {r.centerStone2?.carats && (
-                                  <tr>
-                                    <td className="p-2.5 pl-3 font-bold font-sans text-brand-950 print:py-1 print:px-2 print:pl-2.5">Center Stone 2 (Pair)</td>
-                                    <td className="p-2.5 font-bold font-sans print:py-1 print:px-2">{r.centerStone2.shape}</td>
-                                    <td className="p-2.5 print:py-1 print:px-2">1</td>
-                                    <td className="p-2.5 print:py-1 print:px-2">--</td>
-                                    <td className="p-2.5 font-bold print:py-1 print:px-2">{r.centerStone2.carats} ct</td>
-                                    <td className="p-2.5 font-sans print:py-1 print:px-2">{r.stoneSource === 'customer' ? 'Client' : `${r.centerStone2.type} (${r.centerStone2.origin})`}</td>
-                                  </tr>
+                                    {/* Center Stone 2 for earrings */}
+                                    {r.centerStone2?.carats && (
+                                      <tr>
+                                        <td className="p-2.5 pl-3 font-bold font-sans text-brand-950 print:py-1 print:px-2 print:pl-2.5">Center Stone 2 (Pair)</td>
+                                        <td className="p-2.5 font-bold font-sans print:py-1 print:px-2">{r.centerStone2.shape}</td>
+                                        <td className="p-2.5 print:py-1 print:px-2">1</td>
+                                        <td className="p-2.5 print:py-1 print:px-2">--</td>
+                                        <td className="p-2.5 font-bold print:py-1 print:px-2">{r.centerStone2.carats} ct</td>
+                                        <td className="p-2.5 font-sans print:py-1 print:px-2">{r.stoneSource === 'customer' ? 'Client' : `${r.centerStone2.type} (${r.centerStone2.origin})`}</td>
+                                      </tr>
+                                    )}
+                                  </>
                                 )}
 
                                 {/* Melee Stones */}
@@ -4245,7 +4459,7 @@ export default function QuoteCalculator({
                                 })}
 
                                 {/* If no stones whatsoever */}
-                                {!r.centerStone?.carats && !r.centerStone2?.carats && !r.melee.some(m => parseInt(m.qty) > 0) && !r.fancy.some(f => parseInt(f.qty) > 0) && (!Array.isArray(r.clientStones) || r.clientStones.filter(cs => parseInt(cs.qty) > 0).length === 0) && (
+                                {!(r.centerStones && r.centerStones.some(cs => cs.carats)) && !r.centerStone?.carats && !r.centerStone2?.carats && !r.melee.some(m => parseInt(m.qty) > 0) && !r.fancy.some(f => parseInt(f.qty) > 0) && (!Array.isArray(r.clientStones) || r.clientStones.filter(cs => parseInt(cs.qty) > 0).length === 0) && (
                                   <tr>
                                     <td colSpan={6} className="p-4 text-center font-sans text-slate-400 italic print:py-2">
                                       No stones / gemstones specified. Plain metal band / design.
@@ -4290,15 +4504,15 @@ export default function QuoteCalculator({
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block pl-1 print:text-[8px]">Visual Mockup References</span>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 print:gap-2">
                               {rSketches.map((sk, skIdx) => (
-                                <div key={`sk-${skIdx}`} className="border border-slate-200 rounded-xl p-2 bg-white flex flex-col items-center print:p-1 print:rounded-lg">
-                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-1.5 print:mb-0.5 print:text-[7px]">Sketch {skIdx + 1}</span>
-                                  <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-44 w-full object-contain rounded-lg print:h-20 print:rounded" />
+                                <div key={`sk-${skIdx}`} className="border border-slate-200 rounded-xl p-2 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
+                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-1.5 print:mb-1 print:text-[7px]">Sketch {skIdx + 1}</span>
+                                  <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-44 w-full object-contain rounded-lg print:h-64 print:rounded-lg" />
                                 </div>
                               ))}
                               {rPhotos.map((ph, phIdx) => (
-                                <div key={`ph-${phIdx}`} className="border border-slate-200 rounded-xl p-2 bg-white flex flex-col items-center print:p-1 print:rounded-lg">
-                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-1.5 print:mb-0.5 print:text-[7px]">Photo {phIdx + 1}</span>
-                                  <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-44 w-full object-contain rounded-lg print:h-20 print:rounded" />
+                                <div key={`ph-${phIdx}`} className="border border-slate-200 rounded-xl p-2 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
+                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-1.5 print:mb-1 print:text-[7px]">Photo {phIdx + 1}</span>
+                                  <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-44 w-full object-contain rounded-lg print:h-64 print:rounded-lg" />
                                 </div>
                               ))}
                             </div>

@@ -918,7 +918,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       ctx.fill();
 
       // Draw label text
-      ctx.fillStyle = '#fbbf24'; // Golden amber text
+      ctx.fillStyle = '#c2a265'; // Brand gold text
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(label, mx, my);
@@ -1700,7 +1700,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
         if (isStamping && stampStartPosRef.current && pointerPos) {
           // 1. Actively dragging/placing a new stamp
           ctx.save();
-          ctx.strokeStyle = '#f59e0b'; // golden amber
+          ctx.strokeStyle = '#c2a265'; // brand gold
           ctx.lineWidth = 1.2;
           ctx.setLineDash([4, 4]);
           ctx.beginPath();
@@ -2365,7 +2365,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
               onPointerUp={handleStampTransformEnd}
               style={{
                 position: 'absolute',
-                border: '2px dashed #f59e0b', // Amber/orange border for active stamp
+                border: '2px dashed #c2a265', // Brand gold dashed border for active stamp
                 width: `${activeStamp.size * 2}px`,
                 height: `${activeStamp.size * 2}px`,
                 left: `${activeStamp.x - activeStamp.size}px`,
@@ -2632,12 +2632,17 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       <div className="bg-white/95 backdrop-blur-xl border-t border-brand-200 p-3 md:p-4 pb-5 flex flex-col gap-3 shadow-2xl z-30">
 
         {/* VISUAL STAMP GALLERY RIBBON (Quick Stamp Selection) */}
-        <div className="w-full bg-amber-50/40 border border-amber-200/50 rounded-xl p-2.5 animate-fadeIn">
-          <div className="flex items-center justify-between gap-2 mb-2 px-1">
-            <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
-              <Sparkles size={12} className="text-amber-500 animate-spin-slow" />
-              Quick Stamp Selector
-            </span>
+        <div className="w-full bg-slate-50/70 border border-slate-200/80 rounded-xl p-3 animate-fadeIn shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2 px-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                <Sparkles size={12} className="text-brand-gold animate-spin-slow" />
+                Quick Stamp Selector
+              </span>
+              <span className="text-[9px] text-slate-400/90 font-medium hidden xs:inline">
+                (Swipe / Scroll horizontally to view more shapes)
+              </span>
+            </div>
             {tool === 'stamp' && stampShape && (
               <button
                 type="button"
@@ -2645,58 +2650,68 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
                   handleStampShapeChange('');
                   selectTool('pen');
                 }}
-                className="text-[9px] font-black text-amber-800 hover:text-amber-900 uppercase tracking-widest bg-amber-100/80 hover:bg-amber-200/80 border border-amber-200 px-2 py-0.5 rounded-lg transition-all"
+                className="text-[9px] font-black text-slate-700 hover:text-slate-950 hover:bg-slate-200/80 bg-slate-100 border border-slate-200/80 px-2.5 py-1 rounded-lg transition-all shadow-sm self-end sm:self-auto"
               >
                 Clear Selection
               </button>
             )}
           </div>
-          <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-amber-200 scrollbar-track-transparent">
+          <div className="flex items-center gap-2.5 overflow-x-auto pb-2 custom-stamp-scroll select-none w-full scroll-smooth">
             {/* Ring Rail Stamp */}
             <button
               type="button"
               onClick={() => handleStampShapeChange('Ring Rail')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all shrink-0 min-h-[38px] ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all shrink-0 min-h-[38px] group ${
                 tool === 'stamp' && stampShape === 'Ring Rail'
-                  ? 'bg-amber-900 text-amber-100 border-amber-950 shadow-md scale-105 z-10 animate-pulse'
-                  : 'bg-white text-amber-800 border-amber-200/60 hover:bg-amber-100/40'
+                  ? 'bg-brand-900 text-brand-gold border-brand-950 shadow-md scale-105 z-10 animate-pulse'
+                  : 'bg-white text-slate-700 border-slate-200/80 hover:bg-slate-100/60 hover:border-slate-300'
               }`}
               title="Click to select Ring Rail Stamp"
             >
-              <StampIcon shape="Ring Rail" className="w-5 h-5 text-amber-500" />
+              <StampIcon 
+                shape="Ring Rail" 
+                className={`w-5 h-5 shrink-0 transition-colors ${
+                  tool === 'stamp' && stampShape === 'Ring Rail' ? 'text-brand-gold' : 'text-slate-400 group-hover:text-slate-600'
+                }`} 
+              />
               <span>Ring Rail</span>
             </button>
 
             {/* Divider */}
-            <div className="w-px h-6 bg-amber-200/50 shrink-0 mx-1" />
+            <div className="w-px h-6 bg-slate-200/80 shrink-0 mx-1.5" />
 
             {/* Top View Stones */}
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[9px] font-bold text-amber-600/80 uppercase tracking-widest mr-1">Top Cuts:</span>
+              <span className="text-[9px] font-black text-slate-400/90 uppercase tracking-wider mr-1">Top Cuts:</span>
               {CENTER_SHAPES.map((shape) => (
                 <button
                   key={shape}
                   type="button"
                   onClick={() => handleStampShapeChange(shape)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all shrink-0 min-h-[38px] ${
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all shrink-0 min-h-[38px] group ${
                     tool === 'stamp' && stampShape === shape
-                      ? 'bg-amber-900 text-amber-100 border-amber-950 shadow-md scale-105 z-10'
-                      : 'bg-white text-amber-800 border-amber-200/60 hover:bg-amber-100/40'
+                      ? 'bg-brand-900 text-brand-gold border-brand-950 shadow-md scale-105 z-10'
+                      : 'bg-white text-slate-700 border-slate-200/80 hover:bg-slate-100/60 hover:border-slate-300'
                   }`}
                   title={`Click to select ${shape} Stamp`}
                 >
-                  <StampIcon shape={shape} className="w-5 h-5 text-amber-500" />
+                  <StampIcon 
+                    shape={shape} 
+                    className={`w-5 h-5 shrink-0 transition-colors ${
+                      tool === 'stamp' && stampShape === shape ? 'text-brand-gold' : 'text-slate-400 group-hover:text-slate-600'
+                    }`} 
+                  />
                   <span>{shape}</span>
                 </button>
               ))}
             </div>
 
             {/* Divider */}
-            <div className="w-px h-6 bg-amber-200/50 shrink-0 mx-1" />
+            <div className="w-px h-6 bg-slate-200/80 shrink-0 mx-1.5" />
 
             {/* Side View Stones */}
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[9px] font-bold text-amber-600/80 uppercase tracking-widest mr-1">Side Cuts:</span>
+              <span className="text-[9px] font-black text-slate-400/90 uppercase tracking-wider mr-1">Side Cuts:</span>
               {[
                 { val: 'Round Side', label: 'Round' },
                 { val: 'Princess Side', label: 'Princess' },
@@ -2708,26 +2723,30 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
                   key={item.val}
                   type="button"
                   onClick={() => handleStampShapeChange(item.val)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all shrink-0 min-h-[38px] ${
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all shrink-0 min-h-[38px] group ${
                     tool === 'stamp' && stampShape === item.val
-                      ? 'bg-amber-900 text-amber-100 border-amber-950 shadow-md scale-105 z-10'
-                      : 'bg-white text-amber-800 border-amber-200/60 hover:bg-amber-100/40'
+                      ? 'bg-brand-900 text-brand-gold border-brand-950 shadow-md scale-105 z-10'
+                      : 'bg-white text-slate-700 border-slate-200/80 hover:bg-slate-100/60 hover:border-slate-300'
                   }`}
                   title={`Click to select ${item.label} Side Stamp`}
                 >
-                  <StampIcon shape={item.val} className="w-5 h-5 text-amber-500" />
+                  <StampIcon 
+                    shape={item.val} 
+                    className={`w-5 h-5 shrink-0 transition-colors ${
+                      tool === 'stamp' && stampShape === item.val ? 'text-brand-gold' : 'text-slate-400 group-hover:text-slate-600'
+                    }`} 
+                  />
                   <span>{item.label} Side</span>
                 </button>
               ))}
             </div>
           </div>
         </div>
-
         {/* MAIN SKETCH TOOLS BAR */}
-        <div className="w-full flex flex-wrap lg:flex-nowrap items-center justify-between gap-3 md:gap-4">
+        <div className="w-full flex flex-wrap lg:flex-nowrap items-center justify-between gap-3.5 md:gap-4">
           
-          {/* Tool selectors & Image upload (Tablet layout optimized) */}
-          <div className="flex items-center justify-between sm:justify-start gap-2.5 w-full sm:w-auto shrink-0">
+          {/* Group 1: Drawing & Brush Configuration (Tool Selectors, Color Palette, and Stroke Slider) */}
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-start shrink-0">
             {/* Tool selector buttons */}
             <div className="flex gap-1 bg-brand-50 p-1 rounded-xl border border-brand-200 shadow-inner shrink-0">
               <button
@@ -2783,46 +2802,9 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
                 <Move size={15} />
               </button>
             </div>
- 
-            {/* Reference Image upload */}
-            <div className="shrink-0">
-              <label className="cursor-pointer text-[10px] font-black text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200/80 px-4 py-3 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm uppercase tracking-wider min-h-[42px]">
-                <Camera size={14} className="text-brand-gold shrink-0" />
-                Upload Photo
-                <input 
-                  ref={fileInputRef}
-                  type="file" 
-                  accept="image/*" 
-                  className="hidden" 
-                  onChange={handleBgUpload} 
-                />
-              </label>
-            </div>
-          </div>
- 
-          {/* Stencil Selector (Tablet layout optimized) */}
-          <div className="w-full sm:w-auto shrink-0 md:max-w-[200px]">
-            <select
-              id="sketch-stencil-select"
-              value={stencilType}
-              onChange={(e) => setStencilType(e.target.value)}
-              className="cursor-pointer text-[10px] font-black text-brand-800 bg-brand-50 border border-brand-200 px-3 py-3 rounded-xl hover:bg-brand-100 transition-all shadow-sm outline-none w-full uppercase tracking-wider min-h-[42px]"
-            >
-              <option value="none">📐 No Overlay Stencil</option>
-              <option value="solitaire">📐 4-Prong Solitaire</option>
-              <option value="cathedral">📐 Cathedral Mount (Side)</option>
-              <option value="halo">📐 Halo Setting Guide</option>
-              <option value="threestone">📐 Three-Stone Mount</option>
-              <option value="pave">📐 Pavé Band Template</option>
-            </select>
-          </div>
 
-
- 
-          {/* Color palette & Pen thickness slider (Tablet layout optimized) */}
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto justify-start sm:justify-start lg:justify-start shrink-0">
             {/* Color palette */}
-            <div className="flex items-center gap-1.5 px-2.5 py-2 bg-brand-50/50 rounded-xl border border-brand-100/80 overflow-x-auto max-w-[320px] scrollbar-none shrink-0" title="Precious Metals & Fine Gemstones Palette">
+            <div className="flex items-center gap-1 px-2 py-1.5 bg-brand-50/50 rounded-xl border border-brand-100/80 overflow-x-auto max-w-[260px] sm:max-w-[320px] scrollbar-none shrink-0" title="Precious Metals & Fine Gemstones Palette">
               {jewelryColors.map(c => (
                 <button
                   key={c.name}
@@ -2838,9 +2820,9 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
                 />
               ))}
             </div>
- 
+
             {/* continuous brush stroke thickness slider */}
-            <div className="flex items-center gap-2 bg-brand-50 px-3.5 py-2 rounded-xl border border-brand-200/60 w-full sm:w-auto shrink-0">
+            <div className="flex items-center gap-2 bg-brand-50 px-3 py-1.5 rounded-xl border border-brand-200/60 shrink-0 min-w-[150px] sm:min-w-[185px]">
               <span className="text-[9px] font-black text-brand-500 uppercase tracking-wider shrink-0">Stroke:</span>
               <input
                 type="range"
@@ -2849,11 +2831,46 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
                 step="0.5"
                 value={thickness}
                 onChange={(e) => setThickness(parseFloat(e.target.value))}
-                className="flex-1 sm:w-20 md:w-24 accent-brand-900 cursor-pointer h-1 bg-brand-200 rounded-lg appearance-none"
+                className="w-16 sm:w-20 md:w-24 accent-brand-900 cursor-pointer h-1 bg-brand-200 rounded-lg appearance-none shrink-0"
               />
-              <span className="text-[9px] font-bold font-mono text-brand-800 w-11 text-center bg-white px-1.5 py-0.5 rounded border border-brand-200 shrink-0">
+              <span className="text-[9px] font-bold font-mono text-brand-800 w-11 text-center bg-white px-1 py-0.5 rounded border border-brand-200 shrink-0">
                 {thickness.toFixed(1)}px
               </span>
+            </div>
+          </div>
+
+          {/* Group 2: Backdrop & Overlay Templates (Photo Upload & Stencil Overlays) */}
+          <div className="flex items-center gap-2 w-full sm:w-auto lg:w-auto justify-between sm:justify-end shrink-0">
+            {/* Reference Image upload */}
+            <div className="shrink-0">
+              <label className="cursor-pointer text-[10px] font-black text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200/80 px-4 py-3 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm uppercase tracking-wider min-h-[42px]">
+                <Camera size={14} className="text-brand-gold shrink-0" />
+                Upload Photo
+                <input 
+                  ref={fileInputRef}
+                  type="file" 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={handleBgUpload} 
+                />
+              </label>
+            </div>
+
+            {/* Stencil Selector */}
+            <div className="shrink-0 min-w-[140px] sm:max-w-[200px]">
+              <select
+                id="sketch-stencil-select"
+                value={stencilType}
+                onChange={(e) => setStencilType(e.target.value)}
+                className="cursor-pointer text-[10px] font-black text-brand-800 bg-brand-50 border border-brand-200 px-3 py-3 rounded-xl hover:bg-brand-100 transition-all shadow-sm outline-none w-full uppercase tracking-wider min-h-[42px]"
+              >
+                <option value="none">📐 No Overlay Stencil</option>
+                <option value="solitaire">📐 4-Prong Solitaire</option>
+                <option value="cathedral">📐 Cathedral Mount (Side)</option>
+                <option value="halo">📐 Halo Setting Guide</option>
+                <option value="threestone">📐 Three-Stone Mount</option>
+                <option value="pave">📐 Pavé Band Template</option>
+              </select>
             </div>
           </div>
 

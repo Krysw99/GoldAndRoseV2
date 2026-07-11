@@ -132,3 +132,25 @@ body {
   }
 }
 
+/* Custom premium horizontal scrollbar styling for the stamp selection list */
+.custom-stamp-scroll::-webkit-scrollbar {
+  height: 6px;
+  display: block;
+}
+.custom-stamp-scroll::-webkit-scrollbar-track {
+  background: rgba(18, 21, 26, 0.05);
+  border-radius: 9999px;
+}
+.custom-stamp-scroll::-webkit-scrollbar-thumb {
+  background: rgba(18, 21, 26, 0.25);
+  border-radius: 9999px;
+}
+.custom-stamp-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(18, 21, 26, 0.45);
+}
+.custom-stamp-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(18, 21, 26, 0.25) transparent;
+}
+
+

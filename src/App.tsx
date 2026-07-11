@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Coins, FileCheck, Landmark, Library, Settings, RefreshCw, 
   HelpCircle, Sparkles, Scale, Info, AlertCircle 
@@ -26,6 +26,9 @@ import Sketchpad from './components/Sketchpad';
 import SpotPriceView from './components/SpotPriceView';
 import CubanBraceletBuilder from './components/CubanBraceletBuilder';
 
+// Firebase cloud sync helpers
+import { listenCollection, saveDocument, deleteDocument, syncLocalToCloud } from './firebase';
+
 export default function App() {
   // Navigation State
   const [activeTab, setActiveTab] = useState<'scrap' | 'quote' | 'wholesale' | 'spot' | 'cuban' | 'ledger' | 'settings'>('scrap');
@@ -34,7 +37,7 @@ export default function App() {
   const [spotPrices, setSpotPrices] = useState({ gold: 2350, silver: 30, platinum: 1050 });
   const [lastUpdated, setLastUpdated] = useState('Manual Default');
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const [goldApiKey, setGoldApiKey] = useState('goldapi-472c240569490d4d25bde6da08749829-io');
+  const [goldApiKey, setGoldApiKey] = useState('');
 
   // Quick Calculator state
   const [quickPurity, setQuickPurity] = useState('gold_14');
@@ -57,12 +60,35 @@ export default function App() {
   const [editingImageType, setEditingImageType] = useState<'sketch' | 'photo'>('sketch');
   const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null);
 
+  const isLoadedRef = useRef(false);
+  const [isPersistenceLoaded, setIsPersistenceLoaded] = useState(false);
+  const [isCloudSynced, setIsCloudSynced] = useState(false);
+
+  // Request persistent storage on load (Safari/Chrome/iOS support to prevent auto-eviction)
+  useEffect(() => {
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().then(granted => {
+        if (granted) {
+          console.log("iOS/Browser Storage marked as PERSISTENT. History will not be cleared under storage pressure.");
+        } else {
+          console.log("iOS/Browser Storage marked as BEST-EFFORT. User should run main production domains.");
+        }
+      });
+    }
+  }, []);
+
   // Load persistence data on initialization
   useEffect(() => {
+    // 1. Scrap Ledger
     try {
       const st = localStorage.getItem('gr_scrap_ledger');
       if (st) setScrapTransactions(JSON.parse(st));
+    } catch (e) {
+      console.error("Error parsing gr_scrap_ledger:", e);
+    }
 
+    // 2. Retail/Custom Quote Ledger
+    try {
       const rt = localStorage.getItem('gr_quote_ledger');
       if (rt) {
         setRingQuoteTransactions(JSON.parse(rt));
@@ -95,13 +121,28 @@ export default function App() {
         setRingQuoteTransactions([demoTx]);
         localStorage.setItem('gr_quote_ledger', JSON.stringify([demoTx]));
       }
+    } catch (e) {
+      console.error("Error parsing gr_quote_ledger:", e);
+    }
 
+    // 3. Wholesale Ledger
+    try {
       const wt = localStorage.getItem('gr_wholesale_ledger');
       if (wt) setWholesaleTransactions(JSON.parse(wt));
+    } catch (e) {
+      console.error("Error parsing gr_wholesale_ledger:", e);
+    }
 
+    // 4. API Keys
+    try {
       const k = localStorage.getItem('gr_gold_api_key');
       if (k) setGoldApiKey(k);
+    } catch (e) {
+      console.error("Error parsing gr_gold_api_key:", e);
+    }
 
+    // 5. Master Settings
+    try {
       const s = localStorage.getItem('gr_master_settings');
       if (s) {
         const parsed = JSON.parse(s);
@@ -110,6 +151,7 @@ export default function App() {
           ...parsed,
           // ensure child objects are fully initialized to avoid missing attributes
           wholesale: { ...prev.wholesale, ...(parsed.wholesale || {}) },
+          wholesaleProfiles: parsed.wholesaleProfiles || [],
           centerStoneRates: { ...prev.centerStoneRates, ...(parsed.centerStoneRates || {}) },
           centerStoneRawRates: { ...prev.centerStoneRawRates, ...(parsed.centerStoneRawRates || {}) },
           cubanMultipliers: parsed.cubanMultipliers || prev.cubanMultipliers || [
@@ -126,14 +168,93 @@ export default function App() {
         }));
       }
     } catch (e) {
-      console.error("Local Storage Load Error:", e);
+      console.error("Error parsing gr_master_settings:", e);
     }
+
+    // Explicitly mark initialization loading complete
+    isLoadedRef.current = true;
+    setIsPersistenceLoaded(true);
   }, []);
 
-  // Persist master settings on changes
+  // Persist master settings on changes ONLY after loading has successfully finished!
   useEffect(() => {
-    localStorage.setItem('gr_master_settings', JSON.stringify(settings));
+    if (isLoadedRef.current) {
+      localStorage.setItem('gr_master_settings', JSON.stringify(settings));
+    }
   }, [settings]);
+
+  // Firestore server synchronization & real-time updates
+  useEffect(() => {
+    if (!isPersistenceLoaded) return;
+
+    let active = true;
+    let unsubScrap: (() => void) | null = null;
+    let unsubRetail: (() => void) | null = null;
+    let unsubWholesale: (() => void) | null = null;
+
+    const runSyncAndListen = async () => {
+      try {
+        console.log("Starting server synchronization...");
+        
+        // 1. Sync any existing local items created offline or stored locally to Firestore
+        await syncLocalToCloud('scrap_ledger', scrapTransactions);
+        await syncLocalToCloud('retail_ledger', ringQuoteTransactions);
+        await syncLocalToCloud('wholesale_ledger', wholesaleTransactions);
+
+        if (!active) return;
+
+        // 2. Set up real-time listener for Scrap Buyback Ledger
+        unsubScrap = listenCollection('scrap_ledger', (docs) => {
+          if (!active) return;
+          const sorted = [...docs].sort((a, b) => {
+            const tA = a.date ? Date.parse(a.date) : 0;
+            const tB = b.date ? Date.parse(b.date) : 0;
+            return tB - tA; // Newest first
+          });
+          setScrapTransactions(sorted);
+          localStorage.setItem('gr_scrap_ledger', JSON.stringify(sorted));
+        });
+
+        // 3. Set up real-time listener for Retail Quote Ledger
+        unsubRetail = listenCollection('retail_ledger', (docs) => {
+          if (!active) return;
+          const sorted = [...docs].sort((a, b) => {
+            const tA = a.date ? Date.parse(a.date) : 0;
+            const tB = b.date ? Date.parse(b.date) : 0;
+            return tB - tA; // Newest first
+          });
+          setRingQuoteTransactions(sorted);
+          localStorage.setItem('gr_quote_ledger', JSON.stringify(sorted));
+        });
+
+        // 4. Set up real-time listener for Wholesale Ledger
+        unsubWholesale = listenCollection('wholesale_ledger', (docs) => {
+          if (!active) return;
+          const sorted = [...docs].sort((a, b) => {
+            const tA = a.date ? Date.parse(a.date) : 0;
+            const tB = b.date ? Date.parse(b.date) : 0;
+            return tB - tA; // Newest first
+          });
+          setWholesaleTransactions(sorted);
+          localStorage.setItem('gr_wholesale_ledger', JSON.stringify(sorted));
+        });
+
+        setIsCloudSynced(true);
+        console.log("Server synchronization initialized successfully.");
+      } catch (err) {
+        console.error("Error setting up server synchronization:", err);
+      }
+    };
+
+    runSyncAndListen();
+
+    return () => {
+      active = false;
+      if (unsubScrap) unsubScrap();
+      if (unsubRetail) unsubRetail();
+      if (unsubWholesale) unsubWholesale();
+    };
+  }, [isPersistenceLoaded]);
 
   // Fetch GoldAPI CAD Spot Indices
   const fetchLivePrices = async () => {
@@ -231,6 +352,9 @@ export default function App() {
       localStorage.setItem('gr_scrap_ledger', JSON.stringify(updated));
       return updated;
     });
+
+    // Sync to cloud Firestore
+    saveDocument('scrap_ledger', newTx.id, newTx);
   };
 
   const handleSaveQuote = (isWholesale: boolean) => {
@@ -267,7 +391,7 @@ export default function App() {
     let gT = 0;
     let tD = 0;
     activeSession.rings.forEach(r => {
-      const cost = calculateRingCost(r, settings, spotPrices, isWholesale ? 'wholesale' : 'retail', activeSession.overridePrices);
+      const cost = calculateRingCost(r, settings, spotPrices, isWholesale ? 'wholesale' : 'retail', activeSession.overridePrices, isWholesale ? activeSession.wholesaleProfileId : undefined);
       gT += cost;
       const val = parseFloat(r.discount) || 0;
       tD += r.discountType === '%' ? cost * (val / 100) : val;
@@ -291,35 +415,81 @@ export default function App() {
     };
 
     if (isWholesale) {
-      setWholesaleTransactions(prev => {
-        const idx = prev.findIndex(q => q.id === activeSession.id);
-        let updated;
-        if (idx >= 0) {
-          updated = [...prev];
-          updated[idx] = newTx;
-        } else {
-          updated = [newTx, ...prev];
-        }
+      const idx = wholesaleTransactions.findIndex(q => q.id === activeSession.id);
+      let updated: QuoteTransaction[];
+      if (idx >= 0) {
+        updated = [...wholesaleTransactions];
+        updated[idx] = newTx;
+      } else {
+        updated = [newTx, ...wholesaleTransactions];
+      }
+
+      try {
         localStorage.setItem('gr_wholesale_ledger', JSON.stringify(updated));
-        return updated;
-      });
-      // reset session
-      setWholesaleSession(getEmptyQuoteSession());
-    } else {
-      setRingQuoteTransactions(prev => {
-        const idx = prev.findIndex(q => q.id === activeSession.id);
-        let updated;
-        if (idx >= 0) {
-          updated = [...prev];
-          updated[idx] = newTx;
-        } else {
-          updated = [newTx, ...prev];
+      } catch (e) {
+        console.error("Failed to save wholesale ledger to localStorage:", e);
+        alert("Warning: Local storage limit exceeded! The reference photos are too large to persist on this device's local history. We will save the textual details of your quote, but omit the heavy photo images to fit within storage limits.");
+        try {
+          const strippedUpdated = updated.map(item => ({
+            ...item,
+            fullData: {
+              ...item.fullData,
+              rings: item.fullData.rings.map(r => ({
+                ...r,
+                referencePhoto: r.referencePhoto ? "(Image too large, omitted from persistent history)" : null,
+                referencePhotos: r.referencePhotos ? r.referencePhotos.map(() => "(Image too large, omitted)") : []
+              }))
+            }
+          }));
+          localStorage.setItem('gr_wholesale_ledger', JSON.stringify(strippedUpdated));
+          updated = strippedUpdated;
+        } catch (retryError) {
+          console.error("Fallback save failed:", retryError);
         }
+      }
+
+      setWholesaleTransactions(updated);
+      setWholesaleSession(getEmptyQuoteSession());
+      // Save to cloud Firestore
+      saveDocument('wholesale_ledger', newTx.id, newTx);
+    } else {
+      const idx = ringQuoteTransactions.findIndex(q => q.id === activeSession.id);
+      let updated: QuoteTransaction[];
+      if (idx >= 0) {
+        updated = [...ringQuoteTransactions];
+        updated[idx] = newTx;
+      } else {
+        updated = [newTx, ...ringQuoteTransactions];
+      }
+
+      try {
         localStorage.setItem('gr_quote_ledger', JSON.stringify(updated));
-        return updated;
-      });
-      // reset session
+      } catch (e) {
+        console.error("Failed to save quote ledger to localStorage:", e);
+        alert("Warning: Local storage limit exceeded! The reference photos are too large to persist on this device's local history. We will save the textual details of your quote, but omit the heavy photo images to fit within storage limits.");
+        try {
+          const strippedUpdated = updated.map(item => ({
+            ...item,
+            fullData: {
+              ...item.fullData,
+              rings: item.fullData.rings.map(r => ({
+                ...r,
+                referencePhoto: r.referencePhoto ? "(Image too large, omitted from persistent history)" : null,
+                referencePhotos: r.referencePhotos ? r.referencePhotos.map(() => "(Image too large, omitted)") : []
+              }))
+            }
+          }));
+          localStorage.setItem('gr_quote_ledger', JSON.stringify(strippedUpdated));
+          updated = strippedUpdated;
+        } catch (retryError) {
+          console.error("Fallback save failed:", retryError);
+        }
+      }
+
+      setRingQuoteTransactions(updated);
       setRetailSession(getEmptyQuoteSession());
+      // Save to cloud Firestore
+      saveDocument('retail_ledger', newTx.id, newTx);
     }
 
     alert("Quote successfully logged into ledger ledger!");
@@ -443,18 +613,21 @@ export default function App() {
         localStorage.setItem('gr_scrap_ledger', JSON.stringify(updated));
         return updated;
       });
+      deleteDocument('scrap_ledger', id);
     } else if (type === 'retail') {
       setRingQuoteTransactions(prev => {
         const updated = prev.filter(t => t.id !== id);
         localStorage.setItem('gr_quote_ledger', JSON.stringify(updated));
         return updated;
       });
+      deleteDocument('retail_ledger', id);
     } else {
       setWholesaleTransactions(prev => {
         const updated = prev.filter(t => t.id !== id);
         localStorage.setItem('gr_wholesale_ledger', JSON.stringify(updated));
         return updated;
       });
+      deleteDocument('wholesale_ledger', id);
     }
   };
 
@@ -564,7 +737,20 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-serif italic font-black text-xl tracking-wide text-brand-gold">Gold & Rose Jewellery Corp</h1>
-              <p className="text-[10px] text-brand-300 font-mono tracking-widest uppercase">Executive Dashboard Suite</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="text-[10px] text-brand-300 font-mono tracking-widest uppercase">Executive Dashboard Suite</p>
+                {isCloudSynced ? (
+                  <span className="inline-flex items-center gap-1 bg-emerald-950/80 text-emerald-400 border border-emerald-800 text-[8px] px-1.5 py-0.5 rounded-md font-mono font-bold tracking-wider uppercase scale-90 origin-left">
+                    <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Live Cloud Sync
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 bg-amber-950/80 text-amber-400 border border-amber-800 text-[8px] px-1.5 py-0.5 rounded-md font-mono font-bold tracking-wider uppercase scale-90 origin-left">
+                    <span className="w-1 h-1 rounded-full bg-amber-400 animate-bounce"></span>
+                    Syncing...
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 

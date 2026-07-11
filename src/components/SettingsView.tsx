@@ -6,7 +6,8 @@
 import React, { useState } from 'react';
 import { 
   Save, Download, Trash2, Calendar, Settings, ShieldAlert, Key, 
-  DollarSign, Wrench, Gem, HardDrive, EyeOff, Upload, FileJson
+  DollarSign, Wrench, Gem, HardDrive, EyeOff, Upload, FileJson,
+  Building, ShoppingBag, Globe, Plus, Edit
 } from 'lucide-react';
 import { AppSettings } from '../types';
 import { ROUND_MELEE, FANCY_SHAPES } from '../constants';
@@ -61,6 +62,59 @@ export default function SettingsView({
   const [purgeRange, setPurgeRange] = useState<'all' | '365' | 'custom'>('365');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  const [selectedProfileId, setSelectedProfileId] = useState<string>('');
+
+  const currentWholesaleSettings = selectedProfileId
+    ? (localSettings.wholesaleProfiles?.find(p => p.id === selectedProfileId)?.settings || localSettings.wholesale)
+    : localSettings.wholesale;
+
+  const handleAddProfile = () => {
+    const name = prompt("Enter a name for the new wholesale client profile:");
+    if (!name || name.trim() === '') return;
+    
+    const newProfile = {
+      id: 'wp_' + Date.now(),
+      name: name.trim(),
+      settings: JSON.parse(JSON.stringify(currentWholesaleSettings))
+    };
+    
+    setLocalSettings(prev => ({
+      ...prev,
+      wholesaleProfiles: [...(prev.wholesaleProfiles || []), newProfile]
+    }));
+    setSelectedProfileId(newProfile.id);
+  };
+
+  const handleRenameProfile = () => {
+    if (!selectedProfileId) return;
+    const profile = localSettings.wholesaleProfiles?.find(p => p.id === selectedProfileId);
+    if (!profile) return;
+    
+    const name = prompt("Enter a new name for this wholesale client profile:", profile.name);
+    if (!name || name.trim() === '') return;
+    
+    setLocalSettings(prev => ({
+      ...prev,
+      wholesaleProfiles: (prev.wholesaleProfiles || []).map(p =>
+        p.id === selectedProfileId ? { ...p, name: name.trim() } : p
+      )
+    }));
+  };
+
+  const handleDeleteProfile = () => {
+    if (!selectedProfileId) return;
+    const profile = localSettings.wholesaleProfiles?.find(p => p.id === selectedProfileId);
+    if (!profile) return;
+    
+    if (confirm(`Are you sure you want to permanently delete the profile "${profile.name}"?`)) {
+      setLocalSettings(prev => ({
+        ...prev,
+        wholesaleProfiles: (prev.wholesaleProfiles || []).filter(p => p.id !== selectedProfileId)
+      }));
+      setSelectedProfileId('');
+    }
+  };
 
   // Wholesale stone rate custom sizes
   const [activeFancyShapeTab, setActiveFancyShapeTab] = useState<string>('Princess');
@@ -172,39 +226,84 @@ export default function SettingsView({
   };
 
   const handleWholesaleSetting = (field: string, value: number) => {
-    setLocalSettings(prev => ({
-      ...prev,
-      wholesale: {
-        ...prev.wholesale,
-        [field]: value
-      }
-    }));
+    if (selectedProfileId) {
+      setLocalSettings(prev => ({
+        ...prev,
+        wholesaleProfiles: (prev.wholesaleProfiles || []).map(p =>
+          p.id === selectedProfileId
+            ? { ...p, settings: { ...p.settings, [field]: value } }
+            : p
+        )
+      }));
+    } else {
+      setLocalSettings(prev => ({
+        ...prev,
+        wholesale: {
+          ...prev.wholesale,
+          [field]: value
+        }
+      }));
+    }
   };
 
   const handleWholesaleMeleeRate = (size: string, value: number) => {
-    setLocalSettings(prev => ({
-      ...prev,
-      wholesale: {
-        ...prev.wholesale,
-        meleeRates: {
-          ...(prev.wholesale.meleeRates || {}),
-          [size]: value
+    if (selectedProfileId) {
+      setLocalSettings(prev => ({
+        ...prev,
+        wholesaleProfiles: (prev.wholesaleProfiles || []).map(p =>
+          p.id === selectedProfileId
+            ? {
+                ...p,
+                settings: {
+                  ...p.settings,
+                  meleeRates: { ...(p.settings.meleeRates || {}), [size]: value }
+                }
+              }
+            : p
+        )
+      }));
+    } else {
+      setLocalSettings(prev => ({
+        ...prev,
+        wholesale: {
+          ...prev.wholesale,
+          meleeRates: {
+            ...(prev.wholesale.meleeRates || {}),
+            [size]: value
+          }
         }
-      }
-    }));
+      }));
+    }
   };
 
   const handleWholesaleFancyRate = (key: string, value: number) => {
-    setLocalSettings(prev => ({
-      ...prev,
-      wholesale: {
-        ...prev.wholesale,
-        fancyRates: {
-          ...(prev.wholesale.fancyRates || {}),
-          [key]: value
+    if (selectedProfileId) {
+      setLocalSettings(prev => ({
+        ...prev,
+        wholesaleProfiles: (prev.wholesaleProfiles || []).map(p =>
+          p.id === selectedProfileId
+            ? {
+                ...p,
+                settings: {
+                  ...p.settings,
+                  fancyRates: { ...(p.settings.fancyRates || {}), [key]: value }
+                }
+              }
+            : p
+        )
+      }));
+    } else {
+      setLocalSettings(prev => ({
+        ...prev,
+        wholesale: {
+          ...prev.wholesale,
+          fancyRates: {
+            ...(prev.wholesale.fancyRates || {}),
+            [key]: value
+          }
         }
-      }
-    }));
+      }));
+    }
   };
 
   const handleRawMeleeRate = (size: string, value: number) => {
@@ -403,6 +502,117 @@ export default function SettingsView({
                 onChange={(e) => setApiKey(e.target.value)}
               />
               <p className="text-[10px] text-brand-400 italic">Leaves blank or enter custom tokens. Spot price updates rely on standard CAD valuations.</p>
+            </div>
+
+            {/* Store details block */}
+            <div className="space-y-3 bg-brand-50 p-4 rounded-xl border border-brand-100">
+              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2 flex items-center gap-1.5">
+                <Building size={14} className="text-brand-gold" />
+                Store & Invoice Branding Details
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Store / Business Name</label>
+                  <input
+                    type="text"
+                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    value={localSettings.storeName ?? ""}
+                    placeholder="Gold & Rose"
+                    onChange={(e) => setLocalSettings(prev => ({ ...prev, storeName: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Store Slogan / Subtitle</label>
+                  <input
+                    type="text"
+                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    value={localSettings.storeSubName ?? ""}
+                    placeholder="Jewellery Corporation"
+                    onChange={(e) => setLocalSettings(prev => ({ ...prev, storeSubName: e.target.value }))}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Store Address</label>
+                  <input
+                    type="text"
+                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    value={localSettings.storeAddress ?? ""}
+                    placeholder="4501 North Rd #209, Burnaby, BC V3N 4J5"
+                    onChange={(e) => setLocalSettings(prev => ({ ...prev, storeAddress: e.target.value }))}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Store Contact Info (Email | Phone | Website)</label>
+                  <input
+                    type="text"
+                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    value={localSettings.storeContact ?? ""}
+                    placeholder="info@goldandrosejewellery.com | (604) 420-9077"
+                    onChange={(e) => setLocalSettings(prev => ({ ...prev, storeContact: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Wix Store checkout integration details */}
+            <div className="space-y-3 bg-brand-50 p-4 rounded-xl border border-brand-100">
+              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2 flex items-center gap-1.5">
+                <ShoppingBag size={14} className="text-brand-gold" />
+                Wix Store Checkout Integration
+              </h4>
+              <p className="text-[10px] text-brand-500 leading-relaxed italic">
+                Configure your Wix Online Store and Velo integration to send bespoke estimates directly to your Wix checkout system.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Wix Store Domain / URL</label>
+                  <input
+                    type="text"
+                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    value={localSettings.wixStoreUrl ?? ""}
+                    placeholder="https://www.goldandrosejewellery.com"
+                    onChange={(e) => setLocalSettings(prev => ({ ...prev, wixStoreUrl: e.target.value }))}
+                  />
+                  <span className="text-[9px] text-brand-400">Used as the base domain for deep-linking items to your Wix cart.</span>
+                </div>
+                
+                <div>
+                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Integration Mode</label>
+                  <select
+                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    value={localSettings.wixIntegrationMode ?? "deeplink"}
+                    onChange={(e) => setLocalSettings(prev => ({ ...prev, wixIntegrationMode: e.target.value as any }))}
+                  >
+                    <option value="deeplink">Wix Cart Deep Link (No Setup Required)</option>
+                    <option value="velo_api">Wix Velo Headless API (Real-time Draft)</option>
+                    <option value="webhook">Custom Wix Webhook (External Sync)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Wix Store Access Token / Secret</label>
+                  <input
+                    type="password"
+                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold font-mono"
+                    value={localSettings.wixAccessToken ?? ""}
+                    placeholder="wix_sec_••••••••••••••••"
+                    onChange={(e) => setLocalSettings(prev => ({ ...prev, wixAccessToken: e.target.value }))}
+                  />
+                </div>
+
+                {localSettings.wixIntegrationMode === "webhook" && (
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Wix Webhook Endpoint URL</label>
+                    <input
+                      type="text"
+                      className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                      value={localSettings.wixWebhookUrl ?? ""}
+                      placeholder="https://yourdomain.wixsite.com/_functions/syncQuote"
+                      onChange={(e) => setLocalSettings(prev => ({ ...prev, wixWebhookUrl: e.target.value }))}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Manual Spot Price Overrides */}
@@ -826,13 +1036,78 @@ export default function SettingsView({
               <p className="text-xs text-brand-500">Fine-tune the fabrication labor pricing, spot premiums, and master setting rates.</p>
             </div>
 
+            {/* Wholesale Client Profile Manager */}
+            <div className="bg-emerald-50/40 p-4 rounded-2xl border border-emerald-100/85 space-y-3">
+              <h3 className="text-xs font-black text-emerald-800 uppercase tracking-widest flex items-center gap-1.5">
+                <Globe size={14} className="text-emerald-600" />
+                Wholesale Client Profile Manager
+              </h3>
+              <p className="text-[10px] text-emerald-600/95 leading-relaxed">
+                Create and manage specific wholesale client profiles with custom rates. When selected on the Wholesale Manufacturing tab, these custom rates automatically apply to the active job.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <div className="flex-1">
+                  <select
+                    className="w-full bg-white border border-emerald-200 p-2.5 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-emerald-400"
+                    value={selectedProfileId}
+                    onChange={(e) => setSelectedProfileId(e.target.value)}
+                  >
+                    <option value="">Default (Global Wholesale Rates)</option>
+                    {(localSettings.wholesaleProfiles || []).map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleAddProfile}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Plus size={13} />
+                    Add Profile
+                  </button>
+                  
+                  {selectedProfileId && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleRenameProfile}
+                        className="bg-white hover:bg-brand-50 text-emerald-800 border border-emerald-200 text-xs font-bold px-3 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Edit size={13} />
+                        Rename
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDeleteProfile}
+                        className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 text-xs font-bold px-3 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Trash2 size={13} />
+                        Delete
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              
+              <div className="bg-white/90 border border-emerald-100/50 p-3 rounded-xl text-[10px] font-medium text-emerald-800 flex items-center gap-2 shadow-xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                <span>
+                  Currently editing: <strong className="font-bold">{selectedProfileId ? `"${localSettings.wholesaleProfiles?.find(p => p.id === selectedProfileId)?.name}" Client Profile` : 'Global Default Wholesale Rates'}</strong>. Any rates adjusted below will apply to this profile.
+                </span>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="text-[10px] font-bold text-brand-500 mb-1 block">Gold Spot Premium / oz</label>
                 <input
                   type="number"
                   className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
-                  value={localSettings.wholesale.goldSpotPremium}
+                  value={currentWholesaleSettings.goldSpotPremium}
                   onChange={(e) => handleWholesaleSetting('goldSpotPremium', parseFloat(e.target.value) || 0)}
                 />
               </div>
@@ -841,7 +1116,7 @@ export default function SettingsView({
                 <input
                   type="number"
                   className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
-                  value={localSettings.wholesale.laborPerGram}
+                  value={currentWholesaleSettings.laborPerGram}
                   onChange={(e) => handleWholesaleSetting('laborPerGram', parseFloat(e.target.value) || 0)}
                 />
               </div>
@@ -850,7 +1125,7 @@ export default function SettingsView({
                 <input
                   type="number"
                   className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
-                  value={localSettings.wholesale.designFee}
+                  value={currentWholesaleSettings.designFee}
                   onChange={(e) => handleWholesaleSetting('designFee', parseFloat(e.target.value) || 0)}
                 />
               </div>
@@ -864,7 +1139,7 @@ export default function SettingsView({
                   <input
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
-                    value={localSettings.wholesale.settingMelee}
+                    value={currentWholesaleSettings.settingMelee}
                     onChange={(e) => handleWholesaleSetting('settingMelee', parseFloat(e.target.value) || 0)}
                   />
                 </div>
@@ -873,7 +1148,7 @@ export default function SettingsView({
                   <input
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
-                    value={localSettings.wholesale.settingFancy}
+                    value={currentWholesaleSettings.settingFancy}
                     onChange={(e) => handleWholesaleSetting('settingFancy', parseFloat(e.target.value) || 0)}
                   />
                 </div>
@@ -882,7 +1157,7 @@ export default function SettingsView({
                   <input
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
-                    value={localSettings.wholesale.settingCenter}
+                    value={currentWholesaleSettings.settingCenter}
                     onChange={(e) => handleWholesaleSetting('settingCenter', parseFloat(e.target.value) || 0)}
                   />
                 </div>
@@ -905,16 +1180,27 @@ export default function SettingsView({
                       Object.keys(ROUND_MELEE).forEach(size => {
                         updated[size] = val;
                       });
-                      setLocalSettings(prev => ({
-                        ...prev,
-                        wholesale: {
-                          ...prev.wholesale,
-                          meleeRates: updated
-                        }
-                      }));
+                      if (selectedProfileId) {
+                        setLocalSettings(prev => ({
+                          ...prev,
+                          wholesaleProfiles: (prev.wholesaleProfiles || []).map(p =>
+                            p.id === selectedProfileId
+                              ? { ...p, settings: { ...p.settings, meleeRates: updated } }
+                              : p
+                          )
+                        }));
+                      } else {
+                        setLocalSettings(prev => ({
+                          ...prev,
+                          wholesale: {
+                            ...prev.wholesale,
+                            meleeRates: updated
+                          }
+                        }));
+                      }
                     }
                   }}
-                  className="text-[10px] text-brand-600 hover:text-brand-900 font-bold underline cursor-pointer"
+                  className="text-[10px] text-brand-600 hover:text-brand-900 font-bold underline cursor-pointer font-sans"
                 >
                   Set All Melee Rates
                 </button>
@@ -923,7 +1209,7 @@ export default function SettingsView({
               
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
                 {Object.entries(ROUND_MELEE).map(([size, carat]) => (
-                  <div key={size} className="bg-white p-2 rounded-xl border border-brand-100/85 shadow-xs flex flex-col justify-between gap-1.5">
+                  <div key={size} className="bg-white p-2 rounded-xl border border-brand-100/85 shadow-xs flex flex-col justify-between gap-1.5 font-sans">
                     <span className="text-[10px] font-bold text-brand-600 block leading-tight">
                       {size} mm <span className="font-mono text-[9px] text-brand-400">({carat} ct)</span>
                     </span>
@@ -933,7 +1219,7 @@ export default function SettingsView({
                         type="number"
                         placeholder="400"
                         className="w-full bg-brand-50/20 border border-brand-200 pl-4.5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono"
-                        value={localSettings.wholesale.meleeRates?.[size] ?? ""}
+                        value={currentWholesaleSettings.meleeRates?.[size] ?? ""}
                         onChange={(e) => handleWholesaleMeleeRate(size, parseFloat(e.target.value) || 0)}
                       />
                     </div>
@@ -954,23 +1240,34 @@ export default function SettingsView({
                   onClick={() => {
                     const val = parseFloat(prompt(`Enter wholesale price per carat to set for ALL sizes of ${activeFancyShapeTab}:`, "500") || "");
                     if (!isNaN(val)) {
-                      const updated = { ...(localSettings.wholesale.fancyRates || {}) };
+                      const updated = { ...(currentWholesaleSettings.fancyRates || {}) };
                       const sizes = FANCY_SHAPES[activeFancyShapeTab] || [];
                       sizes.forEach(sz => {
                         const key = `${activeFancyShapeTab}-${sz.label}`;
                         updated[key] = val;
                       });
                       updated[activeFancyShapeTab] = val; // Also fallback
-                      setLocalSettings(prev => ({
-                        ...prev,
-                        wholesale: {
-                          ...prev.wholesale,
-                          fancyRates: updated
-                        }
-                      }));
+                      if (selectedProfileId) {
+                        setLocalSettings(prev => ({
+                          ...prev,
+                          wholesaleProfiles: (prev.wholesaleProfiles || []).map(p =>
+                            p.id === selectedProfileId
+                              ? { ...p, settings: { ...p.settings, fancyRates: updated } }
+                              : p
+                          )
+                        }));
+                      } else {
+                        setLocalSettings(prev => ({
+                          ...prev,
+                          wholesale: {
+                            ...prev.wholesale,
+                            fancyRates: updated
+                          }
+                        }));
+                      }
                     }
                   }}
-                  className="text-[10px] text-brand-600 hover:text-brand-900 font-bold underline cursor-pointer"
+                  className="text-[10px] text-brand-600 hover:text-brand-900 font-bold underline cursor-pointer font-sans"
                 >
                   Set All {activeFancyShapeTab} Rates
                 </button>
@@ -978,7 +1275,7 @@ export default function SettingsView({
               <p className="text-[10px] text-brand-500">Select a fancy cut shape below, then manually adjust the wholesale price per carat for each size specification.</p>
               
               {/* Fancy shape selector tabs */}
-              <div className="flex flex-wrap gap-1 border-b border-brand-100/50 pb-2">
+              <div className="flex flex-wrap gap-1 border-b border-brand-100/50 pb-2 font-sans">
                 {Object.keys(FANCY_SHAPES).map(shape => (
                   <button
                     key={shape}
@@ -996,7 +1293,7 @@ export default function SettingsView({
               </div>
 
               {/* Base Shape Fallback rate input */}
-              <div className="bg-white p-3 rounded-xl border border-brand-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="bg-white p-3 rounded-xl border border-brand-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-sans">
                 <div className="leading-tight">
                   <span className="text-[11px] font-bold text-brand-800 block">
                     Base Shape Fallback Rate ({activeFancyShapeTab})
@@ -1009,7 +1306,7 @@ export default function SettingsView({
                     type="number"
                     placeholder="500"
                     className="w-full bg-brand-50/20 border border-brand-200 pl-6 pr-2 py-1 rounded-lg text-xs font-bold font-mono"
-                    value={localSettings.wholesale.fancyRates?.[activeFancyShapeTab] ?? ""}
+                    value={currentWholesaleSettings.fancyRates?.[activeFancyShapeTab] ?? ""}
                     onChange={(e) => handleWholesaleFancyRate(activeFancyShapeTab, parseFloat(e.target.value) || 0)}
                   />
                 </div>
@@ -1019,9 +1316,9 @@ export default function SettingsView({
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
                 {(FANCY_SHAPES[activeFancyShapeTab] || []).map((sz) => {
                   const key = `${activeFancyShapeTab}-${sz.label}`;
-                  const fallbackRate = localSettings.wholesale.fancyRates?.[activeFancyShapeTab] ?? 500;
+                  const fallbackRate = currentWholesaleSettings.fancyRates?.[activeFancyShapeTab] ?? 500;
                   return (
-                    <div key={sz.label} className="bg-white p-2 rounded-xl border border-brand-100/85 shadow-xs flex flex-col justify-between gap-1.5">
+                    <div key={sz.label} className="bg-white p-2 rounded-xl border border-brand-100/85 shadow-xs flex flex-col justify-between gap-1.5 font-sans">
                       <span className="text-[10px] font-bold text-brand-600 block leading-tight">
                         {sz.label} <span className="font-mono text-[9px] text-brand-400">({sz.carat} ct)</span>
                       </span>
@@ -1031,7 +1328,7 @@ export default function SettingsView({
                           type="number"
                           placeholder={String(fallbackRate)}
                           className="w-full bg-brand-50/20 border border-brand-200 pl-4.5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono"
-                          value={localSettings.wholesale.fancyRates?.[key] ?? ""}
+                          value={currentWholesaleSettings.fancyRates?.[key] ?? ""}
                           onChange={(e) => handleWholesaleFancyRate(key, parseFloat(e.target.value) || 0)}
                         />
                       </div>
@@ -1346,6 +1643,18 @@ export default function SettingsView({
                 <p className="text-[11px] text-brand-600 leading-relaxed mt-1">
                   Since you opted out of cloud databases, you can synchronize your complete calculator history, custom jewellery designs, and settings between your <strong>computers and iPad</strong> entirely for free.
                 </p>
+                <div className="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200/80 text-[11px] text-amber-950 leading-relaxed space-y-1.5 mt-2">
+                  <p className="font-bold flex items-center gap-1.5 text-amber-900 text-xs">
+                    <ShieldAlert size={13} className="text-amber-700 shrink-0" />
+                    How to Avoid Losing History When Updating (Vercel/GitHub)
+                  </p>
+                  <p>
+                    <strong>1. Keep to the Production Domain:</strong> Browser databases (<code className="bg-amber-100/60 px-1 py-0.5 rounded font-mono text-[10px]">localStorage</code>) are securely tied to your exact website URL address. If you update your code and visit Vercel's changing <em>Preview Links</em> (e.g. <code className="bg-amber-100/60 px-1 py-0.5 rounded font-mono text-[10px]">...git-main...vercel.app</code>), the iPad treats it as a brand new website and cannot access the old history. <strong>Always use your main, static production domain link</strong> to ensure your data is always there.
+                  </p>
+                  <p>
+                    <strong>2. Apple Safari Background Eviction:</strong> iOS Safari aggressively clears local storage for sites if you don't visit them for over 7 days or if disk space is low. We have implemented an automatic <strong>iOS Storage Preservation Request</strong> to block iOS from auto-purging this cache. However, we highly recommend clicking the <strong>Download Sync File</strong> button before any updates as an ultimate physical backup!
+                  </p>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

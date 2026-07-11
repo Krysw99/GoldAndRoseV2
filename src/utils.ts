@@ -23,6 +23,7 @@ export function getEmptyRing(category: CategoryType): JewelryItem {
     fancy: [],
     melee: [],
     clientStones: [],
+    centerStones: [],
     addons: [],
     showEngraving: false,
     engravingText: '',
@@ -80,7 +81,9 @@ export function getEmptyRing(category: CategoryType): JewelryItem {
     cRingSize: '',
     cBandWidth: '',
     cBandThickness: '',
-    centerStone: { carats: '', shape: 'Round', setting: 'Round Prongs', type: 'Diamond', origin: 'Lab' }
+    centerStone: { carats: '', shape: 'Round', setting: 'Round Prongs', type: 'Diamond', origin: 'Lab' },
+    centerStones: [],
+    showCenterStone: category === 'customRing' ? false : true
   };
 }
 
@@ -109,6 +112,21 @@ export function upgradeRingData(r: any): JewelryItem {
   }
   if (!base.fancy) base.fancy = [];
   if (!base.melee) base.melee = [];
+  if (!base.centerStones) {
+    base.centerStones = [];
+    if (base.centerStone && base.centerStone.carats !== '') {
+      base.centerStones.push({ ...base.centerStone });
+    }
+    if (base.category === 'earrings' && base.centerStone2 && base.centerStone2.carats !== '') {
+      base.centerStones.push({ ...base.centerStone2 });
+    }
+  }
+  base.centerStones.forEach((cs: any) => {
+    if (!cs.type) cs.type = 'Diamond';
+    if (!cs.origin) cs.origin = 'Lab';
+    if (!cs.shape) cs.shape = 'Round';
+    if (!cs.setting) cs.setting = 'Round Prongs';
+  });
   if (!base.metalColor) base.metalColor = 'Yellow';
   if (!base.centerStone && ['customRing', 'weddingBand', 'pendant', 'earrings'].includes(base.category)) {
     base.centerStone = { carats: '', shape: 'Round', setting: 'Round Prongs', type: 'Diamond', origin: 'Lab' };
@@ -136,6 +154,9 @@ export function upgradeRingData(r: any): JewelryItem {
     if (base.mbWidth === undefined || base.mbWidth === '') base.mbWidth = '5.0';
     if (base.mbThickness === undefined || base.mbThickness === '') base.mbThickness = '1.7';
     if (base.mbProfile === undefined || base.mbProfile === '') base.mbProfile = 'Flat';
+  }
+  if (base.showCenterStone === undefined) {
+    base.showCenterStone = base.category === 'customRing' ? (!!base.centerStone?.carats) : true;
   }
   return base as JewelryItem;
 }
@@ -290,6 +311,7 @@ export function calculateBandWeight(r: JewelryItem): string {
 export function hasRingData(r: JewelryItem): boolean {
   return !!(
     Number(r.goldGrams) > 0 ||
+    (r.centerStones && r.centerStones.some(cs => Number(cs.carats) > 0)) ||
     Number(r.centerStone?.carats) > 0 ||
     Number(r.centerStone2?.carats) > 0 ||
     r.fancy.some(f => Number(f.qty) > 0) ||
@@ -300,9 +322,10 @@ export function hasRingData(r: JewelryItem): boolean {
   );
 }
 
-export function calculateWholesaleRingCost(r: JewelryItem, settings: AppSettings, spotPrices: { gold: number, silver: number, platinum: number }, overridePrices?: { gold?: number, silver?: number, platinum?: number }): number {
+export function calculateWholesaleRingCost(r: JewelryItem, settings: AppSettings, spotPrices: { gold: number, silver: number, platinum: number }, overridePrices?: { gold?: number, silver?: number, platinum?: number }, wholesaleProfileId?: string): number {
   let c = 0;
-  const w = settings.wholesale;
+  const w = (wholesaleProfileId && settings.wholesaleProfiles?.find(p => p.id === wholesaleProfileId)?.settings)
+            || settings.wholesale;
   let g = Number(r.goldGrams) || 0;
   if (r.category === 'tennisBracelet' && !g) {
     g = getTennisEstimates(r).estGrams;
@@ -329,8 +352,8 @@ export function calculateWholesaleRingCost(r: JewelryItem, settings: AppSettings
     const fc = Number(r.tbManualCarats) || (fs * est.caratPerStone);
     
     const ppc = r.tbShape === 'Round' 
-      ? (settings.wholesale.meleeRates?.[r.tbSizeRound || '2.0'] ?? settings.rawCostRates.melee ?? 350) 
-      : (settings.wholesale.fancyRates?.[r.tbShape || 'Princess'] ?? settings.rawCostRates.fancy ?? 450);
+      ? (w.meleeRates?.[r.tbSizeRound || '2.0'] ?? settings.rawCostRates.melee ?? 350) 
+      : (w.fancyRates?.[r.tbShape || 'Princess'] ?? settings.rawCostRates.fancy ?? 450);
       
     const settingFee = r.tbShape === 'Round'
       ? Number(w.settingMelee || 5)
@@ -389,10 +412,10 @@ export function calculateWholesaleRingCost(r: JewelryItem, settings: AppSettings
   return c;
 }
 
-export function calculateRingCost(r: JewelryItem, settings: AppSettings, spotPrices: { gold: number, silver: number, platinum: number }, mode: 'retail' | 'wholesale' = 'retail', overridePrices?: { gold?: number, silver?: number, platinum?: number }): number {
+export function calculateRingCost(r: JewelryItem, settings: AppSettings, spotPrices: { gold: number, silver: number, platinum: number }, mode: 'retail' | 'wholesale' = 'retail', overridePrices?: { gold?: number, silver?: number, platinum?: number }, wholesaleProfileId?: string): number {
   if (!r) return 0;
   if (mode === 'wholesale') {
-    return calculateWholesaleRingCost(r, settings, spotPrices, overridePrices);
+    return calculateWholesaleRingCost(r, settings, spotPrices, overridePrices, wholesaleProfileId);
   }
   
   let cM = 0;
@@ -500,22 +523,33 @@ export function calculateRingCost(r: JewelryItem, settings: AppSettings, spotPri
     });
     
     let cC = 0;
-    if (['customRing', 'pendant', 'earrings'].includes(r.category) && r.centerStone?.carats) {
-      const cts = Number(r.centerStone.carats);
-      if (r.centerStone.type && r.centerStone.origin) {
-        cC = cts * Number(settings.centerStoneRates[r.centerStone.type]?.[r.centerStone.origin] ?? 1000);
+    if (['customRing', 'pendant', 'earrings'].includes(r.category)) {
+      if (r.centerStones && r.centerStones.length > 0) {
+        r.centerStones.forEach(cs => {
+          if (cs.carats) {
+            const cts = Number(cs.carats);
+            if (cs.type && cs.origin) {
+              cC += cts * Number(settings.centerStoneRates[cs.type]?.[cs.origin] ?? 1000);
+            }
+          }
+        });
+      } else {
+        if (r.centerStone?.carats) {
+          const cts = Number(r.centerStone.carats);
+          if (r.centerStone.type && r.centerStone.origin) {
+            cC += cts * Number(settings.centerStoneRates[r.centerStone.type]?.[r.centerStone.origin] ?? 1000);
+          }
+        }
+        if (r.category === 'earrings' && r.centerStone2?.carats) {
+          const cts = Number(r.centerStone2.carats);
+          if (r.centerStone2.type && r.centerStone2.origin) {
+            cC += cts * Number(settings.centerStoneRates[r.centerStone2.type]?.[r.centerStone2.origin] ?? 1000);
+          }
+        }
       }
     }
     
-    let cC2 = 0;
-    if (r.category === 'earrings' && r.centerStone2?.carats) {
-      const cts = Number(r.centerStone2.carats);
-      if (r.centerStone2.type && r.centerStone2.origin) {
-        cC2 = cts * Number(settings.centerStoneRates[r.centerStone2.type]?.[r.centerStone2.origin] ?? 1000);
-      }
-    }
-    
-    cS = cMc + (fc) + cC + cC2;
+    cS = cMc + (fc) + cC;
   }
   
   let cCF = 0;
@@ -574,26 +608,39 @@ export function calculateRawCost(r: JewelryItem, settings: AppSettings, spotPric
   });
   
   let rC = 0;
-  if (['customRing', 'pendant', 'earrings'].includes(r.category) && r.centerStone?.carats) {
-    const cts = Number(r.centerStone.carats);
-    if (r.centerStone.type && r.centerStone.origin) {
-      rC = cts * Number(settings.centerStoneRawRates[r.centerStone.type]?.[r.centerStone.origin] ?? 500);
+  if (['customRing', 'pendant', 'earrings'].includes(r.category)) {
+    if (r.centerStones && r.centerStones.length > 0) {
+      r.centerStones.forEach(cs => {
+        if (cs.carats) {
+          const cts = Number(cs.carats);
+          if (cs.type && cs.origin) {
+            rC += cts * Number(settings.centerStoneRawRates[cs.type]?.[cs.origin] ?? 500);
+          } else {
+            rC += cts * Number(settings.rawCostRates.center);
+          }
+        }
+      });
     } else {
-      rC = cts * Number(settings.rawCostRates.center);
+      if (r.centerStone?.carats) {
+        const cts = Number(r.centerStone.carats);
+        if (r.centerStone.type && r.centerStone.origin) {
+          rC += cts * Number(settings.centerStoneRawRates[r.centerStone.type]?.[r.centerStone.origin] ?? 500);
+        } else {
+          rC += cts * Number(settings.rawCostRates.center);
+        }
+      }
+      if (r.category === 'earrings' && r.centerStone2?.carats) {
+        const cts = Number(r.centerStone2.carats);
+        if (r.centerStone2.type && r.centerStone2.origin) {
+          rC += cts * Number(settings.centerStoneRawRates[r.centerStone2.type]?.[r.centerStone2.origin] ?? 500);
+        } else {
+          rC += cts * Number(settings.rawCostRates.center);
+        }
+      }
     }
   }
   
-  let rC2 = 0;
-  if (r.category === 'earrings' && r.centerStone2?.carats) {
-    const cts = Number(r.centerStone2.carats);
-    if (r.centerStone2.type && r.centerStone2.origin) {
-      rC2 = cts * Number(settings.centerStoneRawRates[r.centerStone2.type]?.[r.centerStone2.origin] ?? 500);
-    } else {
-      rC2 = cts * Number(settings.rawCostRates.center);
-    }
-  }
-  
-  return rMc + fc + rC + rC2 + rM;
+  return rMc + fc + rC + rM;
 }
 
 export function calculateScrapItemValue(item: ScrapItem, spotPrices: { gold: number, silver: number, platinum: number }): number {

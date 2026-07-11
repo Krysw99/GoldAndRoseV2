@@ -76,11 +76,14 @@ export interface JewelryItem {
   mbWidth?: string;
   mbThickness?: string;
   mbProfile?: string;
+  mbOverrideWeight?: boolean;
+  mbManualGrams?: string;
   goldGrams: string;
 
   // Pendant specific
   pDimensions?: string;
   centerStone?: CenterStone;
+  centerStones?: CenterStone[];
 
   // Tennis Bracelet specific
   tbLength?: number;
@@ -100,6 +103,7 @@ export interface JewelryItem {
   cBandWidth?: string;
   cBandThickness?: string;
   bandStyle?: string;
+  showCenterStone?: boolean;
 }
 
 export interface QuoteSession {
@@ -118,6 +122,7 @@ export interface QuoteSession {
   referenceSketch: string | null;
   referencePhoto: string | null;
   overridePrices?: { gold?: number; silver?: number; platinum?: number };
+  wholesaleProfileId?: string;
 }
 
 export interface ScrapItem {
@@ -214,6 +219,16 @@ export interface AppSettings {
   tennisFancyPricePerCtRaw: number;
   showRawCostOnQuoteTab: boolean;
   
+  storeName?: string;
+  storeSubName?: string;
+  storeAddress?: string;
+  storeContact?: string;
+  
+  wixStoreUrl?: string;
+  wixAccessToken?: string;
+  wixIntegrationMode?: string;
+  wixWebhookUrl?: string;
+  
   retailGoldPremium?: number;
   retailSilverPremium?: number;
   retailPlatinumPremium?: number;
@@ -229,6 +244,13 @@ export interface AppSettings {
   tennisMultipliers?: TennisMultiplierRange[];
   
   wholesale: WholesaleSettings;
+  wholesaleProfiles?: WholesaleProfile[];
+}
+
+export interface WholesaleProfile {
+  id: string;
+  name: string;
+  settings: WholesaleSettings;
 }
 
 export interface CubanMultiplierRange {
