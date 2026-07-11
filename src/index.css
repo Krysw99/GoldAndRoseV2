@@ -53,6 +53,13 @@ body {
     transform: none !important;
     backdrop-filter: none !important;
     filter: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Force system fonts fallback during print to prevent blocking WebKit network requests for custom Google web fonts */
+  body, html, #root, *, div, p, span, h1, h2, h3, h4, table, tr, td, th {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
   }
 
   /* Hide UI elements */
