@@ -8,6 +8,7 @@ import { Plus, Trash2, Camera, Shield, DollarSign, Scale, ArrowRight, Printer } 
 import { ScrapItem, MaterialType, ScrapTransaction } from '../types';
 import { PURITY_OPTIONS, TROY_ONCE_GRAMS } from '../constants';
 import { calculateScrapItemValue, calculateScrapTotal } from '../utils';
+import { printElement } from '../utils/printHelper';
 import SignaturePad from './SignaturePad';
 
 interface ScrapCalculatorProps {
@@ -179,11 +180,11 @@ export default function ScrapCalculator({
     if (shouldPrint && savedTx) {
       if (isIframe && onTriggerPrint) {
         onTriggerPrint(() => {
-          window.print();
+          printElement('scrap-receipt-box');
           resetForm();
         });
       } else {
-        window.print();
+        printElement('scrap-receipt-box');
         resetForm();
       }
     } else {
@@ -481,7 +482,7 @@ export default function ScrapCalculator({
     </div>
 
     {/* Print-only container */}
-    <div className="hidden print:block bg-white text-brand-800 text-left font-sans w-full p-4">
+    <div id="scrap-receipt-box" className="hidden print:block bg-white text-brand-800 text-left font-sans w-full p-4">
       <div className="max-w-xl mx-auto">
         {/* Header info */}
         <div className="flex justify-between items-start border-b border-brand-900 pb-4 mb-6">

@@ -12,6 +12,7 @@ import {
 import { ScrapTransaction, QuoteTransaction, AppSettings, QuoteSession, JewelryItem } from '../types';
 import { calculateRingCost, calculateScrapTotal } from '../utils';
 import { FANCY_SHAPES, TROY_ONCE_GRAMS } from '../constants';
+import { printElement } from '../utils/printHelper';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -537,9 +538,9 @@ export default function LedgerView({
                   type="button"
                   onClick={() => {
                     if (isIframe && onTriggerPrint) {
-                      onTriggerPrint(() => window.print());
+                      onTriggerPrint(() => printElement('ledger-invoice-box'));
                     } else {
-                      window.print();
+                      printElement('ledger-invoice-box');
                     }
                   }}
                   className="bg-brand-900 text-brand-gold hover:bg-brand-950 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all flex items-center gap-1 shadow-sm cursor-pointer"

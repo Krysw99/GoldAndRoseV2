@@ -41,6 +41,22 @@ export default function App() {
   // Navigation State
   const [activeTab, setActiveTab] = useState<'scrap' | 'quote' | 'wholesale' | 'spot' | 'cuban' | 'ledger' | 'settings'>('scrap');
 
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type });
+  };
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
   // Spot Rates & API credentials
   const [spotPrices, setSpotPrices] = useState({ gold: 2350, silver: 30, platinum: 1050 });
   const [lastUpdated, setLastUpdated] = useState('Manual Default');
@@ -440,7 +456,7 @@ export default function App() {
       saveDocument('scrap_ledger', existingId, updatedTx);
       setEditingScrapTx(null);
       playClickSound('success');
-      alert("Scrap payout adjusted and updated successfully in Ledger!");
+      showToast("Scrap payout adjusted and updated successfully in Ledger!", "success");
       return updatedTx;
     } else {
       const newTx: ScrapTransaction = {
@@ -468,7 +484,7 @@ export default function App() {
       // Sync to cloud Firestore
       saveDocument('scrap_ledger', newTx.id, newTx);
       playClickSound('success');
-      alert("Scrap payout logged successfully to Ledger!");
+      showToast("Scrap payout logged successfully to Ledger!", "success");
       return newTx;
     }
   };
@@ -609,7 +625,7 @@ export default function App() {
     }
 
     playClickSound('success');
-    alert("Quote successfully logged into ledger ledger!");
+    showToast("Quote successfully logged into Ledger!", "success");
   };
 
   const getTennisEstimates = (r: JewelryItem) => {
@@ -1213,6 +1229,22 @@ export default function App() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. LUXURIOUS NON-BLOCKING TOAST NOTIFICATION OVERLAY */}
+      {toast && (
+        <div className="fixed top-6 right-6 z-[9999] animate-fadeIn print:hidden">
+          <div className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border text-xs font-black uppercase tracking-wider transition-all duration-300 ${
+            toast.type === 'error' 
+              ? 'bg-red-50 border-red-200 text-red-800' 
+              : toast.type === 'info'
+                ? 'bg-blue-50 border-blue-200 text-blue-800'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          }`}>
+            <span className="w-2 h-2 rounded-full animate-pulse bg-current" />
+            {toast.message}
           </div>
         </div>
       )}

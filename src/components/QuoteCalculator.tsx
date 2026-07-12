@@ -21,6 +21,7 @@ import {
   getEmptyRing, getTennisEstimates, calculateBandWeight, 
   calculateRingCost, calculateRawCost, hasRingData 
 } from '../utils';
+import { printElement } from '../utils/printHelper';
 import SignaturePad from './SignaturePad';
 
 const PROFILE_SHAPES = [
@@ -3870,7 +3871,7 @@ export default function QuoteCalculator({
             </div>
 
             {!isDesignerMode ? (
-              <div className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none print:space-y-3.5">
+              <div id="quote-client-invoice-box" className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none print:space-y-3.5">
                 {/* Invoice Header */}
                 <div className="flex justify-between items-start border-b border-brand-200 pb-6 print:pb-3">
                   <div>
@@ -4242,7 +4243,7 @@ export default function QuoteCalculator({
                 </div>
               </div>
             ) : (
-              <div className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none print:space-y-3.5">
+              <div id="quote-cad-specs-box" className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none print:space-y-3.5">
                 {/* CAD Specs Header */}
                 <div className="flex justify-between items-start border-b border-brand-200 pb-6 print:pb-3">
                   <div>
@@ -4677,10 +4678,11 @@ export default function QuoteCalculator({
               <button
                 type="button"
                 onClick={() => {
+                  const targetId = isDesignerMode ? 'quote-cad-specs-box' : 'quote-client-invoice-box';
                   if (isIframe && onTriggerPrint) {
-                    onTriggerPrint(() => window.print());
+                    onTriggerPrint(() => printElement(targetId));
                   } else {
-                    window.print();
+                    printElement(targetId);
                   }
                 }}
                 className="bg-brand-100 text-brand-900 hover:bg-brand-200 font-bold py-3 px-6 rounded-2xl text-xs uppercase tracking-wider shadow-sm transition-all flex items-center gap-2 cursor-pointer"
