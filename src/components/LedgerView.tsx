@@ -25,6 +25,7 @@ interface LedgerViewProps {
   settings: AppSettings;
   onAddDemoTransaction?: () => void;
   onTriggerPrint?: (printFn: () => void) => void;
+  isIframe?: boolean;
 }
 
 function getQuoteTransactionScore(tx: QuoteTransaction, queryWords: string[], fullSearchStr: string): number {
@@ -171,7 +172,8 @@ export default function LedgerView({
   onLoadScrapIntoEditor,
   settings,
   onAddDemoTransaction,
-  onTriggerPrint
+  onTriggerPrint,
+  isIframe
 }: LedgerViewProps) {
   const [activeLedger, setActiveLedger] = useState<'scrap' | 'retail' | 'wholesale'>('retail');
   const [search, setSearch] = useState('');
@@ -213,15 +215,6 @@ export default function LedgerView({
       .sort((a, b) => b.score - a.score)
       .map(item => item.tx);
   }, [wholesaleTransactions, queryWords, fullSearchStr]);
-
-  // PDF Export Trigger using browser's native high-fidelity print engine (prevents canvas parsing issues with oklab/oklch colors)
-  const exportPdf = async (elementId: string, name: string) => {
-    if (onTriggerPrint) {
-      onTriggerPrint(() => window.print());
-    } else {
-      window.print();
-    }
-  };
 
   const currentTxData = () => {
     if (!selectedTx) return null;
@@ -542,8 +535,14 @@ export default function LedgerView({
                 )}
                 <button
                   type="button"
-                  onClick={() => exportPdf('ledger-invoice-box', activeTx.name || 'Quote')}
-                  className="bg-brand-900 text-brand-gold hover:bg-brand-950 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all flex items-center gap-1 shadow-sm"
+                  onClick={() => {
+                    if (isIframe && onTriggerPrint) {
+                      onTriggerPrint(() => window.print());
+                    } else {
+                      window.print();
+                    }
+                  }}
+                  className="bg-brand-900 text-brand-gold hover:bg-brand-950 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all flex items-center gap-1 shadow-sm cursor-pointer"
                 >
                   <Printer size={12} />
                   Print PDF

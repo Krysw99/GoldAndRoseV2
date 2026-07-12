@@ -863,6 +863,7 @@ interface QuoteCalculatorProps {
   isWholesale: boolean;
   scrapTransactions?: ScrapTransaction[];
   onTriggerPrint?: (printFn: () => void) => void;
+  isIframe?: boolean;
 }
 
 export default function QuoteCalculator({
@@ -874,7 +875,8 @@ export default function QuoteCalculator({
   spotPrices,
   isWholesale,
   scrapTransactions,
-  onTriggerPrint
+  onTriggerPrint,
+  isIframe
 }: QuoteCalculatorProps) {
   const getWholesaleBreakdown = () => {
     let rawMetalCost = 0;
@@ -4675,7 +4677,7 @@ export default function QuoteCalculator({
               <button
                 type="button"
                 onClick={() => {
-                  if (onTriggerPrint) {
+                  if (isIframe && onTriggerPrint) {
                     onTriggerPrint(() => window.print());
                   } else {
                     window.print();

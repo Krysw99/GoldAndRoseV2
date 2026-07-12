@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Camera, Shield, DollarSign, Scale, ArrowRight } from 'lucide-react';
+import { Plus, Trash2, Camera, Shield, DollarSign, Scale, ArrowRight, Printer } from 'lucide-react';
 import { ScrapItem, MaterialType, ScrapTransaction } from '../types';
 import { PURITY_OPTIONS, TROY_ONCE_GRAMS } from '../constants';
 import { calculateScrapItemValue, calculateScrapTotal } from '../utils';
@@ -25,11 +25,13 @@ interface ScrapCalculatorProps {
       signature: string | null;
     },
     existingId?: string
-  ) => void;
+  ) => ScrapTransaction;
   syncStatus: string | null;
   onFetchLivePrices: () => void;
   editingTransaction?: ScrapTransaction | null;
   onCancelEdit?: () => void;
+  onTriggerPrint?: (printFn: () => void) => void;
+  isIframe?: boolean;
 }
 
 export default function ScrapCalculator({ 
@@ -39,7 +41,9 @@ export default function ScrapCalculator({
   syncStatus,
   onFetchLivePrices,
   editingTransaction,
-  onCancelEdit
+  onCancelEdit,
+  onTriggerPrint,
+  isIframe
 }: ScrapCalculatorProps) {
   // Scrap State
   const [customerName, setCustomerName] = useState('');
@@ -137,7 +141,7 @@ export default function ScrapCalculator({
 
   const scrapTotal = calculateScrapTotal(items, spotPrices, stoneRemovalQty);
 
-  const handleSave = () => {
+  const handleSave = (shouldPrint: boolean = false) => {
     if (!customerName.trim()) {
       alert("Please enter customer name to log the buyback.");
       return;
@@ -148,7 +152,7 @@ export default function ScrapCalculator({
       return;
     }
 
-    onSaveTransaction({
+    const savedTx = onSaveTransaction({
       name: customerName,
       phone: phoneNumber,
       address,
@@ -159,21 +163,37 @@ export default function ScrapCalculator({
       signature: customerSignature
     }, editingTransaction?.id);
 
-    // Reset Form if not editing
-    if (!editingTransaction) {
-      setCustomerName('');
-      setPhoneNumber('');
-      setAddress('');
-      setDriversLicense('');
-      setStoneRemovalQty('');
-      setScrapImage(null);
-      setCustomerSignature(null);
-      setItems([{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
+    const resetForm = () => {
+      if (!editingTransaction) {
+        setCustomerName('');
+        setPhoneNumber('');
+        setAddress('');
+        setDriversLicense('');
+        setStoneRemovalQty('');
+        setScrapImage(null);
+        setCustomerSignature(null);
+        setItems([{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
+      }
+    };
+
+    if (shouldPrint && savedTx) {
+      if (isIframe && onTriggerPrint) {
+        onTriggerPrint(() => {
+          window.print();
+          resetForm();
+        });
+      } else {
+        window.print();
+        resetForm();
+      }
+    } else {
+      resetForm();
     }
   };
 
   return (
-    <div className="p-4 md:p-8 bg-white rounded-b-2xl rounded-tr-2xl shadow-lg border border-brand-100 space-y-8 animate-fadeIn">
+    <>
+      <div className="p-4 md:p-8 bg-white rounded-b-2xl rounded-tr-2xl shadow-lg border border-brand-100 space-y-8 animate-fadeIn print:hidden">
       {editingTransaction && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-4 animate-fadeIn">
           <div className="flex items-center gap-3">
@@ -413,23 +433,156 @@ export default function ScrapCalculator({
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
-        {editingTransaction && (
-          <button
-            type="button"
-            onClick={onCancelEdit}
-            className="flex-1 bg-brand-100 hover:bg-brand-200 text-brand-800 font-bold text-sm tracking-widest uppercase py-4 rounded-xl transition-colors cursor-pointer"
-          >
-            Cancel Adjust
-          </button>
+        {editingTransaction ? (
+          <>
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              className="flex-1 bg-brand-100 hover:bg-brand-200 text-brand-800 font-bold text-sm tracking-widest uppercase py-4 rounded-xl transition-colors cursor-pointer"
+            >
+              Cancel Adjust
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSave(false)}
+              className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-black text-sm tracking-widest uppercase py-4 rounded-xl shadow-md transition-colors cursor-pointer"
+            >
+              Save Adjusted Buyback
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSave(true)}
+              className="flex-1 bg-brand-800 hover:bg-brand-900 text-brand-gold font-black text-sm tracking-widest uppercase py-4 rounded-xl shadow-md transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Printer size={16} />
+              Save & Print Payout Log
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => handleSave(false)}
+              className="flex-1 bg-brand-100 hover:bg-brand-200 text-brand-800 font-bold text-sm tracking-widest uppercase py-4 rounded-xl transition-colors cursor-pointer"
+            >
+              Commit Payout Log
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSave(true)}
+              className="flex-1 bg-brand-800 text-brand-gold hover:bg-brand-900 font-black text-sm tracking-widest uppercase py-4 rounded-xl shadow-md transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Printer size={16} />
+              Commit & Print Payout Log
+            </button>
+          </>
         )}
-        <button
-          type="button"
-          onClick={handleSave}
-          className={`${editingTransaction ? 'flex-1 bg-amber-600 hover:bg-amber-700 text-white' : 'w-full bg-brand-800 text-brand-gold hover:bg-brand-900'} font-black text-sm tracking-widest uppercase py-4 rounded-xl shadow-md transition-colors cursor-pointer`}
-        >
-          {editingTransaction ? 'Save Adjusted Buyback' : 'Commit Payout Log'}
-        </button>
       </div>
     </div>
+
+    {/* Print-only container */}
+    <div className="hidden print:block bg-white text-brand-800 text-left font-sans w-full p-4">
+      <div className="max-w-xl mx-auto">
+        {/* Header info */}
+        <div className="flex justify-between items-start border-b border-brand-900 pb-4 mb-6">
+          <div>
+            <h1 className="font-serif text-2xl font-black italic tracking-wide text-brand-900 mb-0.5">Gold And Rose Jewellery Corp</h1>
+            <p className="text-[10px] text-brand-500 font-bold uppercase tracking-wider">James Lee • 604-250-7414</p>
+            <p className="text-[8px] text-brand-400 font-mono mt-0.5">GST/HST: 737186213RT0001</p>
+          </div>
+          <div className="text-right">
+            <h2 className="text-sm font-black uppercase tracking-widest text-brand-400">Buyback Receipt</h2>
+            <p className="text-[10px] font-bold text-brand-800 mt-0.5">
+              {new Date().toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </p>
+            <p className="text-[8px] font-mono text-brand-400">Ref: #{editingTransaction?.id || 'NEW'}</p>
+          </div>
+        </div>
+
+        {/* Customer Details */}
+        <div className="grid grid-cols-2 gap-4 mb-6 text-xs">
+          <div className="bg-brand-50 p-3 rounded-xl border border-brand-100">
+            <p className="text-[9px] uppercase font-black text-brand-400 tracking-wider mb-1">Client Details</p>
+            <p className="font-bold text-brand-900">{customerName || 'N/A'}</p>
+            {phoneNumber && (
+              <p className="text-brand-600 mt-0.5">{phoneNumber}</p>
+            )}
+            {address && (
+              <p className="text-brand-500 mt-0.5 leading-relaxed">{address}</p>
+            )}
+            {driversLicense && (
+              <p className="text-[9px] text-brand-400 mt-1 font-mono">ID: {driversLicense}</p>
+            )}
+          </div>
+          <div className="bg-green-50/50 p-3 rounded-xl border border-green-100 text-right flex flex-col justify-center">
+            <p className="text-[9px] uppercase font-black text-green-700 tracking-wider mb-1">Total Payout Paid (CAD)</p>
+            <p className="text-2xl font-black text-green-600">${scrapTotal.toFixed(2)}</p>
+          </div>
+        </div>
+
+        {/* Items list */}
+        <div className="space-y-4 mb-6">
+          <div>
+            <p className="text-[10px] uppercase font-black text-brand-500 tracking-widest border-b border-brand-100 pb-1 mb-2">Verified Items Received</p>
+            <div className="bg-brand-50/50 p-3 rounded-xl border border-brand-100/50 text-xs text-brand-700 space-y-1.5 leading-relaxed">
+              {items.filter(i => Number(i.weight) > 0).map((it, idx) => {
+                const val = calculateScrapItemValue(it, spotPrices);
+                return (
+                  <div key={idx} className="flex justify-between items-center border-b border-dashed border-brand-100 pb-1.5 last:border-none last:pb-0">
+                    <span>
+                      {it.weight}g {it.material} ({it.purity}{it.material === 'gold' ? 'k' : ''}) @ {it.rate}% payout rate
+                    </span>
+                    <span className="font-bold text-brand-900 font-mono">${val.toFixed(2)}</span>
+                  </div>
+                );
+              })}
+              {Number(stoneRemovalQty) > 0 && (
+                <div className="flex justify-between items-center text-red-600 pt-1">
+                  <span>Stone extraction fee ({stoneRemovalQty} stones)</span>
+                  <span className="font-bold font-mono">-${(Number(stoneRemovalQty) * 5).toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Snapshot of Driver's license / items if available */}
+        {scrapImage && (
+          <div className="mb-6">
+            <p className="text-[10px] uppercase font-black text-brand-400 tracking-wider mb-2">Verified ID Photograph</p>
+            <img src={scrapImage} alt="Compliance photo" className="h-28 w-44 object-contain rounded-xl border border-brand-200 shadow-sm" />
+          </div>
+        )}
+
+        {/* Sign-off terms */}
+        <div className="border-t border-brand-200 pt-5 text-center space-y-4">
+          <p className="text-[8px] text-brand-400 italic leading-relaxed font-sans">
+            I declare that I am the legal owner of the scrap items presented above and have full right to transact and sell them to Gold & Rose Jewellery Corp. All buyout transactions are absolute and final.
+          </p>
+          <div className="flex flex-col items-center justify-center font-sans">
+            {customerSignature ? (
+              <div className="h-16 w-40 flex items-center justify-center relative overflow-hidden mb-1">
+                <img 
+                  src={customerSignature} 
+                  alt="Client signature" 
+                  className="max-h-16 max-w-full object-contain filter brightness-95" 
+                />
+              </div>
+            ) : (
+              <div className="h-12"></div>
+            )}
+            <div className="w-40 border-b border-brand-300"></div>
+            <p className="text-[8px] uppercase tracking-wider text-brand-500 mt-1">Client Authorization Signature</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </>
   );
 }

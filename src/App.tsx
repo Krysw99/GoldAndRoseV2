@@ -73,9 +73,9 @@ export default function App() {
   const [showIframePrintDialog, setShowIframePrintDialog] = useState(false);
   const [pendingPrintFn, setPendingPrintFn] = useState<(() => void) | null>(null);
 
-  // Trigger optimized printing on iPad/Safari
+  // Trigger optimized printing inside iframes (such as the AI Studio dev preview)
   const handleTriggerPrint = (printFn: () => void) => {
-    if (isIframe && isIOS) {
+    if (isIframe) {
       setPendingPrintFn(() => printFn);
       setShowIframePrintDialog(true);
     } else {
@@ -402,7 +402,7 @@ export default function App() {
       signature: string | null;
     },
     existingId?: string
-  ) => {
+  ): ScrapTransaction => {
     const logStr = data.items.map(i => `${i.weight}g ${i.material} (${i.purity}${i.material==='gold'?'k':''})`).join(', ');
     const totalVal = data.items.reduce((total, item) => {
       const w = parseFloat(item.weight) || 0;
@@ -441,6 +441,7 @@ export default function App() {
       setEditingScrapTx(null);
       playClickSound('success');
       alert("Scrap payout adjusted and updated successfully in Ledger!");
+      return updatedTx;
     } else {
       const newTx: ScrapTransaction = {
         id: Math.random().toString(36).substring(2, 11),
@@ -468,6 +469,7 @@ export default function App() {
       saveDocument('scrap_ledger', newTx.id, newTx);
       playClickSound('success');
       alert("Scrap payout logged successfully to Ledger!");
+      return newTx;
     }
   };
 
@@ -851,13 +853,13 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100 text-brand-800 flex flex-col font-sans selection:bg-brand-gold selection:text-brand-900 pb-12">
       
-      {/* iPad / iOS Safari print-blocking iframe warning banner */}
-      {isIframe && isIOS && (
+      {/* Print-blocking iframe warning banner */}
+      {isIframe && (
         <div className="bg-amber-50 border-b border-amber-200 text-amber-900 text-xs py-2.5 px-4 font-sans flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn print:hidden shadow-sm">
           <div className="flex items-center gap-2">
             <AlertCircle size={16} className="text-brand-gold shrink-0 animate-pulse" />
             <span>
-              <strong>iPad Safari Block Detected:</strong> Apple restricts printing inside builder preview frames, resulting in a print block or lag. Open the app in a <strong>New Tab</strong> to print <strong>instantly</strong> with zero delay!
+              <strong>Safari/iPad Print Block:</strong> Browsers block or freeze when printing inside website frames. Open the app in a <strong>New Tab</strong> to print <strong>instantly</strong> with zero delay! (Live sync preserves all your changes).
             </span>
           </div>
           <button
@@ -1055,6 +1057,8 @@ export default function App() {
               onFetchLivePrices={fetchLivePrices}
               editingTransaction={editingScrapTx}
               onCancelEdit={() => setEditingScrapTx(null)}
+              onTriggerPrint={handleTriggerPrint}
+              isIframe={isIframe}
             />
           )}
 
@@ -1089,6 +1093,7 @@ export default function App() {
               isWholesale={false}
               scrapTransactions={scrapTransactions}
               onTriggerPrint={handleTriggerPrint}
+              isIframe={isIframe}
             />
           )}
 
@@ -1107,6 +1112,7 @@ export default function App() {
               isWholesale={true}
               scrapTransactions={scrapTransactions}
               onTriggerPrint={handleTriggerPrint}
+              isIframe={isIframe}
             />
           )}
 
@@ -1121,6 +1127,7 @@ export default function App() {
               settings={settings}
               onAddDemoTransaction={handleCreateDemoTransaction}
               onTriggerPrint={handleTriggerPrint}
+              isIframe={isIframe}
             />
           )}
 
@@ -1166,17 +1173,17 @@ export default function App() {
             </button>
 
             <div className="mx-auto bg-amber-50 text-brand-gold p-3 rounded-2xl mb-4 border border-amber-100 w-12 h-12 flex items-center justify-center">
-              <Printer size={24} className="text-brand-gold" />
+              <Printer size={24} className="text-brand-gold animate-bounce" />
             </div>
 
             <h3 className="font-serif text-lg font-bold italic text-brand-900 mb-2">
-              Fix iPad Print Block & Delay
+              Bypass iPad Print Block
             </h3>
             
             <p className="text-xs text-brand-600 mb-6 leading-relaxed">
-              iPadOS Safari blocks or severely delays printing from inside website frames. This results in the warning <strong>"website has been blocked from automatically printing"</strong> or causes a 10-20s freeze.
+              Safari on iPad blocks and delays printing from inside website frames, showing the warning <strong>"website has been blocked from automatically printing"</strong>.
               <br /><br />
-              Since your Gold & Rose app utilizes <strong>Live Cloud Sync</strong>, you can open this app in its own browser tab to print <strong>instantly</strong> with zero delay!
+              Since your Gold & Rose app features <strong>Live Cloud Sync</strong>, your calculations are saved instantly. Simply open the app in a standalone tab to print with zero delay!
             </p>
 
             <div className="flex flex-col gap-2.5">
@@ -1191,7 +1198,7 @@ export default function App() {
                 className="w-full bg-brand-gold hover:bg-brand-400 text-brand-950 font-black py-3.5 px-6 rounded-xl text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all border border-brand-300"
               >
                 <ExternalLink size={14} />
-                Open in New Tab & Print Instantly
+                Open in New Tab & Print Flawlessly
               </button>
 
               <button
