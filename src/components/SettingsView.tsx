@@ -177,6 +177,23 @@ export default function SettingsView({
     reader.readAsText(file);
   };
 
+  const sanitizeNumbers = (obj: any): any => {
+    if (obj === '') {
+      return 0;
+    }
+    if (Array.isArray(obj)) {
+      return obj.map(sanitizeNumbers);
+    }
+    if (obj !== null && typeof obj === 'object') {
+      const res: any = {};
+      for (const key of Object.keys(obj)) {
+        res[key] = sanitizeNumbers(obj[key]);
+      }
+      return res;
+    }
+    return obj;
+  };
+
   const handleSaveAll = () => {
     // Apply manual spot rate updates
     const g = parseFloat(manualGold) || spotPrices.gold;
@@ -187,13 +204,22 @@ export default function SettingsView({
     // Save Gold API Key
     onSaveApiKey(apiKey);
 
-    // Save Master Settings
-    onSaveSettings(localSettings);
+    // Save Master Settings with deep cleaning of temporary empty string values
+    onSaveSettings(sanitizeNumbers(localSettings));
 
     alert("Master parameters saved successfully and applied globally!");
   };
 
-  const handleNestedSetting = (section: keyof AppSettings, field: string, value: number) => {
+  const handleTopLevelSetting = (field: keyof AppSettings, valueStr: string) => {
+    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
+    setLocalSettings(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleNestedSetting = (section: keyof AppSettings, field: string, valueStr: any) => {
+    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     setLocalSettings(prev => {
       const target = prev[section];
       if (typeof target === 'object' && target !== null) {
@@ -209,7 +235,8 @@ export default function SettingsView({
     });
   };
 
-  const handleDoubleNestedSetting = (section: 'centerStoneRates' | 'centerStoneRawRates', stoneType: string, origin: 'Natural' | 'Lab', value: number) => {
+  const handleDoubleNestedSetting = (section: 'centerStoneRates' | 'centerStoneRawRates', stoneType: string, origin: 'Natural' | 'Lab', valueStr: any) => {
+    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     setLocalSettings(prev => {
       const rates = prev[section];
       return {
@@ -225,7 +252,8 @@ export default function SettingsView({
     });
   };
 
-  const handleWholesaleSetting = (field: string, value: number) => {
+  const handleWholesaleSetting = (field: string, valueStr: any) => {
+    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     if (selectedProfileId) {
       setLocalSettings(prev => ({
         ...prev,
@@ -246,7 +274,8 @@ export default function SettingsView({
     }
   };
 
-  const handleWholesaleMeleeRate = (size: string, value: number) => {
+  const handleWholesaleMeleeRate = (size: string, valueStr: any) => {
+    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     if (selectedProfileId) {
       setLocalSettings(prev => ({
         ...prev,
@@ -276,7 +305,8 @@ export default function SettingsView({
     }
   };
 
-  const handleWholesaleFancyRate = (key: string, value: number) => {
+  const handleWholesaleFancyRate = (key: string, valueStr: any) => {
+    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     if (selectedProfileId) {
       setLocalSettings(prev => ({
         ...prev,
@@ -306,7 +336,8 @@ export default function SettingsView({
     }
   };
 
-  const handleRawMeleeRate = (size: string, value: number) => {
+  const handleRawMeleeRate = (size: string, valueStr: any) => {
+    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     setLocalSettings(prev => ({
       ...prev,
       rawMeleeRates: {
@@ -316,7 +347,8 @@ export default function SettingsView({
     }));
   };
 
-  const handleRawFancyRate = (key: string, value: number) => {
+  const handleRawFancyRate = (key: string, valueStr: any) => {
+    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     setLocalSettings(prev => ({
       ...prev,
       rawFancyRates: {
@@ -326,12 +358,13 @@ export default function SettingsView({
     }));
   };
 
-  const handleUpdateCubanMultiplier = (index: number, field: 'minWidth' | 'maxWidth' | 'multiplier', value: number) => {
+  const handleUpdateCubanMultiplier = (index: number, field: 'minWidth' | 'maxWidth' | 'multiplier', valueStr: any) => {
+    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     setLocalSettings(prev => {
       const updated = [...(prev.cubanMultipliers || [])];
       updated[index] = {
         ...updated[index],
-        [field]: value
+        [field]: value as any
       };
       return {
         ...prev,
@@ -361,12 +394,13 @@ export default function SettingsView({
     });
   };
 
-  const handleUpdateTennisMultiplier = (index: number, field: 'minWidth' | 'maxWidth' | 'multiplier', value: number) => {
+  const handleUpdateTennisMultiplier = (index: number, field: 'minWidth' | 'maxWidth' | 'multiplier', valueStr: any) => {
+    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     setLocalSettings(prev => {
       const updated = [...(prev.tennisMultipliers || [])];
       updated[index] = {
         ...updated[index],
-        [field]: value
+        [field]: value as any
       };
       return {
         ...prev,
@@ -670,7 +704,7 @@ export default function SettingsView({
                   type="number"
                   className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                   value={localSettings.settingFeeCenterPerCt}
-                  onChange={(e) => setLocalSettings(prev => ({ ...prev, settingFeeCenterPerCt: parseFloat(e.target.value) || 0 }))}
+                  onChange={(e) => handleTopLevelSetting('settingFeeCenterPerCt', e.target.value)}
                 />
               </div>
               <div>
@@ -679,7 +713,7 @@ export default function SettingsView({
                   type="number"
                   className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                   value={localSettings.settingFeeFancyPerSt !== undefined ? localSettings.settingFeeFancyPerSt : 25}
-                  onChange={(e) => setLocalSettings(prev => ({ ...prev, settingFeeFancyPerSt: parseFloat(e.target.value) || 0 }))}
+                  onChange={(e) => handleTopLevelSetting('settingFeeFancyPerSt', e.target.value)}
                 />
               </div>
               <div>
@@ -688,7 +722,7 @@ export default function SettingsView({
                   type="number"
                   className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                   value={localSettings.settingFeeMeleePerSt}
-                  onChange={(e) => setLocalSettings(prev => ({ ...prev, settingFeeMeleePerSt: parseFloat(e.target.value) || 0 }))}
+                  onChange={(e) => handleTopLevelSetting('settingFeeMeleePerSt', e.target.value)}
                 />
               </div>
             </div>
@@ -703,7 +737,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                     value={localSettings.retailGoldPremium !== undefined ? localSettings.retailGoldPremium : 100}
-                    onChange={(e) => setLocalSettings(prev => ({ ...prev, retailGoldPremium: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => handleTopLevelSetting('retailGoldPremium', e.target.value)}
                   />
                 </div>
                 <div>
@@ -712,7 +746,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                     value={localSettings.retailSilverPremium !== undefined ? localSettings.retailSilverPremium : 20}
-                    onChange={(e) => setLocalSettings(prev => ({ ...prev, retailSilverPremium: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => handleTopLevelSetting('retailSilverPremium', e.target.value)}
                   />
                 </div>
                 <div>
@@ -721,7 +755,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                     value={localSettings.retailPlatinumPremium !== undefined ? localSettings.retailPlatinumPremium : 100}
-                    onChange={(e) => setLocalSettings(prev => ({ ...prev, retailPlatinumPremium: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => handleTopLevelSetting('retailPlatinumPremium', e.target.value)}
                   />
                 </div>
               </div>
@@ -737,7 +771,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                     value={localSettings.meleePricePerCt}
-                    onChange={(e) => setLocalSettings(prev => ({ ...prev, meleePricePerCt: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => handleTopLevelSetting('meleePricePerCt', e.target.value)}
                   />
                 </div>
                 <div>
@@ -746,7 +780,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                     value={localSettings.fancyPricePerCt}
-                    onChange={(e) => setLocalSettings(prev => ({ ...prev, fancyPricePerCt: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => handleTopLevelSetting('fancyPricePerCt', e.target.value)}
                   />
                 </div>
                 <div>
@@ -755,7 +789,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                     value={localSettings.earringMeleePricePerCt}
-                    onChange={(e) => setLocalSettings(prev => ({ ...prev, earringMeleePricePerCt: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => handleTopLevelSetting('earringMeleePricePerCt', e.target.value)}
                   />
                 </div>
                 <div>
@@ -764,7 +798,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                     value={localSettings.earringFancyPricePerCt}
-                    onChange={(e) => setLocalSettings(prev => ({ ...prev, earringFancyPricePerCt: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => handleTopLevelSetting('earringFancyPricePerCt', e.target.value)}
                   />
                 </div>
               </div>
@@ -784,7 +818,7 @@ export default function SettingsView({
                           type="number"
                           className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
                           value={localSettings.centerStoneRates[stone].Natural}
-                          onChange={(e) => handleDoubleNestedSetting('centerStoneRates', stone, 'Natural', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => handleDoubleNestedSetting('centerStoneRates', stone, 'Natural', e.target.value)}
                         />
                       </div>
                       <div>
@@ -793,7 +827,7 @@ export default function SettingsView({
                           type="number"
                           className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
                           value={localSettings.centerStoneRates[stone].Lab}
-                          onChange={(e) => handleDoubleNestedSetting('centerStoneRates', stone, 'Lab', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => handleDoubleNestedSetting('centerStoneRates', stone, 'Lab', e.target.value)}
                         />
                       </div>
                     </div>
@@ -813,7 +847,7 @@ export default function SettingsView({
                       type="number"
                       className="w-full bg-brand-50/50 border border-brand-200 p-2 rounded-xl text-xs font-bold"
                       value={localSettings.goldPricesPerGram[karat] || ''}
-                      onChange={(e) => handleNestedSetting('goldPricesPerGram', karat.toString(), parseFloat(e.target.value) || 0)}
+                      onChange={(e) => handleNestedSetting('goldPricesPerGram', karat.toString(), e.target.value)}
                     />
                   </div>
                 ))}
@@ -853,7 +887,7 @@ export default function SettingsView({
                           min="0"
                           className="w-full bg-brand-50/30 border border-brand-200 px-2 py-1 rounded-lg text-xs font-bold font-mono"
                           value={range.minWidth}
-                          onChange={(e) => handleUpdateCubanMultiplier(index, 'minWidth', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => handleUpdateCubanMultiplier(index, 'minWidth', e.target.value)}
                         />
                       </div>
                       <div>
@@ -864,7 +898,7 @@ export default function SettingsView({
                           min="0"
                           className="w-full bg-brand-50/30 border border-brand-200 px-2 py-1 rounded-lg text-xs font-bold font-mono"
                           value={range.maxWidth}
-                          onChange={(e) => handleUpdateCubanMultiplier(index, 'maxWidth', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => handleUpdateCubanMultiplier(index, 'maxWidth', e.target.value)}
                         />
                       </div>
                     </div>
@@ -877,7 +911,7 @@ export default function SettingsView({
                         min="1"
                         className="w-full bg-brand-50/30 border border-brand-200 px-2 py-1 rounded-lg text-xs font-bold font-mono"
                         value={range.multiplier}
-                        onChange={(e) => handleUpdateCubanMultiplier(index, 'multiplier', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => handleUpdateCubanMultiplier(index, 'multiplier', e.target.value)}
                       />
                     </div>
 
@@ -919,7 +953,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
                     value={localSettings.tennisDiamondPricePerCt !== undefined ? localSettings.tennisDiamondPricePerCt : 600}
-                    onChange={(e) => setLocalSettings(prev => ({ ...prev, tennisDiamondPricePerCt: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => handleTopLevelSetting('tennisDiamondPricePerCt', e.target.value)}
                   />
                   <span className="text-[9px] text-brand-400 mt-1 block">Default price for all diamond sizes ($600)</span>
                 </div>
@@ -929,7 +963,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
                     value={localSettings.tennisMeleePricePerCt !== undefined ? localSettings.tennisMeleePricePerCt : 2600}
-                    onChange={(e) => setLocalSettings(prev => ({ ...prev, tennisMeleePricePerCt: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => handleTopLevelSetting('tennisMeleePricePerCt', e.target.value)}
                   />
                   <span className="text-[9px] text-brand-400 mt-1 block">Used if diamond override is not set ($2,600)</span>
                 </div>
@@ -939,7 +973,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
                     value={localSettings.tennisFancyPricePerCt !== undefined ? localSettings.tennisFancyPricePerCt : 800}
-                    onChange={(e) => setLocalSettings(prev => ({ ...prev, tennisFancyPricePerCt: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => handleTopLevelSetting('tennisFancyPricePerCt', e.target.value)}
                   />
                   <span className="text-[9px] text-brand-400 mt-1 block">Used for non-round fancy cut styles ($800)</span>
                 </div>
@@ -976,7 +1010,7 @@ export default function SettingsView({
                           min="0"
                           className="w-full bg-brand-50/30 border border-brand-200 px-2 py-1 rounded-lg text-xs font-bold font-mono"
                           value={range.minWidth}
-                          onChange={(e) => handleUpdateTennisMultiplier(index, 'minWidth', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => handleUpdateTennisMultiplier(index, 'minWidth', e.target.value)}
                         />
                       </div>
                       <div>
@@ -987,7 +1021,7 @@ export default function SettingsView({
                           min="0"
                           className="w-full bg-brand-50/30 border border-brand-200 px-2 py-1 rounded-lg text-xs font-bold font-mono"
                           value={range.maxWidth}
-                          onChange={(e) => handleUpdateTennisMultiplier(index, 'maxWidth', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => handleUpdateTennisMultiplier(index, 'maxWidth', e.target.value)}
                         />
                       </div>
                     </div>
@@ -1000,7 +1034,7 @@ export default function SettingsView({
                         min="1"
                         className="w-full bg-brand-50/30 border border-brand-200 px-2 py-1 rounded-lg text-xs font-bold font-mono"
                         value={range.multiplier}
-                        onChange={(e) => handleUpdateTennisMultiplier(index, 'multiplier', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => handleUpdateTennisMultiplier(index, 'multiplier', e.target.value)}
                       />
                     </div>
 
@@ -1108,7 +1142,7 @@ export default function SettingsView({
                   type="number"
                   className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                   value={currentWholesaleSettings.goldSpotPremium}
-                  onChange={(e) => handleWholesaleSetting('goldSpotPremium', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => handleWholesaleSetting('goldSpotPremium', e.target.value)}
                 />
               </div>
               <div>
@@ -1117,7 +1151,7 @@ export default function SettingsView({
                   type="number"
                   className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                   value={currentWholesaleSettings.laborPerGram}
-                  onChange={(e) => handleWholesaleSetting('laborPerGram', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => handleWholesaleSetting('laborPerGram', e.target.value)}
                 />
               </div>
               <div>
@@ -1126,7 +1160,7 @@ export default function SettingsView({
                   type="number"
                   className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                   value={currentWholesaleSettings.designFee}
-                  onChange={(e) => handleWholesaleSetting('designFee', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => handleWholesaleSetting('designFee', e.target.value)}
                 />
               </div>
             </div>
@@ -1140,7 +1174,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                     value={currentWholesaleSettings.settingMelee}
-                    onChange={(e) => handleWholesaleSetting('settingMelee', parseFloat(e.target.value) || 0)}
+                    onChange={(e) => handleWholesaleSetting('settingMelee', e.target.value)}
                   />
                 </div>
                 <div>
@@ -1149,7 +1183,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                     value={currentWholesaleSettings.settingFancy}
-                    onChange={(e) => handleWholesaleSetting('settingFancy', parseFloat(e.target.value) || 0)}
+                    onChange={(e) => handleWholesaleSetting('settingFancy', e.target.value)}
                   />
                 </div>
                 <div>
@@ -1158,7 +1192,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                     value={currentWholesaleSettings.settingCenter}
-                    onChange={(e) => handleWholesaleSetting('settingCenter', parseFloat(e.target.value) || 0)}
+                    onChange={(e) => handleWholesaleSetting('settingCenter', e.target.value)}
                   />
                 </div>
               </div>
@@ -1220,7 +1254,7 @@ export default function SettingsView({
                         placeholder="400"
                         className="w-full bg-brand-50/20 border border-brand-200 pl-4.5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono"
                         value={currentWholesaleSettings.meleeRates?.[size] ?? ""}
-                        onChange={(e) => handleWholesaleMeleeRate(size, parseFloat(e.target.value) || 0)}
+                        onChange={(e) => handleWholesaleMeleeRate(size, e.target.value)}
                       />
                     </div>
                   </div>
@@ -1291,7 +1325,7 @@ export default function SettingsView({
                   </button>
                 ))}
               </div>
-
+              
               {/* Base Shape Fallback rate input */}
               <div className="bg-white p-3 rounded-xl border border-brand-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-sans">
                 <div className="leading-tight">
@@ -1307,7 +1341,7 @@ export default function SettingsView({
                     placeholder="500"
                     className="w-full bg-brand-50/20 border border-brand-200 pl-6 pr-2 py-1 rounded-lg text-xs font-bold font-mono"
                     value={currentWholesaleSettings.fancyRates?.[activeFancyShapeTab] ?? ""}
-                    onChange={(e) => handleWholesaleFancyRate(activeFancyShapeTab, parseFloat(e.target.value) || 0)}
+                    onChange={(e) => handleWholesaleFancyRate(activeFancyShapeTab, e.target.value)}
                   />
                 </div>
               </div>
@@ -1329,7 +1363,7 @@ export default function SettingsView({
                           placeholder={String(fallbackRate)}
                           className="w-full bg-brand-50/20 border border-brand-200 pl-4.5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono"
                           value={currentWholesaleSettings.fancyRates?.[key] ?? ""}
-                          onChange={(e) => handleWholesaleFancyRate(key, parseFloat(e.target.value) || 0)}
+                          onChange={(e) => handleWholesaleFancyRate(key, e.target.value)}
                         />
                       </div>
                     </div>
@@ -1387,7 +1421,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                     value={localSettings.rawCostRates.melee}
-                    onChange={(e) => handleNestedSetting('rawCostRates', 'melee', parseFloat(e.target.value) || 0)}
+                    onChange={(e) => handleNestedSetting('rawCostRates', 'melee', e.target.value)}
                   />
                 </div>
                 <div>
@@ -1396,7 +1430,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                     value={localSettings.rawCostRates.fancy}
-                    onChange={(e) => handleNestedSetting('rawCostRates', 'fancy', parseFloat(e.target.value) || 0)}
+                    onChange={(e) => handleNestedSetting('rawCostRates', 'fancy', e.target.value)}
                   />
                 </div>
                 <div>
@@ -1405,7 +1439,7 @@ export default function SettingsView({
                     type="number"
                     className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
                     value={localSettings.rawCostRates.center}
-                    onChange={(e) => handleNestedSetting('rawCostRates', 'center', parseFloat(e.target.value) || 0)}
+                    onChange={(e) => handleNestedSetting('rawCostRates', 'center', e.target.value)}
                   />
                 </div>
               </div>
@@ -1425,7 +1459,7 @@ export default function SettingsView({
                           type="number"
                           className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
                           value={localSettings.centerStoneRawRates[stone]?.Natural ?? 500}
-                          onChange={(e) => handleDoubleNestedSetting('centerStoneRawRates', stone, 'Natural', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => handleDoubleNestedSetting('centerStoneRawRates', stone, 'Natural', e.target.value)}
                         />
                       </div>
                       <div>
@@ -1434,7 +1468,7 @@ export default function SettingsView({
                           type="number"
                           className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
                           value={localSettings.centerStoneRawRates[stone]?.Lab ?? 200}
-                          onChange={(e) => handleDoubleNestedSetting('centerStoneRawRates', stone, 'Lab', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => handleDoubleNestedSetting('centerStoneRawRates', stone, 'Lab', e.target.value)}
                         />
                       </div>
                     </div>
@@ -1485,7 +1519,7 @@ export default function SettingsView({
                         placeholder={String(localSettings.rawCostRates.melee || 300)}
                         className="w-full bg-brand-50/20 border border-brand-200 pl-4.5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono"
                         value={localSettings.rawMeleeRates?.[size] ?? ""}
-                        onChange={(e) => handleRawMeleeRate(size, parseFloat(e.target.value) || 0)}
+                        onChange={(e) => handleRawMeleeRate(size, e.target.value)}
                       />
                     </div>
                   </div>
@@ -1558,7 +1592,7 @@ export default function SettingsView({
                     placeholder={String(localSettings.rawCostRates.fancy || 380)}
                     className="w-full bg-brand-50/20 border border-brand-200 pl-6 pr-2 py-1 rounded-lg text-xs font-bold font-mono"
                     value={localSettings.rawFancyRates?.[activeRawFancyShapeTab] ?? ""}
-                    onChange={(e) => handleRawFancyRate(activeRawFancyShapeTab, parseFloat(e.target.value) || 0)}
+                    onChange={(e) => handleRawFancyRate(activeRawFancyShapeTab, e.target.value)}
                   />
                 </div>
               </div>
@@ -1580,7 +1614,7 @@ export default function SettingsView({
                           placeholder={String(fallbackRate)}
                           className="w-full bg-brand-50/20 border border-brand-200 pl-4.5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono"
                           value={localSettings.rawFancyRates?.[key] ?? ""}
-                          onChange={(e) => handleRawFancyRate(key, parseFloat(e.target.value) || 0)}
+                          onChange={(e) => handleRawFancyRate(key, e.target.value)}
                         />
                       </div>
                     </div>

@@ -55,6 +55,15 @@ export default function ScrapCalculator({
   const [scrapImage, setScrapImage] = useState<string | null>(null);
   const [customerSignature, setCustomerSignature] = useState<string | null>(null);
   
+  // Crop & Lightbox States
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
+  const [cropState, setCropState] = useState({ x: 10, y: 15, w: 80, h: 70 }); // percentages
+  const [dragMode, setDragMode] = useState<'move' | 'resize' | null>(null);
+  const [dragStart, setDragStart] = useState<{ clientX: number; clientY: number; x: number; y: number; w: number; h: number } | null>(null);
+  const [enlargeImage, setEnlargeImage] = useState<string | null>(null);
+  const cropContainerRef = React.useRef<HTMLDivElement>(null);
+
   const [items, setItems] = useState<ScrapItem[]>([
     { weight: '', material: 'gold', purity: 14, rate: 85 }
   ]);
@@ -80,6 +89,54 @@ export default function ScrapCalculator({
       setItems([{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
     }
   }, [editingTransaction]);
+
+  // Handle crop container mouse/touch dragging
+  useEffect(() => {
+    if (!dragMode || !dragStart || !cropContainerRef.current) return;
+
+    const handleDragMove = (e: MouseEvent | TouchEvent) => {
+      const container = cropContainerRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+      const dx = ((clientX - dragStart.clientX) / rect.width) * 100;
+      const dy = ((clientY - dragStart.clientY) / rect.height) * 100;
+
+      if (dragMode === 'move') {
+        let newX = dragStart.x + dx;
+        let newY = dragStart.y + dy;
+        newX = Math.max(0, Math.min(100 - dragStart.w, newX));
+        newY = Math.max(0, Math.min(100 - dragStart.h, newY));
+        setCropState(prev => ({ ...prev, x: newX, y: newY }));
+      } else if (dragMode === 'resize') {
+        let newW = dragStart.w + dx;
+        let newH = dragStart.h + dy;
+        newW = Math.max(10, Math.min(100 - dragStart.x, newW));
+        newH = Math.max(10, Math.min(100 - dragStart.y, newH));
+        setCropState(prev => ({ ...prev, w: newW, h: newH }));
+      }
+    };
+
+    const handleDragEnd = () => {
+      setDragMode(null);
+      setDragStart(null);
+    };
+
+    window.addEventListener('mousemove', handleDragMove);
+    window.addEventListener('mouseup', handleDragEnd);
+    window.addEventListener('touchmove', handleDragMove, { passive: false });
+    window.addEventListener('touchend', handleDragEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', handleDragMove);
+      window.removeEventListener('mouseup', handleDragEnd);
+      window.removeEventListener('touchmove', handleDragMove);
+      window.removeEventListener('touchend', handleDragEnd);
+    };
+  }, [dragMode, dragStart]);
 
   // Handle adding rows
   const addRow = () => {
@@ -110,34 +167,95 @@ export default function ScrapCalculator({
     }));
   };
 
-  // Image Upload Compress and Scale
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent, mode: 'move' | 'resize') => {
+    e.preventDefault();
+    e.stopPropagation();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    setDragMode(mode);
+    setDragStart({
+      clientX,
+      clientY,
+      x: cropState.x,
+      y: cropState.y,
+      w: cropState.w,
+      h: cropState.h
+    });
+  };
+
+  // Image Upload - Open Cropper Modal
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const maxDim = 600;
-        let w = img.width;
-        let h = img.height;
-        if (w > maxDim) {
-          h *= (maxDim / w);
-          w = maxDim;
-        }
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, w, h);
-          setScrapImage(canvas.toDataURL('image/jpeg', 0.6));
-        }
-      };
-      img.src = ev.target?.result as string;
+      const src = ev.target?.result as string;
+      setCropImageSrc(src);
+      // Reset cropState to default widescreen-aspect box
+      setCropState({ x: 10, y: 15, w: 80, h: 70 });
+      setIsCropModalOpen(true);
+      // Reset input value so same file can be uploaded again if needed
+      e.target.value = '';
     };
     reader.readAsDataURL(file);
+  };
+
+  // Execute actual high-resolution crop on the natural image dimensions
+  const handleSaveCrop = () => {
+    if (!cropImageSrc) return;
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      
+      // Calculate crop dimensions relative to real high-res original size
+      const sourceX = (cropState.x / 100) * img.naturalWidth;
+      const sourceY = (cropState.y / 100) * img.naturalHeight;
+      const sourceWidth = (cropState.w / 100) * img.naturalWidth;
+      const sourceHeight = (cropState.h / 100) * img.naturalHeight;
+
+      // Output at extremely high resolution: cap maximum dimension at 1800px
+      const maxOutputDim = 1800;
+      let targetWidth = sourceWidth;
+      let targetHeight = sourceHeight;
+      
+      if (targetWidth > maxOutputDim || targetHeight > maxOutputDim) {
+        if (targetWidth > targetHeight) {
+          targetHeight = (maxOutputDim / targetWidth) * targetHeight;
+          targetWidth = maxOutputDim;
+        } else {
+          targetWidth = (maxOutputDim / targetHeight) * targetWidth;
+          targetHeight = maxOutputDim;
+        }
+      }
+
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(
+          img,
+          sourceX,
+          sourceY,
+          sourceWidth,
+          sourceHeight,
+          0,
+          0,
+          targetWidth,
+          targetHeight
+        );
+        
+        // Output as high-res JPEG at 0.95 quality for ultimate text legibility
+        const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+        setScrapImage(croppedDataUrl);
+        setIsCropModalOpen(false);
+      }
+    };
+    img.src = cropImageSrc;
   };
 
   const scrapTotal = calculateScrapTotal(items, spotPrices, stoneRemovalQty);
@@ -281,16 +399,38 @@ export default function ScrapCalculator({
               />
             </label>
             {scrapImage && (
-              <div className="relative border border-brand-200 rounded-xl overflow-hidden shadow-md">
-                <img src={scrapImage} alt="ID attachment" className="h-10 w-20 object-cover" />
+              <div className="relative border border-brand-200 rounded-xl overflow-hidden shadow-md group cursor-pointer flex items-center">
+                <img 
+                  src={scrapImage} 
+                  alt="ID attachment" 
+                  className="h-10 w-20 object-cover transition-transform hover:scale-105" 
+                  onClick={() => setEnlargeImage(scrapImage)}
+                  title="Click to enlarge"
+                />
                 <button
                   type="button"
-                  onClick={() => setScrapImage(null)}
-                  className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full p-0.5 hover:bg-red-700 shadow-lg text-[8px]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setScrapImage(null);
+                  }}
+                  className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full p-0.5 hover:bg-red-700 shadow-lg text-[8px] leading-none w-3.5 h-3.5 flex items-center justify-center font-bold z-10"
                   title="Remove attachment"
                 >
                   &times;
                 </button>
+                {cropImageSrc && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsCropModalOpen(true);
+                    }}
+                    className="absolute bottom-0.5 left-0.5 right-0.5 bg-brand-gold/90 text-brand-950 font-bold rounded text-[8px] hover:bg-brand-gold py-0.5 text-center shadow border border-brand-200"
+                    title="Recrop photograph"
+                  >
+                    CROP
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -555,9 +695,15 @@ export default function ScrapCalculator({
 
         {/* Snapshot of Driver's license / items if available */}
         {scrapImage && (
-          <div className="mb-6">
-            <p className="text-[10px] uppercase font-black text-brand-400 tracking-wider mb-2">Verified ID Photograph</p>
-            <img src={scrapImage} alt="Compliance photo" className="h-28 w-44 object-contain rounded-xl border border-brand-200 shadow-sm" />
+          <div className="mb-6 print:mb-8 break-inside-avoid">
+            <p className="text-[10px] uppercase font-black text-brand-400 tracking-wider mb-2 print:text-[8px] print:text-brand-500">Verified ID Photograph</p>
+            <img 
+              src={scrapImage} 
+              alt="Compliance photo" 
+              className="h-28 w-44 object-contain rounded-xl border border-brand-200 shadow-sm cursor-pointer hover:opacity-90 hover:scale-[1.02] transition-all print:h-80 print:w-auto print:max-w-xl print:rounded-lg print:border print:border-brand-150 print:shadow-none" 
+              onClick={() => setEnlargeImage(scrapImage)}
+              title="Click to enlarge"
+            />
           </div>
         )}
 
@@ -584,6 +730,231 @@ export default function ScrapCalculator({
         </div>
       </div>
     </div>
+
+    {/* 4. Interactive ID Photograph Cropper Modal */}
+    {isCropModalOpen && cropImageSrc && (
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85 p-4 animate-fadeIn font-sans">
+        <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-brand-100 flex flex-col max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center border-b border-brand-100 pb-3 mb-4">
+            <div>
+              <h3 className="text-sm font-black uppercase text-brand-900 tracking-wider">
+                Crop Verified ID Photograph
+              </h3>
+              <p className="text-[10px] text-brand-500 mt-0.5">
+                Drag the box and corner handle to adjust. The final image will save in high-resolution for legibility.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsCropModalOpen(false)}
+              className="text-brand-400 hover:text-brand-600 font-bold text-lg cursor-pointer"
+            >
+              &times;
+            </button>
+          </div>
+
+          {/* Draggable Viewport Container */}
+          <div className="flex-1 flex items-center justify-center bg-slate-900 rounded-2xl p-4 min-h-[300px] overflow-hidden">
+            <div 
+              ref={cropContainerRef} 
+              className="relative inline-block mx-auto max-h-[50vh] max-w-full overflow-hidden select-none border border-brand-gold/30 rounded-xl bg-slate-950 shadow-inner"
+            >
+              <img 
+                src={cropImageSrc} 
+                alt="Source to crop" 
+                className="max-h-[50vh] block object-contain pointer-events-none"
+              />
+              
+              {/* Dark Mask overlays for the cropped areas */}
+              <div 
+                className="absolute top-0 bottom-0 left-0 bg-black/60 pointer-events-none" 
+                style={{ width: `${cropState.x}%` }}
+              />
+              <div 
+                className="absolute top-0 bottom-0 right-0 bg-black/60 pointer-events-none" 
+                style={{ left: `${cropState.x + cropState.w}%` }}
+              />
+              <div 
+                className="absolute top-0 bg-black/60 pointer-events-none" 
+                style={{ 
+                  left: `${cropState.x}%`, 
+                  width: `${cropState.w}%`, 
+                  height: `${cropState.y}%` 
+                }}
+              />
+              <div 
+                className="absolute bottom-0 bg-black/60 pointer-events-none" 
+                style={{ 
+                  left: `${cropState.x}%`, 
+                  width: `${cropState.w}%`, 
+                  top: `${cropState.y + cropState.h}%` 
+                }}
+              />
+
+              {/* Draggable Selection Box */}
+              <div
+                className="absolute cursor-move border-2 border-dashed border-brand-gold shadow-[0_0_0_1px_rgba(0,0,0,0.6),_inset_0_0_16px_rgba(212,175,55,0.4)]"
+                style={{
+                  left: `${cropState.x}%`,
+                  top: `${cropState.y}%`,
+                  width: `${cropState.w}%`,
+                  height: `${cropState.h}%`
+                }}
+                onMouseDown={(e) => handleDragStart(e, 'move')}
+                onTouchStart={(e) => handleDragStart(e, 'move')}
+              >
+                {/* Grid Lines */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
+                  <div className="w-full border-t border-brand-gold/40" />
+                  <div className="h-full border-l border-brand-gold/40 absolute" />
+                </div>
+
+                {/* Corner Resize Handle */}
+                <div
+                  className="absolute bottom-[-8px] right-[-8px] w-5 h-5 bg-brand-gold border-2 border-white rounded-full cursor-se-resize shadow-xl z-20 flex items-center justify-center"
+                  onMouseDown={(e) => handleDragStart(e, 'resize')}
+                  onTouchStart={(e) => handleDragStart(e, 'resize')}
+                >
+                  <div className="w-2 h-2 bg-brand-900 rounded-full" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sliders for Tablet/Mobile Convenience */}
+          <div className="space-y-3 bg-brand-50 p-3.5 rounded-2xl border border-brand-200 mt-4 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5">
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between text-[10px] text-brand-600 font-bold uppercase">
+                  <span>X Position</span>
+                  <span>{Math.round(cropState.x)}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max={Math.max(0, 100 - cropState.w)} 
+                  value={cropState.x}
+                  onChange={(e) => setCropState(prev => ({ ...prev, x: parseFloat(e.target.value) }))}
+                  className="w-full accent-brand-gold h-1.5 bg-brand-200 rounded-lg cursor-pointer"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between text-[10px] text-brand-600 font-bold uppercase">
+                  <span>Y Position</span>
+                  <span>{Math.round(cropState.y)}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max={Math.max(0, 100 - cropState.h)} 
+                  value={cropState.y}
+                  onChange={(e) => setCropState(prev => ({ ...prev, y: parseFloat(e.target.value) }))}
+                  className="w-full accent-brand-gold h-1.5 bg-brand-200 rounded-lg cursor-pointer"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between text-[10px] text-brand-600 font-bold uppercase">
+                  <span>Width</span>
+                  <span>{Math.round(cropState.w)}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="10" 
+                  max={100 - cropState.x} 
+                  value={cropState.w}
+                  onChange={(e) => setCropState(prev => ({ ...prev, w: parseFloat(e.target.value) }))}
+                  className="w-full accent-brand-gold h-1.5 bg-brand-200 rounded-lg cursor-pointer"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between text-[10px] text-brand-600 font-bold uppercase">
+                  <span>Height</span>
+                  <span>{Math.round(cropState.h)}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="10" 
+                  max={100 - cropState.y} 
+                  value={cropState.h}
+                  onChange={(e) => setCropState(prev => ({ ...prev, h: parseFloat(e.target.value) }))}
+                  className="w-full accent-brand-gold h-1.5 bg-brand-200 rounded-lg cursor-pointer"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Modal actions */}
+          <div className="flex justify-end gap-2.5 mt-5 pt-3 border-t border-brand-100">
+            <button
+              type="button"
+              onClick={() => setIsCropModalOpen(false)}
+              className="px-4 py-2 border border-brand-200 text-brand-800 text-xs font-bold rounded-xl hover:bg-brand-50 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveCrop}
+              className="px-5 py-2 bg-brand-gold text-brand-950 font-black text-xs uppercase rounded-xl hover:bg-yellow-500 shadow-md cursor-pointer"
+            >
+              Apply Crop
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* 5. Click-to-Enlarge ID Photograph Lightbox Overlay */}
+    {enlargeImage && (
+      <div 
+        className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 p-4 animate-fadeIn select-none font-sans"
+        onClick={() => setEnlargeImage(null)}
+      >
+        <div className="absolute top-4 right-4 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const win = window.open('');
+              if (win) {
+                win.document.write(`<img src="${enlargeImage}" style="max-width:100%; max-height:100vh; display:block; margin:auto; object-fit:contain;" />`);
+                win.document.close();
+                win.focus();
+                setTimeout(() => {
+                  win.print();
+                  win.close();
+                }, 250);
+              }
+            }}
+            className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase px-3.5 py-2 rounded-xl transition-all cursor-pointer border border-white/20 shadow flex items-center gap-1.5"
+            title="Print this photo alone"
+          >
+            <Printer size={12} className="text-brand-gold" /> Print ID Photo
+          </button>
+          <button
+            type="button"
+            onClick={() => setEnlargeImage(null)}
+            className="bg-red-600 hover:bg-red-700 text-white rounded-full p-2.5 transition-colors cursor-pointer text-xl leading-none font-black shadow-lg"
+            title="Close Enlarge"
+          >
+            &times;
+          </button>
+        </div>
+        <div 
+          className="relative max-w-4xl max-h-[85vh] flex items-center justify-center bg-slate-950 p-2.5 rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-zoomIn"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <img 
+            src={enlargeImage} 
+            alt="Enlarged Verified ID Document" 
+            className="max-h-[80vh] max-w-full object-contain rounded-xl select-all" 
+          />
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/75 px-4 py-2 rounded-full border border-white/10 text-[10px] font-bold text-brand-200 shadow tracking-wider uppercase">
+            Enlarged Compliance Document View
+          </div>
+        </div>
+      </div>
+    )}
   </>
   );
 }

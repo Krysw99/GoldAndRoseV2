@@ -179,6 +179,7 @@ export default function LedgerView({
   const [activeLedger, setActiveLedger] = useState<'scrap' | 'retail' | 'wholesale'>('retail');
   const [search, setSearch] = useState('');
   const [selectedTx, setSelectedTx] = useState<{ type: 'scrap' | 'retail' | 'wholesale'; id: string } | null>(null);
+  const [enlargeImage, setEnlargeImage] = useState<string | null>(null);
 
   // Wix sync modal states
   const [isWixModalOpen, setIsWixModalOpen] = useState(false);
@@ -616,9 +617,15 @@ export default function LedgerView({
 
                   {/* Snapshot of Driver's license / items if available */}
                   {(activeTx as ScrapTransaction).image && (
-                    <div className="mb-6">
-                      <p className="text-[10px] uppercase font-black text-brand-400 tracking-wider mb-2">Verified ID Photograph</p>
-                      <img src={(activeTx as ScrapTransaction).image!} alt="Compliance photo" className="h-28 w-44 object-contain rounded-xl border border-brand-200 shadow-sm" />
+                    <div className="mb-6 print:mb-8 break-inside-avoid">
+                      <p className="text-[10px] uppercase font-black text-brand-400 tracking-wider mb-2 print:text-[8px] print:text-brand-500">Verified ID Photograph</p>
+                      <img 
+                        src={(activeTx as ScrapTransaction).image!} 
+                        alt="Compliance photo" 
+                        className="h-28 w-44 object-contain rounded-xl border border-brand-200 shadow-sm cursor-pointer hover:opacity-90 hover:scale-[1.02] transition-all print:h-80 print:w-auto print:max-w-xl print:rounded-lg print:border print:border-brand-150 print:shadow-none" 
+                        onClick={() => setEnlargeImage((activeTx as ScrapTransaction).image!)}
+                        title="Click to enlarge"
+                      />
                     </div>
                   )}
 
@@ -940,6 +947,58 @@ export default function LedgerView({
                   Proceed to Wix Checkout
                 </a>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Click-to-Enlarge ID Photograph Lightbox Overlay */}
+      {enlargeImage && (
+        <div 
+          className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 p-4 animate-fadeIn select-none font-sans"
+          onClick={() => setEnlargeImage(null)}
+        >
+          <div className="absolute top-4 right-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const win = window.open('');
+                if (win) {
+                  win.document.write(`<img src="${enlargeImage}" style="max-width:100%; max-height:100vh; display:block; margin:auto; object-fit:contain;" />`);
+                  win.document.close();
+                  win.focus();
+                  setTimeout(() => {
+                    win.print();
+                    win.close();
+                  }, 250);
+                }
+              }}
+              className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase px-3.5 py-2 rounded-xl transition-all cursor-pointer border border-white/20 shadow flex items-center gap-1.5"
+              title="Print this photo alone"
+            >
+              <Printer size={12} className="text-brand-gold" /> Print ID Photo
+            </button>
+            <button
+              type="button"
+              onClick={() => setEnlargeImage(null)}
+              className="bg-red-600 hover:bg-red-700 text-white rounded-full p-2.5 transition-colors cursor-pointer text-xl leading-none font-black shadow-lg"
+              title="Close Enlarge"
+            >
+              &times;
+            </button>
+          </div>
+          <div 
+            className="relative max-w-4xl max-h-[85vh] flex items-center justify-center bg-slate-950 p-2.5 rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-zoomIn"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img 
+              src={enlargeImage} 
+              alt="Enlarged Verified ID Document" 
+              className="max-h-[80vh] max-w-full object-contain rounded-xl select-all" 
+            />
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/75 px-4 py-2 rounded-full border border-white/10 text-[10px] font-bold text-brand-200 shadow tracking-wider uppercase">
+              Enlarged Compliance Document View
             </div>
           </div>
         </div>
