@@ -1310,7 +1310,7 @@ export async function post_syncQuote(request) {
     const newProduct = await createProduct(productInfo);
     
     // Return custom cart redirection params
-    const checkoutUrl = "\${formattedCartSlug}?productId=" + newProduct._id + "&quantity=1";
+    const checkoutUrl = "${formattedCartSlug}?productId=" + newProduct._id + "&quantity=1";
 
     return ok({
       body: { 
@@ -1415,7 +1415,7 @@ export async function post_syncQuote(request) {
     const newProduct = await createProduct(productInfo);
     
     // Return custom cart redirection params
-    const checkoutUrl = "\${formattedCartSlug}?productId=" + newProduct._id + "&quantity=1";
+    const checkoutUrl = "${formattedCartSlug}?productId=" + newProduct._id + "&quantity=1";
 
     return ok({
       body: { 
