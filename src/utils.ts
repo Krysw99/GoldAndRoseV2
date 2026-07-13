@@ -74,6 +74,13 @@ export function getEmptyRing(category: CategoryType): JewelryItem {
       centerStone2: { carats: '', shape: 'Round', setting: 'Round Prongs', type: 'Diamond', origin: 'Lab' }
     };
   }
+  if (category === 'repair') {
+    return {
+      ...base,
+      repairs: [],
+      repairNotes: ''
+    };
+  }
 
   // customRing or weddingBand
   return {
@@ -89,6 +96,9 @@ export function getEmptyRing(category: CategoryType): JewelryItem {
 
 export function upgradeRingData(r: any): JewelryItem {
   const base = { ...r };
+  if (!base.id) {
+    base.id = genId();
+  }
   if (!base.addons) {
     base.addons = (base.customAddon || base.customAddonDesc) 
       ? [{ fee: String(base.customAddon || ''), desc: String(base.customAddonDesc || '') }] 
@@ -143,10 +153,10 @@ export function upgradeRingData(r: any): JewelryItem {
       if (!base.centerStone2.origin) base.centerStone2.origin = 'Lab';
     }
   }
-  if (!base.referenceSketches) {
+  if (!base.referenceSketches || (Array.isArray(base.referenceSketches) && base.referenceSketches.length === 0)) {
     base.referenceSketches = base.referenceSketch ? [base.referenceSketch] : [];
   }
-  if (!base.referencePhotos) {
+  if (!base.referencePhotos || (Array.isArray(base.referencePhotos) && base.referencePhotos.length === 0)) {
     base.referencePhotos = base.referencePhoto ? [base.referencePhoto] : [];
   }
   if (base.category === 'mensBand') {
@@ -178,6 +188,39 @@ export function getEmptyQuoteSession(): QuoteSession {
     referenceSketch: null,
     referencePhoto: null
   };
+}
+
+export function safeSetLocalStorage(key: string, data: any): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.warn(`[safeSetLocalStorage] Quota exceeded for key: ${key}. Attempting to strip heavy images...`, e);
+    try {
+      if (Array.isArray(data)) {
+        const stripped = data.map(item => {
+          if (item && item.fullData && Array.isArray(item.fullData.rings)) {
+            return {
+              ...item,
+              fullData: {
+                ...item.fullData,
+                rings: item.fullData.rings.map((r: any) => ({
+                  ...r,
+                  referencePhoto: r.referencePhoto ? "(Image too large, omitted from local persistent history)" : null,
+                  referencePhotos: r.referencePhotos ? r.referencePhotos.map(() => "(Image too large, omitted)") : []
+                }))
+              }
+            };
+          }
+          return item;
+        });
+        localStorage.setItem(key, JSON.stringify(stripped));
+      } else {
+        console.error("Local storage saving failed completely.");
+      }
+    } catch (err) {
+      console.error("Local storage fallback saving failed:", err);
+    }
+  }
 }
 
 export interface TennisEstimateResult {
@@ -309,6 +352,9 @@ export function calculateBandWeight(r: JewelryItem): string {
 }
 
 export function hasRingData(r: JewelryItem): boolean {
+  if (r.category === 'repair') {
+    return true;
+  }
   return !!(
     Number(r.goldGrams) > 0 ||
     (r.centerStones && r.centerStones.some(cs => Number(cs.carats) > 0)) ||
@@ -323,6 +369,12 @@ export function hasRingData(r: JewelryItem): boolean {
 }
 
 export function calculateWholesaleRingCost(r: JewelryItem, settings: AppSettings, spotPrices: { gold: number, silver: number, platinum: number }, overridePrices?: { gold?: number, silver?: number, platinum?: number }, wholesaleProfileId?: string): number {
+  if (!r) return 0;
+  if (r.category === 'repair') {
+    const repairsTotal = (r.repairs || []).reduce((acc, rep) => acc + (Number(rep.price) || 0), 0);
+    const addonsTotal = r.addons.reduce((acc, a) => acc + (Number(a.fee) || 0), 0);
+    return repairsTotal + addonsTotal;
+  }
   let c = 0;
   const w = (wholesaleProfileId && settings.wholesaleProfiles?.find(p => p.id === wholesaleProfileId)?.settings)
             || settings.wholesale;
@@ -414,6 +466,11 @@ export function calculateWholesaleRingCost(r: JewelryItem, settings: AppSettings
 
 export function calculateRingCost(r: JewelryItem, settings: AppSettings, spotPrices: { gold: number, silver: number, platinum: number }, mode: 'retail' | 'wholesale' = 'retail', overridePrices?: { gold?: number, silver?: number, platinum?: number }, wholesaleProfileId?: string): number {
   if (!r) return 0;
+  if (r.category === 'repair') {
+    const repairsTotal = (r.repairs || []).reduce((acc, rep) => acc + (Number(rep.price) || 0), 0);
+    const addonsTotal = r.addons.reduce((acc, a) => acc + (Number(a.fee) || 0), 0);
+    return repairsTotal + addonsTotal;
+  }
   if (mode === 'wholesale') {
     return calculateWholesaleRingCost(r, settings, spotPrices, overridePrices, wholesaleProfileId);
   }
@@ -568,6 +625,9 @@ export function calculateRingCost(r: JewelryItem, settings: AppSettings, spotPri
 
 export function calculateRawCost(r: JewelryItem, settings: AppSettings, spotPrices: { gold: number, silver: number, platinum: number }): number {
   if (!r) return 0;
+  if (r.category === 'repair') {
+    return 0;
+  }
   const s = Number(spotPrices[r.material]) / TROY_ONCE_GRAMS;
   const pf = r.material === 'gold' 
     ? (Number(r.goldKarat) / 24) 

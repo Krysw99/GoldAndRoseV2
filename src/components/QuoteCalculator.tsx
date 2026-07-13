@@ -909,6 +909,7 @@ export default function QuoteCalculator({
                   : r.category === 'mensBand' ? "Men's Band"
                   : r.category === 'pendant' ? 'Pendant'
                   : r.category === 'earrings' ? 'Earrings'
+                  : r.category === 'repair' ? 'Repair'
                   : 'Tennis';
 
       const g = Number(r.goldGrams) || 0;
@@ -1055,6 +1056,7 @@ export default function QuoteCalculator({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showScrapLinkModal, setShowScrapLinkModal] = useState(false);
   const [scrapSearchQuery, setScrapSearchQuery] = useState('');
+  const [enlargeImage, setEnlargeImage] = useState<string | null>(null);
 
   const getScrapTransactionsList = (): ScrapTransaction[] => {
     if (scrapTransactions && scrapTransactions.length > 0) {
@@ -2002,6 +2004,7 @@ export default function QuoteCalculator({
                       : r.category === 'mensBand' ? "Men's Band"
                       : r.category === 'pendant' ? 'Pendant'
                       : r.category === 'earrings' ? 'Earrings'
+                      : r.category === 'repair' ? 'Repair'
                       : 'Tennis Bracelet';
           return (
             <button
@@ -2068,7 +2071,7 @@ export default function QuoteCalculator({
                   Piece Specifications
                 </h2>
                 <span className="bg-brand-50 text-brand-700 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border border-brand-200">
-                  Category: {activeRing.category === 'customRing' ? 'Engagement / Custom' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category === 'mensBand' ? "Men's Band" : activeRing.category === 'pendant' ? 'Pendant' : activeRing.category === 'earrings' ? 'Earrings Pair' : 'Tennis Bracelet'}
+                  Category: {activeRing.category === 'customRing' ? 'Engagement / Custom' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category === 'mensBand' ? "Men's Band" : activeRing.category === 'pendant' ? 'Pendant' : activeRing.category === 'earrings' ? 'Earrings Pair' : activeRing.category === 'repair' ? 'Jewelry Repair / Service' : 'Tennis Bracelet'}
                 </span>
               </div>
 
@@ -2940,12 +2943,20 @@ export default function QuoteCalculator({
                           </div>
                         ) : (
                           sketches.map((sketchUrl, sIdx) => (
-                            <div key={sIdx} className="relative group border border-brand-150 bg-white rounded-xl p-0.5 w-16 h-16 flex flex-col items-center justify-center shadow-sm cursor-pointer overflow-hidden transition-all">
+                            <div
+                              key={sIdx}
+                              onClick={() => setEnlargeImage(sketchUrl)}
+                              className="relative group border border-brand-150 bg-white rounded-xl p-0.5 w-16 h-16 flex flex-col items-center justify-center shadow-sm cursor-pointer overflow-hidden transition-all"
+                              title="Click to enlarge"
+                            >
                               <img src={sketchUrl} alt={`Sketch ${sIdx + 1}`} className="w-full h-full object-cover rounded-lg" />
                               <div className="absolute inset-0 bg-brand-900/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
                                 <button
                                   type="button"
-                                  onClick={() => onLaunchSketch('sketch', sIdx)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onLaunchSketch('sketch', sIdx);
+                                  }}
                                   className="p-1 bg-white text-brand-900 rounded-md hover:bg-brand-50 transition-colors shadow"
                                   title="Edit Sketch"
                                 >
@@ -2992,12 +3003,20 @@ export default function QuoteCalculator({
                           </div>
                         ) : (
                           photos.map((photoUrl, pIdx) => (
-                            <div key={pIdx} className="relative group border border-brand-150 bg-white rounded-xl p-0.5 w-16 h-16 flex flex-col items-center justify-center shadow-sm cursor-pointer overflow-hidden transition-all">
+                            <div
+                              key={pIdx}
+                              onClick={() => setEnlargeImage(photoUrl)}
+                              className="relative group border border-brand-150 bg-white rounded-xl p-0.5 w-16 h-16 flex flex-col items-center justify-center shadow-sm cursor-pointer overflow-hidden transition-all"
+                              title="Click to enlarge"
+                            >
                               <img src={photoUrl} alt={`Photo ${pIdx + 1}`} className="w-full h-full object-cover rounded-lg" />
                               <div className="absolute inset-0 bg-brand-900/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
                                 <button
                                   type="button"
-                                  onClick={() => onLaunchSketch('photo', pIdx)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onLaunchSketch('photo', pIdx);
+                                  }}
                                   className="p-1 bg-white text-brand-900 rounded-md hover:bg-brand-50 transition-colors shadow"
                                   title="Edit Photo"
                                 >
@@ -3059,7 +3078,7 @@ export default function QuoteCalculator({
                     <p className="text-[9px] font-black text-brand-400 uppercase tracking-widest border-b border-brand-50 pb-1 mb-1">Active Piece Specs</p>
                     <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans font-bold">
                       <span>Category</span>
-                      <span className="text-brand-900">{activeRing.category === 'customRing' ? 'Engagement' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category === 'mensBand' ? "Men's Band" : activeRing.category === 'pendant' ? 'Pendant' : activeRing.category === 'earrings' ? 'Earrings' : 'Tennis'}</span>
+                      <span className="text-brand-900">{activeRing.category === 'customRing' ? 'Engagement' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category === 'mensBand' ? "Men's Band" : activeRing.category === 'pendant' ? 'Pendant' : activeRing.category === 'earrings' ? 'Earrings' : activeRing.category === 'repair' ? 'Repair' : 'Tennis'}</span>
                     </div>
                     <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans">
                       <span>Material / Purity</span>
@@ -3931,7 +3950,7 @@ export default function QuoteCalculator({
                           return (
                             <tr key={r.id} className="hover:bg-brand-50/50 transition-colors">
                               <td className="p-3 pl-4 font-bold text-brand-900 print:p-2 print:pl-3">
-                                #{ri + 1} {r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis'}
+                                #{ri + 1} {r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : r.category === 'repair' ? 'Repair' : 'Tennis'}
                               </td>
                               <td className="p-3 print:p-2">
                                 <span className="font-semibold block print:text-[11px]">{r.goldKarat ? `${r.goldKarat}K` : ''} {r.metalColor} {r.material}</span>
@@ -4158,7 +4177,7 @@ export default function QuoteCalculator({
                         return (
                           <div key={r.id} className="border border-brand-100 bg-brand-50/20 rounded-2xl p-3 space-y-3 print:p-1.5 print:space-y-1.5 print:rounded-xl">
                             <p className="text-[10px] font-black uppercase text-brand-600 tracking-wider print:text-[8px]">
-                              Piece {ri + 1}: {r.category === 'customRing' ? 'Custom Ring' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis'}
+                              Piece {ri + 1}: {r.category === 'customRing' ? 'Custom Ring' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : r.category === 'repair' ? 'Repair' : 'Tennis'}
                             </p>
                             <div className="grid grid-cols-2 gap-2">
                               {rSketches.map((sk, skIdx) => (
@@ -4295,7 +4314,7 @@ export default function QuoteCalculator({
                         {/* Piece Title & Basic Classification */}
                         <div className="flex justify-between items-center border-b border-slate-100 pb-3 print:pb-1.5">
                           <h4 className="text-sm font-black text-brand-900 uppercase tracking-wider print:text-xs">
-                            Piece #{ri + 1}: {r.category === 'customRing' ? 'Engagement Ring' : r.category === 'weddingBand' ? 'Wedding Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis Bracelet'}
+                            Piece #{ri + 1}: {r.category === 'customRing' ? 'Engagement Ring' : r.category === 'weddingBand' ? 'Wedding Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : r.category === 'repair' ? 'Repair' : 'Tennis Bracelet'}
                           </h4>
                           <span className="text-[10px] font-black uppercase bg-slate-200 text-slate-700 px-3 py-1 rounded-md print:px-2 print:py-0.5 print:text-[8px]">
                             {r.material.toUpperCase()} ({r.goldKarat ? `${r.goldKarat}K` : 'N/A'}) - {r.metalColor}
@@ -4848,6 +4867,13 @@ export default function QuoteCalculator({
               >
                 Tennis Bracelet
               </button>
+              <button
+                type="button"
+                onClick={() => handleAddNewItem('repair')}
+                className="bg-amber-100 hover:bg-amber-200 font-bold py-3 rounded-xl border border-amber-300 transition-colors text-xs text-amber-950 uppercase tracking-wider"
+              >
+                Jewelry Repair / Service Tab
+              </button>
             </div>
           </div>
         </div>
@@ -4942,6 +4968,63 @@ export default function QuoteCalculator({
           </div>
         );
       })()}
+
+      {/* 5. Click-to-Enlarge Design/Sketch Lightbox Overlay */}
+      {enlargeImage && (
+        <div 
+          className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 p-4 animate-fadeIn select-none font-sans print:hidden"
+          onClick={() => setEnlargeImage(null)}
+        >
+          <div className="absolute top-4 right-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const win = window.open('');
+                if (win) {
+                  win.document.write(`<img src="${enlargeImage}" style="max-width:100%; max-height:100vh; display:block; margin:auto; object-fit:contain;" />`);
+                  win.document.close();
+                  win.focus();
+                  setTimeout(() => {
+                    win.print();
+                    win.close();
+                  }, 250);
+                }
+              }}
+              className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase px-3.5 py-2 rounded-xl transition-all cursor-pointer border border-white/20 shadow flex items-center gap-1.5"
+              title="Print this image"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-brand-gold">
+                <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                <rect x="6" y="14" width="12" height="8"></rect>
+              </svg>
+              Print Image
+            </button>
+            <button
+              type="button"
+              onClick={() => setEnlargeImage(null)}
+              className="bg-red-600 hover:bg-red-700 text-white rounded-full p-2.5 transition-colors cursor-pointer text-xl leading-none font-black shadow-lg"
+              title="Close Enlarge"
+            >
+              &times;
+            </button>
+          </div>
+          <div 
+            className="relative max-w-4xl max-h-[85vh] flex items-center justify-center bg-slate-950 p-2.5 rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-zoomIn"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img 
+              src={enlargeImage} 
+              alt="Enlarged Reference View" 
+              className="max-h-[80vh] max-w-full object-contain rounded-xl select-all" 
+            />
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/75 px-4 py-2 rounded-full border border-white/10 text-[10px] font-bold text-brand-200 shadow tracking-wider uppercase">
+              Enlarged Design View
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { 
   Search, Trash2, Printer, FileText, X, ArrowRight, User, Phone, 
   MapPin, ShieldCheck, Mail, Calendar, Sparkles, AlertCircle,
-  ShoppingBag, Check, ExternalLink, Cpu
+  ShoppingBag, Check, ExternalLink, Cpu, Copy, Info, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { ScrapTransaction, QuoteTransaction, AppSettings, QuoteSession, JewelryItem } from '../types';
 import { calculateRingCost, calculateScrapTotal } from '../utils';
@@ -186,6 +186,8 @@ export default function LedgerView({
   const [wixSyncState, setWixSyncState] = useState<'idle' | 'checking' | 'syncing' | 'done' | 'error'>('idle');
   const [wixSyncLog, setWixSyncLog] = useState<string[]>([]);
   const [generatedWixUrl, setGeneratedWixUrl] = useState('');
+  const [showVeloInstructions, setShowVeloInstructions] = useState(false);
+  const [copiedVelo, setCopiedVelo] = useState(false);
 
   // Search filter lists
   const queryWords = React.useMemo(() => search.toLowerCase().trim().split(/\s+/).filter(Boolean), [search]);
@@ -261,40 +263,65 @@ export default function LedgerView({
       "Creating dynamic checkout session token..."
     ]);
 
-    // If webhook is configured, actually trigger it!
-    if (settings.wixIntegrationMode === 'webhook' && settings.wixWebhookUrl) {
-      setWixSyncLog(prev => [...prev, `Dispatching secure POST payload to custom webhook: ${settings.wixWebhookUrl}...`]);
-      try {
-        const response = await fetch(settings.wixWebhookUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': settings.wixAccessToken ? `Bearer ${settings.wixAccessToken}` : ''
-          },
-          body: JSON.stringify({
-            transactionId: activeTx.id,
-            clientName: activeTx.name,
-            clientPhone: activeTx.phone,
-            total: activeTx.total,
-            totalNum: cleanPrice,
-            fullDetails: (activeTx as QuoteTransaction).fullData,
-            syncedAt: new Date().toISOString()
-          })
-        });
-        if (response.ok) {
-          setWixSyncLog(prev => [...prev, "✓ Webhook dispatched and accepted by Wix with status 200 OK."]);
-        } else {
-          setWixSyncLog(prev => [...prev, `⚠ Webhook responded with status ${response.status}. Continuing flow.`]);
+    const baseUrl = (settings.wixStoreUrl || 'https://www.goldandrosejewellery.com').replace(/\/$/, '');
+    let customRedirectUrl: string | null = null;
+
+    // Trigger API sync for either webhook OR velo_api mode
+    if (settings.wixIntegrationMode === 'webhook' || settings.wixIntegrationMode === 'velo_api') {
+      const syncUrl = settings.wixIntegrationMode === 'webhook' 
+        ? settings.wixWebhookUrl 
+        : `${baseUrl}/_functions/syncQuote`;
+
+      if (syncUrl) {
+        setWixSyncLog(prev => [...prev, `Dispatching secure POST payload to endpoint: ${syncUrl}...`]);
+        try {
+          const response = await fetch(syncUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': settings.wixAccessToken ? `Bearer ${settings.wixAccessToken}` : ''
+            },
+            body: JSON.stringify({
+              transactionId: activeTx.id,
+              clientName: activeTx.name,
+              clientPhone: activeTx.phone,
+              total: activeTx.total,
+              totalNum: cleanPrice,
+              fullDetails: (activeTx as QuoteTransaction).fullData,
+              syncedAt: new Date().toISOString()
+            })
+          });
+
+          if (response.ok) {
+            setWixSyncLog(prev => [...prev, "✓ API handshake successfully accepted by Wix (200 OK)."]);
+            const resData = await response.json().catch(() => null);
+            if (resData) {
+              if (resData.checkoutUrl || resData.url || resData.cartUrl || resData.redirectUrl) {
+                customRedirectUrl = resData.checkoutUrl || resData.url || resData.cartUrl || resData.redirectUrl;
+                setWixSyncLog(prev => [...prev, "✓ Received live custom checkout session URL from Wix."]);
+              } else if (resData.cartId) {
+                customRedirectUrl = `${baseUrl}/cart-page?cartId=${resData.cartId}`;
+                setWixSyncLog(prev => [...prev, `✓ Received custom Cart ID from Wix backend: ${resData.cartId}.`]);
+              }
+            }
+          } else {
+            setWixSyncLog(prev => [...prev, `⚠ Wix responded with status ${response.status}. Falling back to default deep-link.`]);
+            const errDetails = await response.text().catch(() => '');
+            if (errDetails) {
+              setWixSyncLog(prev => [...prev, `Endpoint logs: ${errDetails.substring(0, 150)}`]);
+            }
+          }
+        } catch (e: any) {
+          setWixSyncLog(prev => [...prev, `⚠ Direct handshake connection failed: ${e.message}. Falling back to client-side session.`]);
         }
-      } catch (e: any) {
-        setWixSyncLog(prev => [...prev, `⚠ Could not connect to Webhook URL: ${e.message}. Continuing with fallback session.`]);
+      } else {
+        setWixSyncLog(prev => [...prev, "⚠ No API Endpoint URL is configured in settings. Falling back to client deep-link."]);
       }
     } else {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
     // Step 3: Deep link construction
-    const baseUrl = settings.wixStoreUrl || 'https://www.goldandrosejewellery.com';
     const cartParams = {
       cart: {
         items: [
@@ -312,14 +339,23 @@ export default function LedgerView({
       }
     };
 
-    const finalUrl = `${baseUrl}/cart-page?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
-    setGeneratedWixUrl(finalUrl);
-
-    setWixSyncLog(prev => [
-      ...prev,
-      "✓ Securing checkout link...",
-      "✓ Wix Retail Checkout generation completed successfully!"
-    ]);
+    const fallbackUrl = `${baseUrl}/cart-page?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+    
+    if (customRedirectUrl) {
+      setGeneratedWixUrl(customRedirectUrl);
+      setWixSyncLog(prev => [
+        ...prev,
+        "✓ Dynamic Wix session checkout generated!",
+        `✓ Checkout link: ${customRedirectUrl!.substring(0, 50)}...`
+      ]);
+    } else {
+      setGeneratedWixUrl(fallbackUrl);
+      setWixSyncLog(prev => [
+        ...prev,
+        "✓ Client deep-link generated successfully!",
+        "ℹ Note: Wix Stores requires Velo HTTP function logic on your site to dynamically populate custom prices."
+      ]);
+    }
     setWixSyncState('done');
   };
 
@@ -784,13 +820,25 @@ export default function LedgerView({
                                   {rSketches.map((sk, skIdx) => (
                                     <div key={`sk-${skIdx}`} className="border border-brand-200 rounded-xl p-2 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
                                       <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1.5 print:mb-1 print:text-[7px]">Sketch {skIdx + 1}</span>
-                                      <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-44 w-full object-contain rounded-lg print:h-64 print:rounded-lg" />
+                                      <img
+                                        src={sk}
+                                        alt={`Piece ${ri+1} Sketch ${skIdx+1}`}
+                                        className="h-44 w-full object-contain rounded-lg cursor-pointer hover:scale-[1.01] hover:opacity-90 transition-all print:h-64 print:rounded-lg"
+                                        onClick={() => setEnlargeImage(sk)}
+                                        title="Click to enlarge"
+                                      />
                                     </div>
                                   ))}
                                   {rPhotos.map((ph, phIdx) => (
                                     <div key={`ph-${phIdx}`} className="border border-brand-200 rounded-xl p-2 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
                                       <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1.5 print:mb-1 print:text-[7px]">Photo {phIdx + 1}</span>
-                                      <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-44 w-full object-contain rounded-lg print:h-64 print:rounded-lg" />
+                                      <img
+                                        src={ph}
+                                        alt={`Piece ${ri+1} Photo ${phIdx+1}`}
+                                        className="h-44 w-full object-contain rounded-lg cursor-pointer hover:scale-[1.01] hover:opacity-90 transition-all print:h-64 print:rounded-lg"
+                                        onClick={() => setEnlargeImage(ph)}
+                                        title="Click to enlarge"
+                                      />
                                     </div>
                                   ))}
                                 </div>
@@ -820,13 +868,25 @@ export default function LedgerView({
                                 {rSketches.map((sk, skIdx) => (
                                   <div key={`sk-${skIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
                                     <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1 print:mb-1 print:text-[7px]">Sketch {skIdx + 1}</span>
-                                    <img src={sk} alt={`Piece ${ri+1} Sketch ${skIdx+1}`} className="h-28 w-full object-contain rounded print:h-64 print:rounded-lg" />
+                                    <img
+                                      src={sk}
+                                      alt={`Piece ${ri+1} Sketch ${skIdx+1}`}
+                                      className="h-28 w-full object-contain rounded cursor-pointer hover:scale-[1.01] hover:opacity-90 transition-all print:h-64 print:rounded-lg"
+                                      onClick={() => setEnlargeImage(sk)}
+                                      title="Click to enlarge"
+                                    />
                                   </div>
                                 ))}
                                 {rPhotos.map((ph, phIdx) => (
                                   <div key={`ph-${phIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
                                     <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1 print:mb-1 print:text-[7px]">Photo {phIdx + 1}</span>
-                                    <img src={ph} alt={`Piece ${ri+1} Photo ${phIdx+1}`} className="h-28 w-full object-contain rounded print:h-64 print:rounded-lg" />
+                                    <img
+                                      src={ph}
+                                      alt={`Piece ${ri+1} Photo ${phIdx+1}`}
+                                      className="h-28 w-full object-contain rounded cursor-pointer hover:scale-[1.01] hover:opacity-90 transition-all print:h-64 print:rounded-lg"
+                                      onClick={() => setEnlargeImage(ph)}
+                                      title="Click to enlarge"
+                                    />
                                   </div>
                                 ))}
                               </div>
@@ -913,15 +973,164 @@ export default function LedgerView({
 
               {/* Status Banner */}
               {wixSyncState === 'done' && (
-                <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex gap-3 items-start">
-                  <div className="bg-green-100 text-green-700 p-1 rounded-full mt-0.5">
-                    <Check size={14} />
+                <div className="space-y-3">
+                  <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex gap-3 items-start">
+                    <div className="bg-green-100 text-green-700 p-1 rounded-full mt-0.5">
+                      <Check size={14} />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-black text-green-800 uppercase tracking-wider">Ready for Checkout</p>
+                      <p className="text-[11px] text-green-700 leading-relaxed">
+                        Your bespoke jewelry specification has been processed. {generatedWixUrl.includes('cartId') || generatedWixUrl.includes('custom-order') || !generatedWixUrl.includes('appSectionParams') ? 'Dynamic checkout session established.' : 'Client deep-link generated.'} Click below to redirect straight to checkout.
+                      </p>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-black text-green-800 uppercase tracking-wider">Ready for Checkout</p>
-                    <p className="text-[11px] text-green-700 leading-relaxed">
-                      Your bespoke jewelry specification is fully pre-loaded. Click below to redirect straight to your custom Wix Shopping Cart page with exact pricing applied.
-                    </p>
+
+                  {/* Velo troubleshooting helper */}
+                  <div className="border border-brand-100 rounded-2xl overflow-hidden bg-brand-50/50">
+                    <button
+                      type="button"
+                      onClick={() => setShowVeloInstructions(!showVeloInstructions)}
+                      className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-brand-50 transition-all border-none outline-none"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Info size={14} className="text-[#002eec]" />
+                        <span className="text-xs font-bold text-brand-800">Wix "Empty Cart" Troubleshooting & Velo Code</span>
+                      </div>
+                      {showVeloInstructions ? <ChevronUp size={14} className="text-brand-500" /> : <ChevronDown size={14} className="text-brand-500" />}
+                    </button>
+
+                    {showVeloInstructions && (
+                      <div className="p-4 pt-0 border-t border-brand-100 space-y-3 animate-fadeIn">
+                        <p className="text-[11px] text-brand-600 leading-relaxed mt-2.5">
+                          Wix restricts adding items with custom prices directly from the browser for security. To support dynamic bespoke pricing, paste this handler in your Wix Backend <code className="font-mono bg-brand-100 px-1 rounded text-[8.5px]">http-functions.js</code> file:
+                        </p>
+                        
+                        <div className="space-y-1">
+                          <span className="text-[9px] font-black text-brand-500 uppercase tracking-wider block">Wix Backend Code:</span>
+                          <div className="relative">
+                            <pre className="bg-brand-950 text-brand-100 p-3 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto max-h-44 shadow-inner border border-brand-900">
+                              {`// File: backend/http-functions.js
+import { ok, serverError } from 'wix-http-functions';
+import wixStoresBackend from 'wix-stores-backend';
+
+export async function post_syncQuote(request) {
+  const corsHeaders = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization"
+  };
+
+  try {
+    const payload = await request.body.json();
+    
+    // Create custom product in Wix catalog
+    const productInfo = {
+      name: payload.clientName ? "Custom: " + payload.clientName : "Custom Jewelry Piece",
+      price: payload.totalNum,
+      description: "Custom quote ID #" + payload.transactionId,
+      visible: false,
+      productType: "physical"
+    };
+
+    const newProduct = await wixStoresBackend.createProduct(productInfo);
+    
+    // Return custom cart redirection params
+    const checkoutUrl = "/cart-page?appSectionParams=" + encodeURIComponent(JSON.stringify({
+      cart: {
+        items: [{ productId: newProduct._id, quantity: 1 }]
+      }
+    }));
+
+    return ok({
+      body: { status: "success", checkoutUrl: checkoutUrl },
+      headers: corsHeaders
+    });
+  } catch (err) {
+    return serverError({ body: { error: err.message }, headers: corsHeaders });
+  }
+}
+
+export function options_syncQuote(request) {
+  return ok({
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization"
+    }
+  });
+}`}
+                            </pre>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(`// File: backend/http-functions.js
+import { ok, serverError } from 'wix-http-functions';
+import wixStoresBackend from 'wix-stores-backend';
+
+export async function post_syncQuote(request) {
+  const corsHeaders = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization"
+  };
+
+  try {
+    const payload = await request.body.json();
+    
+    // Create custom product in Wix catalog
+    const productInfo = {
+      name: payload.clientName ? "Custom: " + payload.clientName : "Custom Jewelry Piece",
+      price: payload.totalNum,
+      description: "Custom quote ID #" + payload.transactionId,
+      visible: false,
+      productType: "physical"
+    };
+
+    const newProduct = await wixStoresBackend.createProduct(productInfo);
+    
+    // Return custom cart redirection params
+    const checkoutUrl = "/cart-page?appSectionParams=" + encodeURIComponent(JSON.stringify({
+      cart: {
+        items: [{ productId: newProduct._id, quantity: 1 }]
+      }
+    }));
+
+    return ok({
+      body: { status: "success", checkoutUrl: checkoutUrl },
+      headers: corsHeaders
+    });
+  } catch (err) {
+    return serverError({ body: { error: err.message }, headers: corsHeaders });
+  }
+}
+
+export function options_syncQuote(request) {
+  return ok({
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization"
+    }
+  });
+}`);
+                                setCopiedVelo(true);
+                                setTimeout(() => setCopiedVelo(false), 2000);
+                              }}
+                              className="absolute top-2 right-2 px-2.5 py-1.5 bg-brand-850 hover:bg-brand-800 text-brand-gold font-bold text-[9px] rounded-lg transition-colors flex items-center gap-1 border border-brand-700/50"
+                            >
+                              <Copy size={10} />
+                              {copiedVelo ? "Copied!" : "Copy Code"}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="text-[9.5px] text-brand-500 space-y-1 pl-1 font-bold leading-normal">
+                          <div>2. In Settings, set your Integration Mode to <span className="text-brand-900">Wix Velo Headless API</span>.</div>
+                          <div>3. Set your Velo Function URL to: <span className="text-brand-900 font-mono">https://www.goldandrosejewellery.com/_functions/syncQuote</span></div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -953,56 +1162,59 @@ export default function LedgerView({
       )}
 
       {/* 5. Click-to-Enlarge ID Photograph Lightbox Overlay */}
-      {enlargeImage && (
-        <div 
-          className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 p-4 animate-fadeIn select-none font-sans"
-          onClick={() => setEnlargeImage(null)}
-        >
-          <div className="absolute top-4 right-4 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                const win = window.open('');
-                if (win) {
-                  win.document.write(`<img src="${enlargeImage}" style="max-width:100%; max-height:100vh; display:block; margin:auto; object-fit:contain;" />`);
-                  win.document.close();
-                  win.focus();
-                  setTimeout(() => {
-                    win.print();
-                    win.close();
-                  }, 250);
-                }
-              }}
-              className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase px-3.5 py-2 rounded-xl transition-all cursor-pointer border border-white/20 shadow flex items-center gap-1.5"
-              title="Print this photo alone"
-            >
-              <Printer size={12} className="text-brand-gold" /> Print ID Photo
-            </button>
-            <button
-              type="button"
-              onClick={() => setEnlargeImage(null)}
-              className="bg-red-600 hover:bg-red-700 text-white rounded-full p-2.5 transition-colors cursor-pointer text-xl leading-none font-black shadow-lg"
-              title="Close Enlarge"
-            >
-              &times;
-            </button>
-          </div>
+      {enlargeImage && (() => {
+        const isComplianceId = selectedTx?.type === 'scrap' && activeTx && (activeTx as ScrapTransaction).image === enlargeImage;
+        return (
           <div 
-            className="relative max-w-4xl max-h-[85vh] flex items-center justify-center bg-slate-950 p-2.5 rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-zoomIn"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 p-4 animate-fadeIn select-none font-sans"
+            onClick={() => setEnlargeImage(null)}
           >
-            <img 
-              src={enlargeImage} 
-              alt="Enlarged Verified ID Document" 
-              className="max-h-[80vh] max-w-full object-contain rounded-xl select-all" 
-            />
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/75 px-4 py-2 rounded-full border border-white/10 text-[10px] font-bold text-brand-200 shadow tracking-wider uppercase">
-              Enlarged Compliance Document View
+            <div className="absolute top-4 right-4 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const win = window.open('');
+                  if (win) {
+                    win.document.write(`<img src="${enlargeImage}" style="max-width:100%; max-height:100vh; display:block; margin:auto; object-fit:contain;" />`);
+                    win.document.close();
+                    win.focus();
+                    setTimeout(() => {
+                      win.print();
+                      win.close();
+                    }, 250);
+                  }
+                }}
+                className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase px-3.5 py-2 rounded-xl transition-all cursor-pointer border border-white/20 shadow flex items-center gap-1.5"
+                title="Print this photo alone"
+              >
+                <Printer size={12} className="text-brand-gold" /> {isComplianceId ? 'Print ID Photo' : 'Print Mockup'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEnlargeImage(null)}
+                className="bg-red-600 hover:bg-red-700 text-white rounded-full p-2.5 transition-colors cursor-pointer text-xl leading-none font-black shadow-lg"
+                title="Close Enlarge"
+              >
+                &times;
+              </button>
+            </div>
+            <div 
+              className="relative max-w-4xl max-h-[85vh] flex items-center justify-center bg-slate-950 p-2.5 rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-zoomIn"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img 
+                src={enlargeImage} 
+                alt="Enlarged Reference View" 
+                className="max-h-[80vh] max-w-full object-contain rounded-xl select-all" 
+              />
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/75 px-4 py-2 rounded-full border border-white/10 text-[10px] font-bold text-brand-200 shadow tracking-wider uppercase">
+                {isComplianceId ? 'Enlarged Compliance Document View' : 'Enlarged Visual Mockup Reference'}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type CategoryType = 'customRing' | 'weddingBand' | 'mensBand' | 'pendant' | 'earrings' | 'tennisBracelet';
+export type CategoryType = 'customRing' | 'weddingBand' | 'mensBand' | 'pendant' | 'earrings' | 'tennisBracelet' | 'repair';
 export type MaterialType = 'gold' | 'silver' | 'platinum';
 export type MetalColorType = 'Yellow' | 'White' | 'Rose';
 export type StoneSourceType = 'our' | 'customer';
@@ -44,6 +44,17 @@ export interface AddonItem {
 
 export interface DesignNote {
   text: string;
+}
+
+export interface RepairSelection {
+  id: string;
+  type: string;
+  name: string;
+  qty: number;
+  extraQty?: number;
+  option?: string;
+  customPrice?: number;
+  price: number;
 }
 
 export interface JewelryItem {
@@ -104,6 +115,8 @@ export interface JewelryItem {
   cBandThickness?: string;
   bandStyle?: string;
   showCenterStone?: boolean;
+  repairs?: RepairSelection[];
+  repairNotes?: string;
 }
 
 export interface QuoteSession {
@@ -169,6 +182,35 @@ export interface CenterStoneRates {
   };
 }
 
+export interface RepairPricingSettings {
+  resizeUp14kThin_base: number;
+  resizeUp14kThin_extra: number;
+  resizeUp14kThick_base: number;
+  resizeUp14kThick_extra: number;
+  resizeUp18k_base: number;
+  resizeUp18k_extra: number;
+  resizeUp22k_base: number;
+  resizeUp22k_extra: number;
+  resizeDownFlat: number;
+  stretchRing: number;
+  resetMelee: number;
+  resetCenter: number;
+  laserEngravingSimple: number;
+  laserEngravingAdvanced: number;
+  prongRetip: number;
+  replatingBase: number;
+  replatingOptionRhodium: number;
+  replatingOption14kYellow: number;
+  replatingOption24k: number;
+  replatingOptionBlackRuthenium: number;
+  replatingOptionNickel: number;
+  replatingOptionRose: number;
+  laserChainRepair: number;
+  simplePolishCleanup: number;
+  heavyCleanupPolishMin: number;
+  heavyCleanupPolishMax: number;
+}
+
 export interface WholesaleSettings {
   goldSpotPremium: number;
   laborPerGram: number;
@@ -183,6 +225,7 @@ export interface WholesaleSettings {
   fancyRates: {
     [shape: string]: number;
   };
+  repairPricing?: RepairPricingSettings;
 }
 
 export interface AppSettings {

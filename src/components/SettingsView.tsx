@@ -9,7 +9,7 @@ import {
   DollarSign, Wrench, Gem, HardDrive, EyeOff, Upload, FileJson,
   Building, ShoppingBag, Globe, Plus, Edit
 } from 'lucide-react';
-import { AppSettings } from '../types';
+import { AppSettings, RepairPricingSettings } from '../types';
 import { ROUND_MELEE, FANCY_SHAPES } from '../constants';
 
 interface SettingsViewProps {
@@ -68,6 +68,35 @@ export default function SettingsView({
   const currentWholesaleSettings = selectedProfileId
     ? (localSettings.wholesaleProfiles?.find(p => p.id === selectedProfileId)?.settings || localSettings.wholesale)
     : localSettings.wholesale;
+
+  const currentRepairPricing: RepairPricingSettings = currentWholesaleSettings.repairPricing || {
+    resizeUp14kThin_base: 50,
+    resizeUp14kThin_extra: 70,
+    resizeUp14kThick_base: 60,
+    resizeUp14kThick_extra: 80,
+    resizeUp18k_base: 80,
+    resizeUp18k_extra: 100,
+    resizeUp22k_base: 100,
+    resizeUp22k_extra: 120,
+    resizeDownFlat: 40,
+    stretchRing: 25,
+    resetMelee: 5,
+    resetCenter: 35,
+    laserEngravingSimple: 30,
+    laserEngravingAdvanced: 40,
+    prongRetip: 30,
+    replatingBase: 50,
+    replatingOptionRhodium: 0,
+    replatingOption14kYellow: 0,
+    replatingOption24k: 0,
+    replatingOptionBlackRuthenium: 0,
+    replatingOptionNickel: 0,
+    replatingOptionRose: 0,
+    laserChainRepair: 20,
+    simplePolishCleanup: 20,
+    heavyCleanupPolishMin: 50,
+    heavyCleanupPolishMax: 150
+  };
 
   const handleAddProfile = () => {
     const name = prompt("Enter a name for the new wholesale client profile:");
@@ -269,6 +298,39 @@ export default function SettingsView({
         wholesale: {
           ...prev.wholesale,
           [field]: value
+        }
+      }));
+    }
+  };
+
+  const handleRepairSetting = (field: keyof RepairPricingSettings, valueStr: any) => {
+    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
+    const updatedPricing = {
+      ...currentRepairPricing,
+      [field]: value
+    };
+
+    if (selectedProfileId) {
+      setLocalSettings(prev => ({
+        ...prev,
+        wholesaleProfiles: (prev.wholesaleProfiles || []).map(p =>
+          p.id === selectedProfileId
+            ? {
+                ...p,
+                settings: {
+                  ...p.settings,
+                  repairPricing: updatedPricing
+                }
+              }
+            : p
+        )
+      }));
+    } else {
+      setLocalSettings(prev => ({
+        ...prev,
+        wholesale: {
+          ...prev.wholesale,
+          repairPricing: updatedPricing
         }
       }));
     }
@@ -634,16 +696,23 @@ export default function SettingsView({
                   />
                 </div>
 
-                {localSettings.wixIntegrationMode === "webhook" && (
+                {(localSettings.wixIntegrationMode === "webhook" || localSettings.wixIntegrationMode === "velo_api") && (
                   <div className="sm:col-span-2">
-                    <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Wix Webhook Endpoint URL</label>
+                    <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">
+                      {localSettings.wixIntegrationMode === "velo_api" ? "Wix Velo Function URL (API Endpoint)" : "Wix Webhook Endpoint URL"}
+                    </label>
                     <input
                       type="text"
                       className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
                       value={localSettings.wixWebhookUrl ?? ""}
-                      placeholder="https://yourdomain.wixsite.com/_functions/syncQuote"
+                      placeholder={localSettings.wixIntegrationMode === "velo_api" ? "https://www.goldandrosejewellery.com/_functions/syncQuote" : "https://yourdomain.wixsite.com/_functions/syncQuote"}
                       onChange={(e) => setLocalSettings(prev => ({ ...prev, wixWebhookUrl: e.target.value }))}
                     />
+                    <span className="text-[9px] text-brand-400 block mt-1">
+                      {localSettings.wixIntegrationMode === "velo_api" 
+                        ? "The Wix Velo backend function URL (e.g., _functions/syncQuote) that will create and return a custom cart redirect session."
+                        : "The URL of your custom webhook listener (e.g., Zapier, Make, or standard endpoint)."}
+                    </span>
                   </div>
                 )}
               </div>
@@ -1194,6 +1263,325 @@ export default function SettingsView({
                     value={currentWholesaleSettings.settingCenter}
                     onChange={(e) => handleWholesaleSetting('settingCenter', e.target.value)}
                   />
+                </div>
+              </div>
+            </div>
+
+            {/* Wholesale Repair Rates */}
+            <div className="bg-brand-50/20 p-5 rounded-2xl border border-brand-100 space-y-4">
+              <div className="border-b border-brand-100 pb-2">
+                <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest flex items-center gap-1.5">
+                  <Wrench size={14} className="text-brand-gold" />
+                  Wholesale Repair Rates
+                </h4>
+                <p className="text-[10px] text-brand-500">Configure base costs and sizing rates specifically for the Repair invoices / wholesale category.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* CARD 1: Sizing */}
+                <div className="bg-white p-4 rounded-xl border border-brand-100 space-y-3 shadow-xs">
+                  <h5 className="text-[10px] font-black text-brand-800 uppercase tracking-wider border-b border-brand-50 pb-1.5 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                    Ring Resizing & Stretching
+                  </h5>
+                  
+                  <div className="space-y-2.5">
+                    <div className="p-2 bg-brand-50/30 rounded-lg border border-brand-50 space-y-1.5">
+                      <span className="text-[9px] font-bold text-brand-700 uppercase tracking-wider block">Resize Up 14k (Thin/Std)</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[8px] font-semibold text-brand-500 block mb-0.5">Base Price ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-brand-200 px-1.5 py-1 rounded-md text-xs font-bold"
+                            value={currentRepairPricing.resizeUp14kThin_base}
+                            onChange={(e) => handleRepairSetting('resizeUp14kThin_base', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] font-semibold text-brand-500 block mb-0.5">Per Size ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-brand-200 px-1.5 py-1 rounded-md text-xs font-bold"
+                            value={currentRepairPricing.resizeUp14kThin_extra}
+                            onChange={(e) => handleRepairSetting('resizeUp14kThin_extra', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-2 bg-brand-50/30 rounded-lg border border-brand-50 space-y-1.5">
+                      <span className="text-[9px] font-bold text-brand-700 uppercase tracking-wider block">Resize Up 14k (Thick/Wide)</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[8px] font-semibold text-brand-500 block mb-0.5">Base Price ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-brand-200 px-1.5 py-1 rounded-md text-xs font-bold"
+                            value={currentRepairPricing.resizeUp14kThick_base}
+                            onChange={(e) => handleRepairSetting('resizeUp14kThick_base', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] font-semibold text-brand-500 block mb-0.5">Per Size ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-brand-200 px-1.5 py-1 rounded-md text-xs font-bold"
+                            value={currentRepairPricing.resizeUp14kThick_extra}
+                            onChange={(e) => handleRepairSetting('resizeUp14kThick_extra', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-2 bg-brand-50/30 rounded-lg border border-brand-50 space-y-1.5">
+                      <span className="text-[9px] font-bold text-brand-700 uppercase tracking-wider block">Resize Up 18k</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[8px] font-semibold text-brand-500 block mb-0.5">Base Price ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-brand-200 px-1.5 py-1 rounded-md text-xs font-bold"
+                            value={currentRepairPricing.resizeUp18k_base}
+                            onChange={(e) => handleRepairSetting('resizeUp18k_base', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] font-semibold text-brand-500 block mb-0.5">Per Size ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-brand-200 px-1.5 py-1 rounded-md text-xs font-bold"
+                            value={currentRepairPricing.resizeUp18k_extra}
+                            onChange={(e) => handleRepairSetting('resizeUp18k_extra', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-2 bg-brand-50/30 rounded-lg border border-brand-50 space-y-1.5">
+                      <span className="text-[9px] font-bold text-brand-700 uppercase tracking-wider block">Resize Up 22k</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[8px] font-semibold text-brand-500 block mb-0.5">Base Price ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-brand-200 px-1.5 py-1 rounded-md text-xs font-bold"
+                            value={currentRepairPricing.resizeUp22k_base}
+                            onChange={(e) => handleRepairSetting('resizeUp22k_base', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] font-semibold text-brand-500 block mb-0.5">Per Size ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-brand-200 px-1.5 py-1 rounded-md text-xs font-bold"
+                            value={currentRepairPricing.resizeUp22k_extra}
+                            onChange={(e) => handleRepairSetting('resizeUp22k_extra', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <div>
+                        <label className="text-[9px] font-bold text-brand-700 block mb-1">Resize Down Flat ($)</label>
+                        <input
+                          type="number"
+                          className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                          value={currentRepairPricing.resizeDownFlat}
+                          onChange={(e) => handleRepairSetting('resizeDownFlat', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-brand-700 block mb-1">Stretch Ring ($)</label>
+                        <input
+                          type="number"
+                          className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                          value={currentRepairPricing.stretchRing}
+                          onChange={(e) => handleRepairSetting('stretchRing', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CARD 2: Stones, Prongs & Engraving */}
+                <div className="bg-white p-4 rounded-xl border border-brand-100 space-y-3 shadow-xs">
+                  <h5 className="text-[10px] font-black text-brand-800 uppercase tracking-wider border-b border-brand-50 pb-1.5 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    Stones, Prongs & Engraving
+                  </h5>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[9px] font-bold text-brand-700 block mb-1">Reset Melee (per stone) ($)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-brand-50/30 border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                        value={currentRepairPricing.resetMelee}
+                        onChange={(e) => handleRepairSetting('resetMelee', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-brand-700 block mb-1">Reset Center Stone ($)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-brand-50/30 border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                        value={currentRepairPricing.resetCenter}
+                        onChange={(e) => handleRepairSetting('resetCenter', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-brand-700 block mb-1">Prong Retip (per prong) ($)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-brand-50/30 border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                        value={currentRepairPricing.prongRetip}
+                        onChange={(e) => handleRepairSetting('prongRetip', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-brand-700 block mb-1">Laser Engraving (Simple) ($)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-brand-50/30 border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                        value={currentRepairPricing.laserEngravingSimple}
+                        onChange={(e) => handleRepairSetting('laserEngravingSimple', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-brand-700 block mb-1">Laser Engraving (Advanced) ($)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-brand-50/30 border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                        value={currentRepairPricing.laserEngravingAdvanced}
+                        onChange={(e) => handleRepairSetting('laserEngravingAdvanced', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* CARD 3: Plating, Polish & Chain */}
+                <div className="bg-white p-4 rounded-xl border border-brand-100 space-y-3 shadow-xs">
+                  <h5 className="text-[10px] font-black text-brand-800 uppercase tracking-wider border-b border-brand-50 pb-1.5 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                    Plating, Cleanup & Polish
+                  </h5>
+
+                  <div className="space-y-2.5">
+                    <div className="p-2 bg-brand-50/30 rounded-lg border border-brand-50 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-bold text-brand-700 uppercase tracking-wider block">Replating Base Price ($)</span>
+                        <input
+                          type="number"
+                          className="w-16 bg-white border border-brand-200 px-1.5 py-0.5 rounded text-xs font-bold text-right"
+                          value={currentRepairPricing.replatingBase}
+                          onChange={(e) => handleRepairSetting('replatingBase', e.target.value)}
+                        />
+                      </div>
+                      
+                      <div className="border-t border-brand-100 pt-1.5 space-y-1">
+                        <span className="text-[8px] font-semibold text-brand-500 uppercase tracking-wider block mb-1">Custom Plating Upcharges:</span>
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+                          <div className="flex justify-between items-center gap-1">
+                            <span className="text-[8px] font-medium text-brand-600">Rhodium</span>
+                            <input
+                              type="number"
+                              className="w-9 bg-white border border-brand-200 px-1 py-0.5 rounded text-[10px] font-bold text-right"
+                              value={currentRepairPricing.replatingOptionRhodium}
+                              onChange={(e) => handleRepairSetting('replatingOptionRhodium', e.target.value)}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center gap-1">
+                            <span className="text-[8px] font-medium text-brand-600">14k Yellow</span>
+                            <input
+                              type="number"
+                              className="w-9 bg-white border border-brand-200 px-1 py-0.5 rounded text-[10px] font-bold text-right"
+                              value={currentRepairPricing.replatingOption14kYellow}
+                              onChange={(e) => handleRepairSetting('replatingOption14kYellow', e.target.value)}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center gap-1">
+                            <span className="text-[8px] font-medium text-brand-600">24k Gold</span>
+                            <input
+                              type="number"
+                              className="w-9 bg-white border border-brand-200 px-1 py-0.5 rounded text-[10px] font-bold text-right"
+                              value={currentRepairPricing.replatingOption24k}
+                              onChange={(e) => handleRepairSetting('replatingOption24k', e.target.value)}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center gap-1">
+                            <span className="text-[8px] font-medium text-brand-600">Black Ruth.</span>
+                            <input
+                              type="number"
+                              className="w-9 bg-white border border-brand-200 px-1 py-0.5 rounded text-[10px] font-bold text-right"
+                              value={currentRepairPricing.replatingOptionBlackRuthenium}
+                              onChange={(e) => handleRepairSetting('replatingOptionBlackRuthenium', e.target.value)}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center gap-1">
+                            <span className="text-[8px] font-medium text-brand-600">Nickel</span>
+                            <input
+                              type="number"
+                              className="w-9 bg-white border border-brand-200 px-1 py-0.5 rounded text-[10px] font-bold text-right"
+                              value={currentRepairPricing.replatingOptionNickel}
+                              onChange={(e) => handleRepairSetting('replatingOptionNickel', e.target.value)}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center gap-1">
+                            <span className="text-[8px] font-medium text-brand-600">Rose</span>
+                            <input
+                              type="number"
+                              className="w-9 bg-white border border-brand-200 px-1 py-0.5 rounded text-[10px] font-bold text-right"
+                              value={currentRepairPricing.replatingOptionRose}
+                              onChange={(e) => handleRepairSetting('replatingOptionRose', e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] font-bold text-brand-700 block mb-1">Laser Chain Repair ($)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-brand-50/30 border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                        value={currentRepairPricing.laserChainRepair}
+                        onChange={(e) => handleRepairSetting('laserChainRepair', e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] font-bold text-brand-700 block mb-1">Simple Polish / Cleanup ($)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-brand-50/30 border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                        value={currentRepairPricing.simplePolishCleanup}
+                        onChange={(e) => handleRepairSetting('simplePolishCleanup', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] font-bold text-brand-700 block mb-1">Heavy Polish Min ($)</label>
+                        <input
+                          type="number"
+                          className="w-full bg-brand-50/30 border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                          value={currentRepairPricing.heavyCleanupPolishMin}
+                          onChange={(e) => handleRepairSetting('heavyCleanupPolishMin', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-brand-700 block mb-1">Heavy Polish Max ($)</label>
+                        <input
+                          type="number"
+                          className="w-full bg-brand-50/30 border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                          value={currentRepairPricing.heavyCleanupPolishMax}
+                          onChange={(e) => handleRepairSetting('heavyCleanupPolishMax', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

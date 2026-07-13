@@ -211,7 +211,35 @@ export const DEFAULT_SETTINGS = {
     designFee: 50,
     stoneCenterPerCt: 800,
     meleeRates: { '1.0': 400 },
-    fancyRates: { 'Princess': 500 }
+    fancyRates: { 'Princess': 500 },
+    repairPricing: {
+      resizeUp14kThin_base: 50,
+      resizeUp14kThin_extra: 70,
+      resizeUp14kThick_base: 60,
+      resizeUp14kThick_extra: 80,
+      resizeUp18k_base: 80,
+      resizeUp18k_extra: 100,
+      resizeUp22k_base: 100,
+      resizeUp22k_extra: 120,
+      resizeDownFlat: 40,
+      stretchRing: 25,
+      resetMelee: 5,
+      resetCenter: 35,
+      laserEngravingSimple: 30,
+      laserEngravingAdvanced: 40,
+      prongRetip: 30,
+      replatingBase: 50,
+      replatingOptionRhodium: 0,
+      replatingOption14kYellow: 0,
+      replatingOption24k: 0,
+      replatingOptionBlackRuthenium: 0,
+      replatingOptionNickel: 0,
+      replatingOptionRose: 0,
+      laserChainRepair: 20,
+      simplePolishCleanup: 20,
+      heavyCleanupPolishMin: 50,
+      heavyCleanupPolishMax: 150
+    }
   },
   wholesaleProfiles: []
 };

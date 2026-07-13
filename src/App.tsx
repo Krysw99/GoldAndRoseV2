@@ -15,7 +15,7 @@ import {
   ScrapItem, JewelryItem 
 } from './types';
 import { DEFAULT_SETTINGS, TROY_ONCE_GRAMS, FANCY_SHAPES, ROUND_MELEE } from './constants';
-import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession } from './utils';
+import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage } from './utils';
 
 // Modular Components
 import ScrapCalculator from './components/ScrapCalculator';
@@ -61,7 +61,7 @@ export default function App() {
   const [spotPrices, setSpotPrices] = useState({ gold: 2350, silver: 30, platinum: 1050 });
   const [lastUpdated, setLastUpdated] = useState('Manual Default');
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const [goldApiKey, setGoldApiKey] = useState('goldapi-472c240569490d4d25bde6da08749829-io');
+  const [goldApiKey, setGoldApiKey] = useState('');
 
   // Quick Calculator state
   const [quickPurity, setQuickPurity] = useState('gold_14');
@@ -316,7 +316,7 @@ export default function App() {
             return tB - tA; // Newest first
           });
           setRingQuoteTransactions(sorted);
-          localStorage.setItem('gr_quote_ledger', JSON.stringify(sorted));
+          safeSetLocalStorage('gr_quote_ledger', sorted);
         });
 
         // 4. Set up real-time listener for Wholesale Ledger
@@ -328,7 +328,7 @@ export default function App() {
             return tB - tA; // Newest first
           });
           setWholesaleTransactions(sorted);
-          localStorage.setItem('gr_wholesale_ledger', JSON.stringify(sorted));
+          safeSetLocalStorage('gr_wholesale_ledger', sorted);
         });
 
         setIsCloudSynced(true);
@@ -556,29 +556,7 @@ export default function App() {
         updated = [newTx, ...wholesaleTransactions];
       }
 
-      try {
-        localStorage.setItem('gr_wholesale_ledger', JSON.stringify(updated));
-      } catch (e) {
-        console.error("Failed to save wholesale ledger to localStorage:", e);
-        alert("Warning: Local storage limit exceeded! The reference photos are too large to persist on this device's local history. We will save the textual details of your quote, but omit the heavy photo images to fit within storage limits.");
-        try {
-          const strippedUpdated = updated.map(item => ({
-            ...item,
-            fullData: {
-              ...item.fullData,
-              rings: item.fullData.rings.map(r => ({
-                ...r,
-                referencePhoto: r.referencePhoto ? "(Image too large, omitted from persistent history)" : null,
-                referencePhotos: r.referencePhotos ? r.referencePhotos.map(() => "(Image too large, omitted)") : []
-              }))
-            }
-          }));
-          localStorage.setItem('gr_wholesale_ledger', JSON.stringify(strippedUpdated));
-          updated = strippedUpdated;
-        } catch (retryError) {
-          console.error("Fallback save failed:", retryError);
-        }
-      }
+      safeSetLocalStorage('gr_wholesale_ledger', updated);
 
       setWholesaleTransactions(updated);
       setWholesaleSession(getEmptyQuoteSession());
@@ -594,29 +572,7 @@ export default function App() {
         updated = [newTx, ...ringQuoteTransactions];
       }
 
-      try {
-        localStorage.setItem('gr_quote_ledger', JSON.stringify(updated));
-      } catch (e) {
-        console.error("Failed to save quote ledger to localStorage:", e);
-        alert("Warning: Local storage limit exceeded! The reference photos are too large to persist on this device's local history. We will save the textual details of your quote, but omit the heavy photo images to fit within storage limits.");
-        try {
-          const strippedUpdated = updated.map(item => ({
-            ...item,
-            fullData: {
-              ...item.fullData,
-              rings: item.fullData.rings.map(r => ({
-                ...r,
-                referencePhoto: r.referencePhoto ? "(Image too large, omitted from persistent history)" : null,
-                referencePhotos: r.referencePhotos ? r.referencePhotos.map(() => "(Image too large, omitted)") : []
-              }))
-            }
-          }));
-          localStorage.setItem('gr_quote_ledger', JSON.stringify(strippedUpdated));
-          updated = strippedUpdated;
-        } catch (retryError) {
-          console.error("Fallback save failed:", retryError);
-        }
-      }
+      safeSetLocalStorage('gr_quote_ledger', updated);
 
       setRingQuoteTransactions(updated);
       setRetailSession(getEmptyQuoteSession());
