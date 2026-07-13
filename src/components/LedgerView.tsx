@@ -304,7 +304,7 @@ export default function LedgerView({
                 customRedirectUrl = resData.checkoutUrl || resData.url || resData.cartUrl || resData.redirectUrl;
                 setWixSyncLog(prev => [...prev, "✓ Received live custom checkout session URL from Wix."]);
               } else if (resData.cartId) {
-                customRedirectUrl = `${baseUrl}/cart-page?cartId=${resData.cartId}`;
+                customRedirectUrl = `${baseUrl}/cart?cartId=${resData.cartId}`;
                 setWixSyncLog(prev => [...prev, `✓ Received custom Cart ID from Wix backend: ${resData.cartId}.`]);
               }
             }
@@ -347,7 +347,7 @@ export default function LedgerView({
             ]
           }
         };
-        finalUrl = `${baseUrl}/cart-page?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+        finalUrl = `${baseUrl}/cart?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
       } else {
         const isCentProduct = settings.wixBaseUnitPrice === 0.01;
         const computedQty = isCentProduct 
@@ -373,7 +373,7 @@ export default function LedgerView({
             ]
           }
         };
-        finalUrl = `${baseUrl}/cart-page?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+        finalUrl = `${baseUrl}/cart?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
       }
     } else {
       const cartParams = {
@@ -392,7 +392,7 @@ export default function LedgerView({
           ]
         }
       };
-      finalUrl = customRedirectUrl || `${baseUrl}/cart-page?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+      finalUrl = customRedirectUrl || `${baseUrl}/cart?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
     }
 
     setGeneratedWixUrl(finalUrl);
@@ -1133,7 +1133,11 @@ $w.onReady(function () {
   if (productId) {
     cart.addProducts([{ productId, quantity }])
       .then(() => {
-        wixLocation.to('/cart-page');
+        // Dynamically redirect back to the current page path to clean the URL query params,
+        // preventing duplicate items from being added if the user refreshes the page.
+        // This works automatically on both "/cart" and "/cart-page"!
+        const cleanPath = '/' + (wixLocation.path || []).join('/');
+        wixLocation.to(cleanPath === '/' ? '/cart' : cleanPath);
       })
       .catch((err) => console.error("Add to cart error:", err));
   }
@@ -1167,7 +1171,11 @@ $w.onReady(function () {
   if (productId) {
     cart.addProducts([{ productId, quantity }])
       .then(() => {
-        wixLocation.to('/cart-page');
+        // Dynamically redirect back to the current page path to clean the URL query params,
+        // preventing duplicate items from being added if the user refreshes the page.
+        // This works automatically on both "/cart" and "/cart-page"!
+        const cleanPath = '/' + (wixLocation.path || []).join('/');
+        wixLocation.to(cleanPath === '/' ? '/cart' : cleanPath);
       })
       .catch((err) => console.error("Add to cart error:", err));
   }
@@ -1271,7 +1279,7 @@ export async function post_syncQuote(request) {
     const newProduct = await wixStoresBackend.createProduct(productInfo);
     
     // Return custom cart redirection params
-    const checkoutUrl = "/cart-page?productId=" + newProduct._id + "&quantity=1";
+    const checkoutUrl = "/cart?productId=" + newProduct._id + "&quantity=1";
 
     return ok({
       body: { 
@@ -1376,7 +1384,7 @@ export async function post_syncQuote(request) {
     const newProduct = await wixStoresBackend.createProduct(productInfo);
     
     // Return custom cart redirection params
-    const checkoutUrl = "/cart-page?productId=" + newProduct._id + "&quantity=1";
+    const checkoutUrl = "/cart?productId=" + newProduct._id + "&quantity=1";
 
     return ok({
       body: { 
@@ -1441,8 +1449,11 @@ $w.onReady(function () {
   if (productId) {
     cart.addProducts([{ productId, quantity }])
       .then(() => {
-        // Redirect to clean the URL query params, preventing multiple items on page refresh
-        wixLocation.to('/cart-page');
+        // Dynamically redirect back to the current page path to clean the URL query params,
+        // preventing duplicate items from being added if the user refreshes the page.
+        // This works automatically on both "/cart" and "/cart-page"!
+        const cleanPath = '/' + (wixLocation.path || []).join('/');
+        wixLocation.to(cleanPath === '/' ? '/cart' : cleanPath);
       })
       .catch((err) => console.error("Add to cart error:", err));
   }
@@ -1476,7 +1487,11 @@ $w.onReady(function () {
   if (productId) {
     cart.addProducts([{ productId, quantity }])
       .then(() => {
-        wixLocation.to('/cart-page');
+        // Dynamically redirect back to the current page path to clean the URL query params,
+        // preventing duplicate items from being added if the user refreshes the page.
+        // This works automatically on both "/cart" and "/cart-page"!
+        const cleanPath = '/' + (wixLocation.path || []).join('/');
+        wixLocation.to(cleanPath === '/' ? '/cart' : cleanPath);
       })
       .catch((err) => console.error("Add to cart error:", err));
   }
