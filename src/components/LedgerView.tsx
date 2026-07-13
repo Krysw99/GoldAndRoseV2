@@ -188,6 +188,7 @@ export default function LedgerView({
   const [generatedWixUrl, setGeneratedWixUrl] = useState('');
   const [showVeloInstructions, setShowVeloInstructions] = useState(false);
   const [copiedVelo, setCopiedVelo] = useState(false);
+  const [copiedFrontendVelo, setCopiedFrontendVelo] = useState(false);
 
   // Search filter lists
   const queryWords = React.useMemo(() => search.toLowerCase().trim().split(/\s+/).filter(Boolean), [search]);
@@ -285,6 +286,9 @@ export default function LedgerView({
               transactionId: activeTx.id,
               clientName: activeTx.name,
               clientPhone: activeTx.phone,
+              clientEmail: (activeTx as QuoteTransaction).fullData?.cEmail || "",
+              notes: (activeTx as QuoteTransaction).fullData?.notes || "",
+              summary: activeTx.summary || "",
               total: activeTx.total,
               totalNum: cleanPrice,
               fullDetails: (activeTx as QuoteTransaction).fullData,
@@ -322,34 +326,91 @@ export default function LedgerView({
     }
 
     // Step 3: Deep link construction
-    const cartParams = {
-      cart: {
-        items: [
-          {
-            name: activeTx.name ? `Custom Jewelry Order for ${activeTx.name}` : 'Bespoke Custom Jewelry Item',
-            quantity: 1,
-            price: cleanPrice,
-            description: activeTx.summary || `Bespoke estimate ID #${activeTx.id}`,
-            customFields: {
-              "Quote ID": activeTx.id,
-              "Material Specs": (activeTx as QuoteTransaction).fullData?.rings?.map(r => `${r.metalColor} ${r.goldKarat ? r.goldKarat+'k' : ''} ${r.material}`).join(', ')
-            }
-          }
-        ]
-      }
-    };
-
-    const fallbackUrl = `${baseUrl}/cart-page?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+    let finalUrl = '';
     
-    if (customRedirectUrl) {
-      setGeneratedWixUrl(customRedirectUrl);
+    if (settings.wixIntegrationMode === 'placeholder_product') {
+      if (!settings.wixProductId) {
+        setWixSyncLog(prev => [
+          ...prev,
+          "⚠ Wix Product ID not configured in Settings!",
+          "ℹ Please go to Settings -> Wix Store Integration and paste the Product ID of your $1.00 or $0.01 placeholder product."
+        ]);
+        const cartParams = {
+          cart: {
+            items: [
+              {
+                name: activeTx.name ? `Custom Jewelry Order for ${activeTx.name}` : 'Bespoke Custom Jewelry Item',
+                quantity: 1,
+                price: cleanPrice,
+                description: activeTx.summary || `Bespoke estimate ID #${activeTx.id}`
+              }
+            ]
+          }
+        };
+        finalUrl = `${baseUrl}/cart-page?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+      } else {
+        const isCentProduct = settings.wixBaseUnitPrice === 0.01;
+        const computedQty = isCentProduct 
+          ? Math.round(cleanPrice * 100) 
+          : Math.round(cleanPrice);
+        
+        const finalQty = computedQty > 0 ? computedQty : 1;
+        const unitLabel = isCentProduct ? '$0.01 cents' : '$1.00 dollars';
+
+        setWixSyncLog(prev => [
+          ...prev,
+          `✓ Using standard placeholder product ID: ${settings.wixProductId}`,
+          `✓ Formulating cart quantity: ${finalQty.toLocaleString()} units of ${unitLabel} to match CAD $${cleanPrice.toFixed(2)}.`
+        ]);
+
+        const cartParams = {
+          cart: {
+            items: [
+              {
+                productId: settings.wixProductId,
+                quantity: finalQty
+              }
+            ]
+          }
+        };
+        finalUrl = `${baseUrl}/cart-page?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+      }
+    } else {
+      const cartParams = {
+        cart: {
+          items: [
+            {
+              name: activeTx.name ? `Custom Jewelry Order for ${activeTx.name}` : 'Bespoke Custom Jewelry Item',
+              quantity: 1,
+              price: cleanPrice,
+              description: activeTx.summary || `Bespoke estimate ID #${activeTx.id}`,
+              customFields: {
+                "Quote ID": activeTx.id,
+                "Material Specs": (activeTx as QuoteTransaction).fullData?.rings?.map(r => `${r.metalColor} ${r.goldKarat ? r.goldKarat+'k' : ''} ${r.material}`).join(', ')
+              }
+            }
+          ]
+        }
+      };
+      finalUrl = customRedirectUrl || `${baseUrl}/cart-page?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+    }
+
+    setGeneratedWixUrl(finalUrl);
+
+    if (settings.wixIntegrationMode === 'placeholder_product' && settings.wixProductId) {
+      setWixSyncLog(prev => [
+        ...prev,
+        "✓ Zero-code secure checkout deep-link successfully formulated!",
+        "✓ Ready to check out securely without Developer Mode!"
+      ]);
+    } else if (customRedirectUrl) {
       setWixSyncLog(prev => [
         ...prev,
         "✓ Dynamic Wix session checkout generated!",
         `✓ Checkout link: ${customRedirectUrl!.substring(0, 50)}...`
       ]);
     } else {
-      setGeneratedWixUrl(fallbackUrl);
+      setGeneratedWixUrl(finalUrl);
       setWixSyncLog(prev => [
         ...prev,
         "✓ Client deep-link generated successfully!",
@@ -995,24 +1056,148 @@ export default function LedgerView({
                     >
                       <div className="flex items-center gap-2">
                         <Info size={14} className="text-[#002eec]" />
-                        <span className="text-xs font-bold text-brand-800">Wix "Empty Cart" Troubleshooting & Velo Code</span>
+                        <span className="text-xs font-bold text-brand-800">
+                          {settings.wixIntegrationMode === 'placeholder_product' 
+                            ? "Wix Zero-Code Guide (No Developer Mode Required)" 
+                            : 'Wix "Empty Cart" & "No Profile" Troubleshooting & Velo Code'}
+                        </span>
                       </div>
                       {showVeloInstructions ? <ChevronUp size={14} className="text-brand-500" /> : <ChevronDown size={14} className="text-brand-500" />}
                     </button>
 
                     {showVeloInstructions && (
-                      <div className="p-4 pt-0 border-t border-brand-100 space-y-3 animate-fadeIn">
-                        <p className="text-[11px] text-brand-600 leading-relaxed mt-2.5">
-                          Wix restricts adding items with custom prices directly from the browser for security. To support dynamic bespoke pricing, paste this handler in your Wix Backend <code className="font-mono bg-brand-100 px-1 rounded text-[8.5px]">http-functions.js</code> file:
-                        </p>
-                        
-                        <div className="space-y-1">
-                          <span className="text-[9px] font-black text-brand-500 uppercase tracking-wider block">Wix Backend Code:</span>
-                          <div className="relative">
-                            <pre className="bg-brand-950 text-brand-100 p-3 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto max-h-44 shadow-inner border border-brand-900">
-                              {`// File: backend/http-functions.js
+                      <div className="p-4 pt-0 border-t border-brand-100 space-y-3 animate-fadeIn text-left mt-2.5">
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-[11px] text-red-900 leading-relaxed font-bold space-y-2">
+                          <p className="font-extrabold uppercase text-[10px] text-red-800 tracking-wide flex items-center gap-1">
+                            ⚠️ Critical integration requirements:
+                          </p>
+                          <ul className="list-disc list-inside space-y-1 pl-1">
+                            <li><span className="text-red-950">HTTP Functions only execute on published Live sites</span>: Testing inside the Wix Editor's "Preview" mode does not expose backend endpoints, meaning profiles will not be created. You must click <span className="underline">Publish</span> first!</li>
+                            <li><span className="text-red-950">Wix requires Frontend code to populate the Cart</span>: Out of the box, Wix Stores do not automatically add products from a redirect URL parameter. You <span className="underline">MUST</span> paste a simple 10-line Frontend Cart script (provided below) on your Wix Cart Page to enable instant cart population!</li>
+                          </ul>
+                        </div>
+
+                        {settings.wixIntegrationMode === 'placeholder_product' ? (
+                          <div className="space-y-2.5 text-[11px] text-brand-600 leading-relaxed">
+                            <p className="font-bold text-brand-800 text-xs">
+                              How to Set Up Your Zero-Code Custom Checkout Product:
+                            </p>
+                            <p className="text-[11px] text-brand-600">
+                              We use a standard, secure Wix workaround. We load a single product with a base unit price of $1.00 (or $0.01) into the cart and multiply the quantity to match your quote's exact CAD total. Follow these easy steps:
+                            </p>
+                            <ol className="list-decimal list-inside space-y-1.5 pl-1 font-bold text-brand-700">
+                              <li>
+                                Log into your <span className="text-brand-900">Wix Dashboard</span> and go to <span className="text-brand-900">Store Products</span>.
+                              </li>
+                              <li>
+                                Create a new physical or digital product named <span className="text-brand-900">"Custom Jewelry Piece Payment"</span>.
+                              </li>
+                              <li>
+                                Set the product's price to exactly <span className="text-brand-900 font-mono">$1.00</span> (or <span className="text-brand-900 font-mono">$0.01</span> for exact cents support).
+                              </li>
+                              <li>
+                                Under inventory, <span className="text-brand-900">UNCHECK "Track Inventory"</span>.
+                              </li>
+                              <li>
+                                Save the product, copy its <span className="text-brand-900 font-bold">Product ID</span> from your browser address bar and paste it into <span className="text-brand-900 font-bold">Settings</span> in this app!
+                              </li>
+                            </ol>
+                            
+                            <div className="space-y-1 mt-3">
+                              <span className="text-[9px] font-black text-brand-800 uppercase tracking-wider block">Required Frontend Cart Code (For Your Wix Cart Page):</span>
+                              <p className="text-[10px] text-brand-600">Paste this Page Code on your Wix Cart page in Developer Mode to handle adding the product on redirect:</p>
+                              <div className="relative">
+                                <pre className="bg-brand-950 text-brand-100 p-3 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto max-h-44 shadow-inner border border-brand-900">
+{`import { cart } from 'wix-stores';
+import wixLocation from 'wix-location';
+
+$w.onReady(function () {
+  const query = wixLocation.query;
+  let productId = query.productId;
+  let quantity = parseInt(query.quantity || query.qty || "1", 10);
+
+  if (query.appSectionParams) {
+    try {
+      const params = JSON.parse(decodeURIComponent(query.appSectionParams));
+      if (params.cart?.items?.length > 0) {
+        productId = params.cart.items[0].productId;
+        if (params.cart.items[0].quantity) {
+          quantity = parseInt(params.cart.items[0].quantity, 10);
+        }
+      }
+    } catch (e) {
+      console.error("Failed parsing appSectionParams:", e);
+    }
+  }
+
+  if (productId) {
+    cart.addProducts([{ productId, quantity }])
+      .then(() => {
+        wixLocation.to('/cart-page');
+      })
+      .catch((err) => console.error("Add to cart error:", err));
+  }
+});`}
+                                </pre>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(`import { cart } from 'wix-stores';
+import wixLocation from 'wix-location';
+
+$w.onReady(function () {
+  const query = wixLocation.query;
+  let productId = query.productId;
+  let quantity = parseInt(query.quantity || query.qty || "1", 10);
+
+  if (query.appSectionParams) {
+    try {
+      const params = JSON.parse(decodeURIComponent(query.appSectionParams));
+      if (params.cart?.items?.length > 0) {
+        productId = params.cart.items[0].productId;
+        if (params.cart.items[0].quantity) {
+          quantity = parseInt(params.cart.items[0].quantity, 10);
+        }
+      }
+    } catch (e) {
+      console.error("Failed parsing appSectionParams:", e);
+    }
+  }
+
+  if (productId) {
+    cart.addProducts([{ productId, quantity }])
+      .then(() => {
+        wixLocation.to('/cart-page');
+      })
+      .catch((err) => console.error("Add to cart error:", err));
+  }
+});`);
+                                    setCopiedFrontendVelo(true);
+                                    setTimeout(() => setCopiedFrontendVelo(false), 2000);
+                                  }}
+                                  className="absolute top-2 right-2 px-2.5 py-1.5 bg-brand-850 hover:bg-brand-800 text-brand-gold font-bold text-[9px] rounded-lg transition-colors flex items-center gap-1 border border-brand-700/50"
+                                >
+                                  <Copy size={10} />
+                                  {copiedFrontendVelo ? "Copied!" : "Copy Frontend Code"}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-[11px] text-brand-600 leading-relaxed">
+                              Follow these steps to enable fully dynamic custom checkout and CRM syncing:
+                            </p>
+
+                            <div className="space-y-1">
+                              <span className="text-[9px] font-black text-brand-800 uppercase tracking-wider block">Step 1: Backend Integration (File: backend/http-functions.js)</span>
+                              <p className="text-[10px] text-brand-600">Creates the CRM contact profile, writes design notes, creates the catalog product, and redirects securely:</p>
+                              <div className="relative">
+                                <pre className="bg-brand-950 text-brand-100 p-3 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto max-h-44 shadow-inner border border-brand-900">
+{`// File: backend/http-functions.js
 import { ok, serverError } from 'wix-http-functions';
 import wixStoresBackend from 'wix-stores-backend';
+import { contacts } from 'wix-crm-backend';
 
 export async function post_syncQuote(request) {
   const corsHeaders = {
@@ -1024,11 +1209,61 @@ export async function post_syncQuote(request) {
   try {
     const payload = await request.body.json();
     
-    // Create custom product in Wix catalog
+    const clientName = payload.clientName || '';
+    const clientPhone = payload.clientPhone || '';
+    const clientEmail = payload.clientEmail || '';
+    const transactionId = payload.transactionId || '';
+    const totalNum = payload.totalNum || 0;
+    const notes = payload.notes || '';
+    const summary = payload.summary || '';
+
+    // 1. CRM Integration: Search or Create Contact Profile & Append Notes
+    let contactId = null;
+    if (clientName || clientEmail || clientPhone) {
+      let firstName = clientName;
+      let lastName = '';
+      if (clientName.trim().includes(' ')) {
+        const parts = clientName.trim().split(/\\s+/);
+        firstName = parts[0];
+        lastName = parts.slice(1).join(' ');
+      }
+
+      const contactInfo = {
+        name: { first: firstName, last: lastName }
+      };
+      if (clientEmail) {
+        contactInfo.emails = [{ email: clientEmail, tag: "MAIN", primary: true }];
+      }
+      if (clientPhone) {
+        contactInfo.phones = [{ phone: clientPhone, tag: "MAIN", primary: true }];
+      }
+
+      try {
+        const contactResult = await contacts.appendOrCreateContact(contactInfo);
+        contactId = contactResult.contactId;
+
+        const noteTitle = "Bespoke Jewelry Quote #" + transactionId;
+        const noteContent = "GOLD & ROSE BESPOKE JEWELRY QUOTE\\n" +
+                            "-----------------------------------------\\n" +
+                            "Client Name: " + clientName + "\\n" +
+                            "Phone: " + clientPhone + "\\n" +
+                            "Email: " + clientEmail + "\\n\\n" +
+                            "Job Summary: " + summary + "\\n" +
+                            "Special Notes: " + notes + "\\n\\n" +
+                            "Total Quote Amount: $" + totalNum.toFixed(2) + " CAD\\n" +
+                            "Synced on: " + new Date().toLocaleString();
+
+        await contacts.addNote(contactId, { title: noteTitle, content: noteContent });
+      } catch (crmErr) {
+        console.error("Wix CRM contact synching failed:", crmErr.message);
+      }
+    }
+
+    // 2. Create bespoke product in Wix Stores Catalog
     const productInfo = {
-      name: payload.clientName ? "Custom: " + payload.clientName : "Custom Jewelry Piece",
-      price: payload.totalNum,
-      description: "Custom quote ID #" + payload.transactionId,
+      name: clientName ? "Bespoke Custom: " + clientName : "Custom Jewelry Piece",
+      price: totalNum,
+      description: "Custom jewelry piece (Quote ID #" + transactionId + ")",
       visible: false,
       productType: "physical"
     };
@@ -1036,14 +1271,14 @@ export async function post_syncQuote(request) {
     const newProduct = await wixStoresBackend.createProduct(productInfo);
     
     // Return custom cart redirection params
-    const checkoutUrl = "/cart-page?appSectionParams=" + encodeURIComponent(JSON.stringify({
-      cart: {
-        items: [{ productId: newProduct._id, quantity: 1 }]
-      }
-    }));
+    const checkoutUrl = "/cart-page?productId=" + newProduct._id + "&quantity=1";
 
     return ok({
-      body: { status: "success", checkoutUrl: checkoutUrl },
+      body: { 
+        status: "success", 
+        checkoutUrl: checkoutUrl,
+        contactId: contactId
+      },
       headers: corsHeaders
     });
   } catch (err) {
@@ -1060,13 +1295,14 @@ export function options_syncQuote(request) {
     }
   });
 }`}
-                            </pre>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(`// File: backend/http-functions.js
+                                </pre>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(`// File: backend/http-functions.js
 import { ok, serverError } from 'wix-http-functions';
 import wixStoresBackend from 'wix-stores-backend';
+import { contacts } from 'wix-crm-backend';
 
 export async function post_syncQuote(request) {
   const corsHeaders = {
@@ -1078,11 +1314,61 @@ export async function post_syncQuote(request) {
   try {
     const payload = await request.body.json();
     
-    // Create custom product in Wix catalog
+    const clientName = payload.clientName || '';
+    const clientPhone = payload.clientPhone || '';
+    const clientEmail = payload.clientEmail || '';
+    const transactionId = payload.transactionId || '';
+    const totalNum = payload.totalNum || 0;
+    const notes = payload.notes || '';
+    const summary = payload.summary || '';
+
+    // 1. CRM Integration: Search or Create Contact Profile & Append Notes
+    let contactId = null;
+    if (clientName || clientEmail || clientPhone) {
+      let firstName = clientName;
+      let lastName = '';
+      if (clientName.trim().includes(' ')) {
+        const parts = clientName.trim().split(/\\s+/);
+        firstName = parts[0];
+        lastName = parts.slice(1).join(' ');
+      }
+
+      const contactInfo = {
+        name: { first: firstName, last: lastName }
+      };
+      if (clientEmail) {
+        contactInfo.emails = [{ email: clientEmail, tag: "MAIN", primary: true }];
+      }
+      if (clientPhone) {
+        contactInfo.phones = [{ phone: clientPhone, tag: "MAIN", primary: true }];
+      }
+
+      try {
+        const contactResult = await contacts.appendOrCreateContact(contactInfo);
+        contactId = contactResult.contactId;
+
+        const noteTitle = "Bespoke Jewelry Quote #" + transactionId;
+        const noteContent = "GOLD & ROSE BESPOKE JEWELRY QUOTE\\n" +
+                            "-----------------------------------------\\n" +
+                            "Client Name: " + clientName + "\\n" +
+                            "Phone: " + clientPhone + "\\n" +
+                            "Email: " + clientEmail + "\\n\\n" +
+                            "Job Summary: " + summary + "\\n" +
+                            "Special Notes: " + notes + "\\n\\n" +
+                            "Total Quote Amount: $" + totalNum.toFixed(2) + " CAD\\n" +
+                            "Synced on: " + new Date().toLocaleString();
+
+        await contacts.addNote(contactId, { title: noteTitle, content: noteContent });
+      } catch (crmErr) {
+        console.error("Wix CRM contact synching failed:", crmErr.message);
+      }
+    }
+
+    // 2. Create bespoke product in Wix Stores Catalog
     const productInfo = {
-      name: payload.clientName ? "Custom: " + payload.clientName : "Custom Jewelry Piece",
-      price: payload.totalNum,
-      description: "Custom quote ID #" + payload.transactionId,
+      name: clientName ? "Bespoke Custom: " + clientName : "Custom Jewelry Piece",
+      price: totalNum,
+      description: "Custom jewelry piece (Quote ID #" + transactionId + ")",
       visible: false,
       productType: "physical"
     };
@@ -1090,14 +1376,14 @@ export async function post_syncQuote(request) {
     const newProduct = await wixStoresBackend.createProduct(productInfo);
     
     // Return custom cart redirection params
-    const checkoutUrl = "/cart-page?appSectionParams=" + encodeURIComponent(JSON.stringify({
-      cart: {
-        items: [{ productId: newProduct._id, quantity: 1 }]
-      }
-    }));
+    const checkoutUrl = "/cart-page?productId=" + newProduct._id + "&quantity=1";
 
     return ok({
-      body: { status: "success", checkoutUrl: checkoutUrl },
+      body: { 
+        status: "success", 
+        checkoutUrl: checkoutUrl,
+        contactId: contactId
+      },
       headers: corsHeaders
     });
   } catch (err) {
@@ -1114,21 +1400,105 @@ export function options_syncQuote(request) {
     }
   });
 }`);
-                                setCopiedVelo(true);
-                                setTimeout(() => setCopiedVelo(false), 2000);
-                              }}
-                              className="absolute top-2 right-2 px-2.5 py-1.5 bg-brand-850 hover:bg-brand-800 text-brand-gold font-bold text-[9px] rounded-lg transition-colors flex items-center gap-1 border border-brand-700/50"
-                            >
-                              <Copy size={10} />
-                              {copiedVelo ? "Copied!" : "Copy Code"}
-                            </button>
-                          </div>
-                        </div>
+                                    setCopiedVelo(true);
+                                    setTimeout(() => setCopiedVelo(false), 2000);
+                                  }}
+                                  className="absolute top-2 right-2 px-2.5 py-1.5 bg-brand-850 hover:bg-brand-800 text-brand-gold font-bold text-[9px] rounded-lg transition-colors flex items-center gap-1 border border-brand-700/50"
+                                >
+                                  <Copy size={10} />
+                                  {copiedVelo ? "Copied!" : "Copy Backend Code"}
+                                </button>
+                              </div>
+                            </div>
 
-                        <div className="text-[9.5px] text-brand-500 space-y-1 pl-1 font-bold leading-normal">
-                          <div>2. In Settings, set your Integration Mode to <span className="text-brand-900">Wix Velo Headless API</span>.</div>
-                          <div>3. Set your Velo Function URL to: <span className="text-brand-900 font-mono">https://www.goldandrosejewellery.com/_functions/syncQuote</span></div>
-                        </div>
+                            <div className="space-y-1">
+                              <span className="text-[9px] font-black text-brand-800 uppercase tracking-wider block">Step 2: Frontend Cart Automation (Wix Cart Page Code)</span>
+                              <p className="text-[10px] text-brand-600">Enables your live Wix Cart Page to read the newly-created bespoke productId from the URL and programmatically insert it into the user's cart on load:</p>
+                              <div className="relative">
+                                <pre className="bg-brand-950 text-brand-100 p-3 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto max-h-44 shadow-inner border border-brand-900">
+{`import { cart } from 'wix-stores';
+import wixLocation from 'wix-location';
+
+$w.onReady(function () {
+  const query = wixLocation.query;
+  let productId = query.productId;
+  let quantity = parseInt(query.quantity || query.qty || "1", 10);
+
+  if (query.appSectionParams) {
+    try {
+      const params = JSON.parse(decodeURIComponent(query.appSectionParams));
+      if (params.cart?.items?.length > 0) {
+        productId = params.cart.items[0].productId;
+        if (params.cart.items[0].quantity) {
+          quantity = parseInt(params.cart.items[0].quantity, 10);
+        }
+      }
+    } catch (e) {
+      console.error("Failed parsing appSectionParams:", e);
+    }
+  }
+
+  if (productId) {
+    cart.addProducts([{ productId, quantity }])
+      .then(() => {
+        // Redirect to clean the URL query params, preventing multiple items on page refresh
+        wixLocation.to('/cart-page');
+      })
+      .catch((err) => console.error("Add to cart error:", err));
+  }
+});`}
+                                </pre>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(`import { cart } from 'wix-stores';
+import wixLocation from 'wix-location';
+
+$w.onReady(function () {
+  const query = wixLocation.query;
+  let productId = query.productId;
+  let quantity = parseInt(query.quantity || query.qty || "1", 10);
+
+  if (query.appSectionParams) {
+    try {
+      const params = JSON.parse(decodeURIComponent(query.appSectionParams));
+      if (params.cart?.items?.length > 0) {
+        productId = params.cart.items[0].productId;
+        if (params.cart.items[0].quantity) {
+          quantity = parseInt(params.cart.items[0].quantity, 10);
+        }
+      }
+    } catch (e) {
+      console.error("Failed parsing appSectionParams:", e);
+    }
+  }
+
+  if (productId) {
+    cart.addProducts([{ productId, quantity }])
+      .then(() => {
+        wixLocation.to('/cart-page');
+      })
+      .catch((err) => console.error("Add to cart error:", err));
+  }
+});`);
+                                    setCopiedFrontendVelo(true);
+                                    setTimeout(() => setCopiedFrontendVelo(false), 2000);
+                                  }}
+                                  className="absolute top-2 right-2 px-2.5 py-1.5 bg-brand-850 hover:bg-brand-800 text-brand-gold font-bold text-[9px] rounded-lg transition-colors flex items-center gap-1 border border-brand-700/50"
+                                >
+                                  <Copy size={10} />
+                                  {copiedFrontendVelo ? "Copied!" : "Copy Frontend Code"}
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="text-[10px] text-brand-500 space-y-1.5 pl-1 font-bold leading-normal pt-1">
+                              <div>3. Go to Settings, set Integration Mode to <span className="text-brand-900 font-bold">Wix Velo Headless API</span>.</div>
+                              <div>4. Set Velo Function URL to: <span className="text-brand-900 font-mono font-bold text-[9.5px] bg-brand-100 px-1 rounded">{settings.wixStoreUrl ? settings.wixStoreUrl.replace(/\/$/, '') : 'https://www.goldandrosejewellery.com'}/_functions/syncQuote</span></div>
+                              <div>5. <span className="text-red-800 font-extrabold uppercase">IMPORTANT:</span> Click <span className="text-brand-900 underline">Publish</span> in the Wix Editor, and verify you are initiating sync from our live app, as editor previews block HTTP functions!</div>
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

@@ -188,6 +188,8 @@ export const DEFAULT_SETTINGS = {
   wixAccessToken: "",
   wixIntegrationMode: "deeplink",
   wixWebhookUrl: "",
+  wixProductId: "",
+  wixBaseUnitPrice: 1.00,
   
   retailGoldPremium: 100,
   retailSilverPremium: 20,

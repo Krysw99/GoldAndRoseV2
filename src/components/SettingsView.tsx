@@ -672,14 +672,15 @@ export default function SettingsView({
                   <span className="text-[9px] text-brand-400">Used as the base domain for deep-linking items to your Wix cart.</span>
                 </div>
                 
-                <div>
+                 <div>
                   <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Integration Mode</label>
                   <select
                     className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
                     value={localSettings.wixIntegrationMode ?? "deeplink"}
                     onChange={(e) => setLocalSettings(prev => ({ ...prev, wixIntegrationMode: e.target.value as any }))}
                   >
-                    <option value="deeplink">Wix Cart Deep Link (No Setup Required)</option>
+                    <option value="deeplink">Wix Cart Deep Link (Requires Developer Mode / Velo)</option>
+                    <option value="placeholder_product">Wix Standard Product (Zero-Code / No Developer Mode)</option>
                     <option value="velo_api">Wix Velo Headless API (Real-time Draft)</option>
                     <option value="webhook">Custom Wix Webhook (External Sync)</option>
                   </select>
@@ -695,6 +696,39 @@ export default function SettingsView({
                     onChange={(e) => setLocalSettings(prev => ({ ...prev, wixAccessToken: e.target.value }))}
                   />
                 </div>
+
+                {localSettings.wixIntegrationMode === "placeholder_product" && (
+                  <>
+                    <div>
+                      <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Wix Product ID for Custom Order</label>
+                      <input
+                        type="text"
+                        className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold font-mono"
+                        value={localSettings.wixProductId ?? ""}
+                        placeholder="e39ba1fc-8c54-46c1-a53d-2dc01c379a29"
+                        onChange={(e) => setLocalSettings(prev => ({ ...prev, wixProductId: e.target.value }))}
+                      />
+                      <span className="text-[9px] text-brand-400 block mt-1">
+                        Create a standard product in your Wix dashboard for $1.00 or $0.01, and paste its Product ID here.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Product Base Unit Price (CAD)</label>
+                      <select
+                        className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                        value={localSettings.wixBaseUnitPrice ?? 1.00}
+                        onChange={(e) => setLocalSettings(prev => ({ ...prev, wixBaseUnitPrice: parseFloat(e.target.value) }))}
+                      >
+                        <option value={1.00}>$1.00 CAD (Price rounds to nearest dollar, quantity = total dollars)</option>
+                        <option value={0.01}>$0.01 CAD (Supports exact cents, quantity = total cents)</option>
+                      </select>
+                      <span className="text-[9px] text-brand-400 block mt-1">
+                        Matches the actual price of your Wix product. Quantity will scale to match the CAD quote total.
+                      </span>
+                    </div>
+                  </>
+                )}
 
                 {(localSettings.wixIntegrationMode === "webhook" || localSettings.wixIntegrationMode === "velo_api") && (
                   <div className="sm:col-span-2">

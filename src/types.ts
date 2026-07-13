@@ -272,6 +272,8 @@ export interface AppSettings {
   wixAccessToken?: string;
   wixIntegrationMode?: string;
   wixWebhookUrl?: string;
+  wixProductId?: string;
+  wixBaseUnitPrice?: number;
   
   retailGoldPremium?: number;
   retailSilverPremium?: number;
