@@ -269,6 +269,7 @@ export interface AppSettings {
   storeContact?: string;
   
   wixStoreUrl?: string;
+  wixCartSlug?: string;
   wixAccessToken?: string;
   wixIntegrationMode?: string;
   wixWebhookUrl?: string;

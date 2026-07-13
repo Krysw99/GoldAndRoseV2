@@ -190,6 +190,9 @@ export default function LedgerView({
   const [copiedVelo, setCopiedVelo] = useState(false);
   const [copiedFrontendVelo, setCopiedFrontendVelo] = useState(false);
 
+  const rawCartSlug = settings.wixCartSlug || '/cart-page';
+  const formattedCartSlug = rawCartSlug.startsWith('/') ? rawCartSlug : `/${rawCartSlug}`;
+
   // Search filter lists
   const queryWords = React.useMemo(() => search.toLowerCase().trim().split(/\s+/).filter(Boolean), [search]);
   const fullSearchStr = search.toLowerCase().trim();
@@ -264,12 +267,30 @@ export default function LedgerView({
       "Creating dynamic checkout session token..."
     ]);
 
-    const baseUrl = (settings.wixStoreUrl || 'https://www.goldandrosejewellery.com').replace(/\/$/, '');
+    let baseUrl = (settings.wixStoreUrl || 'https://www.goldandrosejewellery.com').trim().replace(/\/$/, '');
+    if (baseUrl && !baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+      baseUrl = `https://${baseUrl}`;
+    }
     let customRedirectUrl: string | null = null;
 
     // Trigger API sync for either webhook OR velo_api mode
     if (settings.wixIntegrationMode === 'webhook' || settings.wixIntegrationMode === 'velo_api') {
-      const syncUrl = settings.wixWebhookUrl || `${baseUrl}/_functions/syncQuote`;
+      let syncUrl = (settings.wixWebhookUrl || `${baseUrl}/_functions/syncQuote`).trim();
+      
+      // Sanitization: Clean up common user formatting mistakes in the URL
+      if (syncUrl) {
+        // Remove trailing slashes
+        while (syncUrl.endsWith('/')) {
+          syncUrl = syncUrl.slice(0, -1);
+        }
+        // If they mistakenly appended the Velo function prefix "post_syncQuote" or "options_syncQuote"
+        if (syncUrl.endsWith('_syncQuote')) {
+          const lastSlashIdx = syncUrl.lastIndexOf('/');
+          if (lastSlashIdx !== -1) {
+            syncUrl = syncUrl.substring(0, lastSlashIdx + 1) + 'syncQuote';
+          }
+        }
+      }
 
       if (syncUrl) {
         setWixSyncLog(prev => [...prev, `Dispatching secure POST payload to endpoint: ${syncUrl}...`]);
@@ -299,10 +320,22 @@ export default function LedgerView({
             const resData = await response.json().catch(() => null);
             if (resData) {
               if (resData.checkoutUrl || resData.url || resData.cartUrl || resData.redirectUrl) {
-                customRedirectUrl = resData.checkoutUrl || resData.url || resData.cartUrl || resData.redirectUrl;
+                let rawUrl = resData.checkoutUrl || resData.url || resData.cartUrl || resData.redirectUrl;
+                if (rawUrl && rawUrl.startsWith('/')) {
+                  // Dynamically replace /cart prefix with their custom cart slug if returned from backend
+                  if (rawUrl.startsWith('/cart?')) {
+                    rawUrl = rawUrl.replace('/cart?', `${formattedCartSlug}?`);
+                  } else if (rawUrl.startsWith('/cart/')) {
+                    rawUrl = rawUrl.replace('/cart/', `${formattedCartSlug}/`);
+                  } else if (rawUrl === '/cart') {
+                    rawUrl = formattedCartSlug;
+                  }
+                  rawUrl = `${baseUrl}${rawUrl}`;
+                }
+                customRedirectUrl = rawUrl;
                 setWixSyncLog(prev => [...prev, "✓ Received live custom checkout session URL from Wix."]);
               } else if (resData.cartId) {
-                customRedirectUrl = `${baseUrl}/cart?cartId=${resData.cartId}`;
+                customRedirectUrl = `${baseUrl}${formattedCartSlug}?cartId=${resData.cartId}`;
                 setWixSyncLog(prev => [...prev, `✓ Received custom Cart ID from Wix backend: ${resData.cartId}.`]);
               }
             }
@@ -345,7 +378,7 @@ export default function LedgerView({
             ]
           }
         };
-        finalUrl = `${baseUrl}/cart?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+        finalUrl = `${baseUrl}${formattedCartSlug}?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
       } else {
         const isCentProduct = settings.wixBaseUnitPrice === 0.01;
         const computedQty = isCentProduct 
@@ -354,13 +387,13 @@ export default function LedgerView({
         
         const finalQty = computedQty > 0 ? computedQty : 1;
         const unitLabel = isCentProduct ? '$0.01 cents' : '$1.00 dollars';
-
+ 
         setWixSyncLog(prev => [
           ...prev,
           `✓ Using standard placeholder product ID: ${settings.wixProductId}`,
           `✓ Formulating cart quantity: ${finalQty.toLocaleString()} units of ${unitLabel} to match CAD $${cleanPrice.toFixed(2)}.`
         ]);
-
+ 
         const cartParams = {
           cart: {
             items: [
@@ -371,7 +404,7 @@ export default function LedgerView({
             ]
           }
         };
-        finalUrl = `${baseUrl}/cart?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+        finalUrl = `${baseUrl}${formattedCartSlug}?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
       }
     } else {
       const cartParams = {
@@ -390,7 +423,7 @@ export default function LedgerView({
           ]
         }
       };
-      finalUrl = customRedirectUrl || `${baseUrl}/cart?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+      finalUrl = customRedirectUrl || `${baseUrl}${formattedCartSlug}?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
     }
 
     setGeneratedWixUrl(finalUrl);
@@ -1135,7 +1168,7 @@ $w.onReady(function () {
         // preventing duplicate items from being added if the user refreshes the page.
         // This works automatically on both "/cart" and "/cart-page"!
         const cleanPath = '/' + (wixLocation.path || []).join('/');
-        wixLocation.to(cleanPath === '/' ? '/cart' : cleanPath);
+        wixLocation.to(cleanPath === '/' ? '${formattedCartSlug}' : cleanPath);
       })
       .catch((err) => console.error("Add to cart error:", err));
   }
@@ -1173,7 +1206,7 @@ $w.onReady(function () {
         // preventing duplicate items from being added if the user refreshes the page.
         // This works automatically on both "/cart" and "/cart-page"!
         const cleanPath = '/' + (wixLocation.path || []).join('/');
-        wixLocation.to(cleanPath === '/' ? '/cart' : cleanPath);
+        wixLocation.to(cleanPath === '/' ? '${formattedCartSlug}' : cleanPath);
       })
       .catch((err) => console.error("Add to cart error:", err));
   }
@@ -1277,7 +1310,7 @@ export async function post_syncQuote(request) {
     const newProduct = await createProduct(productInfo);
     
     // Return custom cart redirection params
-    const checkoutUrl = "/cart?productId=" + newProduct._id + "&quantity=1";
+    const checkoutUrl = "\${formattedCartSlug}?productId=" + newProduct._id + "&quantity=1";
 
     return ok({
       body: { 
@@ -1382,7 +1415,7 @@ export async function post_syncQuote(request) {
     const newProduct = await createProduct(productInfo);
     
     // Return custom cart redirection params
-    const checkoutUrl = "/cart?productId=" + newProduct._id + "&quantity=1";
+    const checkoutUrl = "\${formattedCartSlug}?productId=" + newProduct._id + "&quantity=1";
 
     return ok({
       body: { 
@@ -1451,7 +1484,7 @@ $w.onReady(function () {
         // preventing duplicate items from being added if the user refreshes the page.
         // This works automatically on both "/cart" and "/cart-page"!
         const cleanPath = '/' + (wixLocation.path || []).join('/');
-        wixLocation.to(cleanPath === '/' ? '/cart' : cleanPath);
+        wixLocation.to(cleanPath === '/' ? '${formattedCartSlug}' : cleanPath);
       })
       .catch((err) => console.error("Add to cart error:", err));
   }
@@ -1489,7 +1522,7 @@ $w.onReady(function () {
         // preventing duplicate items from being added if the user refreshes the page.
         // This works automatically on both "/cart" and "/cart-page"!
         const cleanPath = '/' + (wixLocation.path || []).join('/');
-        wixLocation.to(cleanPath === '/' ? '/cart' : cleanPath);
+        wixLocation.to(cleanPath === '/' ? '${formattedCartSlug}' : cleanPath);
       })
       .catch((err) => console.error("Add to cart error:", err));
   }

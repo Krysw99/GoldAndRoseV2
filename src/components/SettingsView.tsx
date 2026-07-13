@@ -672,6 +672,18 @@ export default function SettingsView({
                   <span className="text-[9px] text-brand-400">Used as the base domain for deep-linking items to your Wix cart.</span>
                 </div>
                 
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Wix Shopping Cart Page Slug (e.g. /cart-page or /cart)</label>
+                  <input
+                    type="text"
+                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold font-mono"
+                    value={localSettings.wixCartSlug ?? ""}
+                    placeholder="/cart-page"
+                    onChange={(e) => setLocalSettings(prev => ({ ...prev, wixCartSlug: e.target.value }))}
+                  />
+                  <span className="text-[9px] text-brand-400">Specify your Wix store's shopping cart URL slug (Wix default is usually `/cart-page`).</span>
+                </div>
+                
                  <div>
                   <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Integration Mode</label>
                   <select
