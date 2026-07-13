@@ -269,9 +269,7 @@ export default function LedgerView({
 
     // Trigger API sync for either webhook OR velo_api mode
     if (settings.wixIntegrationMode === 'webhook' || settings.wixIntegrationMode === 'velo_api') {
-      const syncUrl = settings.wixIntegrationMode === 'webhook' 
-        ? settings.wixWebhookUrl 
-        : `${baseUrl}/_functions/syncQuote`;
+      const syncUrl = settings.wixWebhookUrl || `${baseUrl}/_functions/syncQuote`;
 
       if (syncUrl) {
         setWixSyncLog(prev => [...prev, `Dispatching secure POST payload to endpoint: ${syncUrl}...`]);
