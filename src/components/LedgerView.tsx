@@ -1202,7 +1202,7 @@ $w.onReady(function () {
                                 <pre className="bg-brand-950 text-brand-100 p-3 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto max-h-44 shadow-inner border border-brand-900">
 {`// File: backend/http-functions.js
 import { ok, serverError } from 'wix-http-functions';
-import wixStoresBackend from 'wix-stores-backend';
+import { products } from 'wix-stores-backend';
 import { contacts } from 'wix-crm-backend';
 
 export async function post_syncQuote(request) {
@@ -1274,7 +1274,7 @@ export async function post_syncQuote(request) {
       productType: "physical"
     };
 
-    const newProduct = await wixStoresBackend.createProduct(productInfo);
+    const newProduct = await products.createProduct(productInfo);
     
     // Return custom cart redirection params
     const checkoutUrl = "/cart?productId=" + newProduct._id + "&quantity=1";
@@ -1307,7 +1307,7 @@ export function options_syncQuote(request) {
                                   onClick={() => {
                                     navigator.clipboard.writeText(`// File: backend/http-functions.js
 import { ok, serverError } from 'wix-http-functions';
-import wixStoresBackend from 'wix-stores-backend';
+import { products } from 'wix-stores-backend';
 import { contacts } from 'wix-crm-backend';
 
 export async function post_syncQuote(request) {
@@ -1379,7 +1379,7 @@ export async function post_syncQuote(request) {
       productType: "physical"
     };
 
-    const newProduct = await wixStoresBackend.createProduct(productInfo);
+    const newProduct = await products.createProduct(productInfo);
     
     // Return custom cart redirection params
     const checkoutUrl = "/cart?productId=" + newProduct._id + "&quantity=1";
