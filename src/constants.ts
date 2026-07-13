@@ -190,6 +190,7 @@ export const DEFAULT_SETTINGS = {
   wixWebhookUrl: "",
   wixProductId: "",
   wixBaseUnitPrice: 1.00,
+  wixCartSlug: "/cart-page",
   
   retailGoldPremium: 100,
   retailSilverPremium: 20,

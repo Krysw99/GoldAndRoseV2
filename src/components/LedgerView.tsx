@@ -404,7 +404,7 @@ export default function LedgerView({
             ]
           }
         };
-        finalUrl = `${baseUrl}${formattedCartSlug}?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+        finalUrl = `${baseUrl}${formattedCartSlug}?productId=${settings.wixProductId}&quantity=${finalQty}&appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
       }
     } else {
       const cartParams = {
@@ -1135,8 +1135,8 @@ export default function LedgerView({
                             </ol>
                             
                             <div className="space-y-1 mt-3">
-                              <span className="text-[9px] font-black text-brand-800 uppercase tracking-wider block">Required Frontend Cart Code (For Your Wix Cart Page):</span>
-                              <p className="text-[10px] text-brand-600">Paste this Page Code on your Wix Cart page in Developer Mode to handle adding the product on redirect:</p>
+                              <span className="text-[9px] font-black text-brand-800 uppercase tracking-wider block">Required Frontend Cart Code (Recommended for masterPage.js or Cart Page):</span>
+                              <p className="text-[10px] text-brand-600">For a foolproof integration that completely avoids Wix Cart page timing conflicts, paste this code into your Global <span className="font-bold">masterPage.js</span> file (under Page Code &gt; Global) OR on your specific Cart page:</p>
                               <div className="relative">
                                 <pre className="bg-brand-950 text-brand-100 p-3 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto max-h-44 shadow-inner border border-brand-900">
 {`import { cart } from 'wix-stores';
@@ -1147,9 +1147,14 @@ $w.onReady(function () {
   let productId = query.productId;
   let quantity = parseInt(query.quantity || query.qty || "1", 10);
 
-  if (query.appSectionParams) {
+  // Fallback: If productId is not found directly, try parsing appSectionParams
+  if (!productId && query.appSectionParams) {
     try {
-      const params = JSON.parse(decodeURIComponent(query.appSectionParams));
+      let appSectionParamsStr = query.appSectionParams;
+      if (appSectionParamsStr.includes('%')) {
+        appSectionParamsStr = decodeURIComponent(appSectionParamsStr);
+      }
+      const params = JSON.parse(appSectionParamsStr);
       if (params.cart?.items?.length > 0) {
         productId = params.cart.items[0].productId;
         if (params.cart.items[0].quantity) {
@@ -1162,15 +1167,16 @@ $w.onReady(function () {
   }
 
   if (productId) {
+    console.log("Adding product to cart:", productId, "Quantity:", quantity);
     cart.addProducts([{ productId, quantity }])
       .then(() => {
-        // Dynamically redirect back to the current page path to clean the URL query params,
-        // preventing duplicate items from being added if the user refreshes the page.
-        // This works automatically on both "/cart" and "/cart-page"!
-        const cleanPath = '/' + (wixLocation.path || []).join('/');
-        wixLocation.to(cleanPath === '/' ? '${formattedCartSlug}' : cleanPath);
+        console.log("Successfully added to cart. Cleaning URL...");
+        // Redirect back to your Cart page without query parameters
+        wixLocation.to("${formattedCartSlug}");
       })
-      .catch((err) => console.error("Add to cart error:", err));
+      .catch((err) => {
+        console.error("Add to cart error:", err);
+      });
   }
 });`}
                                 </pre>
@@ -1185,9 +1191,14 @@ $w.onReady(function () {
   let productId = query.productId;
   let quantity = parseInt(query.quantity || query.qty || "1", 10);
 
-  if (query.appSectionParams) {
+  // Fallback: If productId is not found directly, try parsing appSectionParams
+  if (!productId && query.appSectionParams) {
     try {
-      const params = JSON.parse(decodeURIComponent(query.appSectionParams));
+      let appSectionParamsStr = query.appSectionParams;
+      if (appSectionParamsStr.includes('%')) {
+        appSectionParamsStr = decodeURIComponent(appSectionParamsStr);
+      }
+      const params = JSON.parse(appSectionParamsStr);
       if (params.cart?.items?.length > 0) {
         productId = params.cart.items[0].productId;
         if (params.cart.items[0].quantity) {
@@ -1200,15 +1211,16 @@ $w.onReady(function () {
   }
 
   if (productId) {
+    console.log("Adding product to cart:", productId, "Quantity:", quantity);
     cart.addProducts([{ productId, quantity }])
       .then(() => {
-        // Dynamically redirect back to the current page path to clean the URL query params,
-        // preventing duplicate items from being added if the user refreshes the page.
-        // This works automatically on both "/cart" and "/cart-page"!
-        const cleanPath = '/' + (wixLocation.path || []).join('/');
-        wixLocation.to(cleanPath === '/' ? '${formattedCartSlug}' : cleanPath);
+        console.log("Successfully added to cart. Cleaning URL...");
+        // Redirect back to your Cart page without query parameters
+        wixLocation.to("${formattedCartSlug}");
       })
-      .catch((err) => console.error("Add to cart error:", err));
+      .catch((err) => {
+        console.error("Add to cart error:", err);
+      });
   }
 });`);
                                     setCopiedFrontendVelo(true);
@@ -1451,8 +1463,8 @@ export function options_syncQuote(request) {
                             </div>
 
                             <div className="space-y-1">
-                              <span className="text-[9px] font-black text-brand-800 uppercase tracking-wider block">Step 2: Frontend Cart Automation (Wix Cart Page Code)</span>
-                              <p className="text-[10px] text-brand-600">Enables your live Wix Cart Page to read the newly-created bespoke productId from the URL and programmatically insert it into the user's cart on load:</p>
+                              <span className="text-[9px] font-black text-brand-800 uppercase tracking-wider block">Step 2: Frontend Cart Automation (Recommended for masterPage.js or Cart Page)</span>
+                              <p className="text-[10px] text-brand-600">For a foolproof integration that completely avoids Wix Cart page timing conflicts, paste this code into your Global <span className="font-bold">masterPage.js</span> file (under Page Code &gt; Global) OR on your specific Cart page:</p>
                               <div className="relative">
                                 <pre className="bg-brand-950 text-brand-100 p-3 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto max-h-44 shadow-inner border border-brand-900">
 {`import { cart } from 'wix-stores';
@@ -1463,9 +1475,14 @@ $w.onReady(function () {
   let productId = query.productId;
   let quantity = parseInt(query.quantity || query.qty || "1", 10);
 
-  if (query.appSectionParams) {
+  // Fallback: If productId is not found directly, try parsing appSectionParams
+  if (!productId && query.appSectionParams) {
     try {
-      const params = JSON.parse(decodeURIComponent(query.appSectionParams));
+      let appSectionParamsStr = query.appSectionParams;
+      if (appSectionParamsStr.includes('%')) {
+        appSectionParamsStr = decodeURIComponent(appSectionParamsStr);
+      }
+      const params = JSON.parse(appSectionParamsStr);
       if (params.cart?.items?.length > 0) {
         productId = params.cart.items[0].productId;
         if (params.cart.items[0].quantity) {
@@ -1478,15 +1495,16 @@ $w.onReady(function () {
   }
 
   if (productId) {
+    console.log("Adding product to cart:", productId, "Quantity:", quantity);
     cart.addProducts([{ productId, quantity }])
       .then(() => {
-        // Dynamically redirect back to the current page path to clean the URL query params,
-        // preventing duplicate items from being added if the user refreshes the page.
-        // This works automatically on both "/cart" and "/cart-page"!
-        const cleanPath = '/' + (wixLocation.path || []).join('/');
-        wixLocation.to(cleanPath === '/' ? '${formattedCartSlug}' : cleanPath);
+        console.log("Successfully added to cart. Cleaning URL...");
+        // Redirect back to your Cart page without query parameters
+        wixLocation.to("${formattedCartSlug}");
       })
-      .catch((err) => console.error("Add to cart error:", err));
+      .catch((err) => {
+        console.error("Add to cart error:", err);
+      });
   }
 });`}
                                 </pre>
@@ -1501,9 +1519,14 @@ $w.onReady(function () {
   let productId = query.productId;
   let quantity = parseInt(query.quantity || query.qty || "1", 10);
 
-  if (query.appSectionParams) {
+  // Fallback: If productId is not found directly, try parsing appSectionParams
+  if (!productId && query.appSectionParams) {
     try {
-      const params = JSON.parse(decodeURIComponent(query.appSectionParams));
+      let appSectionParamsStr = query.appSectionParams;
+      if (appSectionParamsStr.includes('%')) {
+        appSectionParamsStr = decodeURIComponent(appSectionParamsStr);
+      }
+      const params = JSON.parse(appSectionParamsStr);
       if (params.cart?.items?.length > 0) {
         productId = params.cart.items[0].productId;
         if (params.cart.items[0].quantity) {
@@ -1516,15 +1539,16 @@ $w.onReady(function () {
   }
 
   if (productId) {
+    console.log("Adding product to cart:", productId, "Quantity:", quantity);
     cart.addProducts([{ productId, quantity }])
       .then(() => {
-        // Dynamically redirect back to the current page path to clean the URL query params,
-        // preventing duplicate items from being added if the user refreshes the page.
-        // This works automatically on both "/cart" and "/cart-page"!
-        const cleanPath = '/' + (wixLocation.path || []).join('/');
-        wixLocation.to(cleanPath === '/' ? '${formattedCartSlug}' : cleanPath);
+        console.log("Successfully added to cart. Cleaning URL...");
+        // Redirect back to your Cart page without query parameters
+        wixLocation.to("${formattedCartSlug}");
       })
-      .catch((err) => console.error("Add to cart error:", err));
+      .catch((err) => {
+        console.error("Add to cart error:", err);
+      });
   }
 });`);
                                     setCopiedFrontendVelo(true);
