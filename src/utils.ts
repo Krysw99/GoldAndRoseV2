@@ -371,7 +371,7 @@ export function hasRingData(r: JewelryItem): boolean {
 export function calculateWholesaleRingCost(r: JewelryItem, settings: AppSettings, spotPrices: { gold: number, silver: number, platinum: number }, overridePrices?: { gold?: number, silver?: number, platinum?: number }, wholesaleProfileId?: string): number {
   if (!r) return 0;
   if (r.category === 'repair') {
-    const repairsTotal = (r.repairs || []).reduce((acc, rep) => acc + (Number(rep.price) || 0), 0);
+    const repairsTotal = (r.repairs || []).reduce((acc, rep) => acc + (Number(rep.customPrice !== undefined ? rep.customPrice : rep.price) || 0), 0);
     const addonsTotal = r.addons.reduce((acc, a) => acc + (Number(a.fee) || 0), 0);
     return repairsTotal + addonsTotal;
   }
@@ -467,7 +467,7 @@ export function calculateWholesaleRingCost(r: JewelryItem, settings: AppSettings
 export function calculateRingCost(r: JewelryItem, settings: AppSettings, spotPrices: { gold: number, silver: number, platinum: number }, mode: 'retail' | 'wholesale' = 'retail', overridePrices?: { gold?: number, silver?: number, platinum?: number }, wholesaleProfileId?: string): number {
   if (!r) return 0;
   if (r.category === 'repair') {
-    const repairsTotal = (r.repairs || []).reduce((acc, rep) => acc + (Number(rep.price) || 0), 0);
+    const repairsTotal = (r.repairs || []).reduce((acc, rep) => acc + (Number(rep.customPrice !== undefined ? rep.customPrice : rep.price) || 0), 0);
     const addonsTotal = r.addons.reduce((acc, a) => acc + (Number(a.fee) || 0), 0);
     return repairsTotal + addonsTotal;
   }

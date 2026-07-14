@@ -23,6 +23,7 @@ import {
 } from '../utils';
 import { printElement } from '../utils/printHelper';
 import SignaturePad from './SignaturePad';
+import WholesaleRepairView from './WholesaleRepairView';
 
 const PROFILE_SHAPES = [
   { id: 'Flat', name: 'Flat / Pipe', factor: '1.00', desc: 'Flat top & flat inside', path: 'M 10 45 L 70 45 L 70 25 L 10 25 Z' },
@@ -2059,7 +2060,27 @@ export default function QuoteCalculator({
 
         {/* PIECE PARAMETERS EDITOR LAYOUT */}
         {session.activeSubTab !== 'summary' && activeRing && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start animate-fadeIn">
+          activeRing.category === 'repair' ? (
+            <WholesaleRepairView
+              session={session}
+              onChangeSession={(newSessionOrUpdater) => {
+                if (typeof newSessionOrUpdater === 'function') {
+                  onChangeSession(prev => (newSessionOrUpdater as any)(prev));
+                } else {
+                  onChangeSession(() => newSessionOrUpdater);
+                }
+              }}
+              onSaveQuote={onSaveQuote}
+              onLaunchSketch={onLaunchSketch}
+              settings={settings}
+              spotPrices={spotPrices}
+              scrapTransactions={scrapTransactions || []}
+              onTriggerPrint={onTriggerPrint || (() => {})}
+              isIframe={isIframe || false}
+              embedMode={true}
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start animate-fadeIn">
             {/* COLUMN 1: Metal Attributes, Sketches & Pricing Summary */}
             <div className="space-y-6">
               {/* Piece Specifications Card */}
@@ -2071,7 +2092,7 @@ export default function QuoteCalculator({
                   Piece Specifications
                 </h2>
                 <span className="bg-brand-50 text-brand-700 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border border-brand-200">
-                  Category: {activeRing.category === 'customRing' ? 'Engagement / Custom' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category === 'mensBand' ? "Men's Band" : activeRing.category === 'pendant' ? 'Pendant' : activeRing.category === 'earrings' ? 'Earrings Pair' : activeRing.category === 'repair' ? 'Jewelry Repair / Service' : 'Tennis Bracelet'}
+                  Category: {activeRing.category === 'customRing' ? 'Engagement / Custom' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category === 'mensBand' ? "Men's Band" : activeRing.category === 'pendant' ? 'Pendant' : activeRing.category === 'earrings' ? 'Earrings Pair' : 'Tennis Bracelet'}
                 </span>
               </div>
 
@@ -3078,7 +3099,7 @@ export default function QuoteCalculator({
                     <p className="text-[9px] font-black text-brand-400 uppercase tracking-widest border-b border-brand-50 pb-1 mb-1">Active Piece Specs</p>
                     <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans font-bold">
                       <span>Category</span>
-                      <span className="text-brand-900">{activeRing.category === 'customRing' ? 'Engagement' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category === 'mensBand' ? "Men's Band" : activeRing.category === 'pendant' ? 'Pendant' : activeRing.category === 'earrings' ? 'Earrings' : activeRing.category === 'repair' ? 'Repair' : 'Tennis'}</span>
+                      <span className="text-brand-900">{activeRing.category === 'customRing' ? 'Engagement' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category === 'mensBand' ? "Men's Band" : activeRing.category === 'pendant' ? 'Pendant' : activeRing.category === 'earrings' ? 'Earrings' : 'Tennis'}</span>
                     </div>
                     <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans">
                       <span>Material / Purity</span>
@@ -3683,7 +3704,8 @@ export default function QuoteCalculator({
             </div>
           </div>
         </div>
-      )}
+          )
+        )}
 
       {/* EMPTY STATE FOR PIECE LIST */}
       {session.activeSubTab !== 'summary' && session.rings.length === 0 && (

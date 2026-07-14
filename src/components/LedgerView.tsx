@@ -260,6 +260,27 @@ export default function LedgerView({
 
     const cleanPrice = parseFloat(activeTx.total.replace(/[^0-9.]/g, '')) || 0;
     const piecesCount = (activeTx as QuoteTransaction).fullData?.rings?.length || 1;
+
+    // Build a clean, precise details summary string of the pieces to import to Wix
+    let detailsString = `Quote #${activeTx.id}`;
+    if (activeTx.name) {
+      detailsString += ` for ${activeTx.name}`;
+    }
+    const rings = (activeTx as QuoteTransaction).fullData?.rings || [];
+    if (rings.length > 0) {
+      const piecesDetails = rings.map((r, idx) => {
+        const catLabel = r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Wedding Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : r.category === 'tennisBracelet' ? 'Tennis Bracelet' : 'Custom Piece';
+        const metal = `${r.metalColor} ${r.goldKarat ? r.goldKarat + 'k' : ''} ${r.material}`;
+        const center = r.centerStone?.carats ? `${r.centerStone.carats}ct ${r.centerStone.shape} ${r.centerStone.type}` : '';
+        const sizeInfo = r.category === 'mensBand' && r.mbSize ? `Size ${r.mbSize}` : r.category === 'customRing' && r.cRingSize ? `Size US ${r.cRingSize}` : '';
+        return `Piece ${idx + 1}: ${catLabel} (${metal}${center ? ', Center: ' + center : ''}${sizeInfo ? ', ' + sizeInfo : ''})`;
+      }).join('; ');
+      detailsString += ` - ${piecesDetails}`;
+    } else if (activeTx.summary) {
+      detailsString += ` - ${activeTx.summary}`;
+    }
+    // Limit to 500 characters to comply with standard Wix Custom Text Field length constraints
+    detailsString = detailsString.substring(0, 500);
     
     setWixSyncLog(prev => [
       ...prev,
@@ -310,6 +331,9 @@ export default function LedgerView({
               summary: activeTx.summary || "",
               total: activeTx.total,
               totalNum: cleanPrice,
+              detailsString: detailsString,
+              placeholderProductId: settings.wixProductId || "",
+              baseUnitPrice: settings.wixBaseUnitPrice || 1.00,
               fullDetails: (activeTx as QuoteTransaction).fullData,
               syncedAt: new Date().toISOString()
             })
@@ -378,7 +402,7 @@ export default function LedgerView({
             ]
           }
         };
-        finalUrl = `${baseUrl}${formattedCartSlug}?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+        finalUrl = `${baseUrl}${formattedCartSlug}?details=${encodeURIComponent(detailsString)}&appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
       } else {
         const isCentProduct = settings.wixBaseUnitPrice === 0.01;
         const computedQty = isCentProduct 
@@ -404,7 +428,7 @@ export default function LedgerView({
             ]
           }
         };
-        finalUrl = `${baseUrl}${formattedCartSlug}?productId=${settings.wixProductId}&quantity=${finalQty}&appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+        finalUrl = `${baseUrl}${formattedCartSlug}?productId=${settings.wixProductId}&quantity=${finalQty}&details=${encodeURIComponent(detailsString)}&appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
       }
     } else {
       const cartParams = {
@@ -423,7 +447,17 @@ export default function LedgerView({
           ]
         }
       };
-      finalUrl = customRedirectUrl || `${baseUrl}${formattedCartSlug}?appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+      
+      if (customRedirectUrl) {
+        if (customRedirectUrl.includes('?')) {
+          customRedirectUrl += `&details=${encodeURIComponent(detailsString)}`;
+        } else {
+          customRedirectUrl += `?details=${encodeURIComponent(detailsString)}`;
+        }
+        finalUrl = customRedirectUrl;
+      } else {
+        finalUrl = `${baseUrl}${formattedCartSlug}?details=${encodeURIComponent(detailsString)}&appSectionParams=${encodeURIComponent(JSON.stringify(cartParams))}`;
+      }
     }
 
     setGeneratedWixUrl(finalUrl);
@@ -1100,11 +1134,28 @@ export default function LedgerView({
                       <div className="p-4 pt-0 border-t border-brand-100 space-y-3 animate-fadeIn text-left mt-2.5">
                         <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-[11px] text-red-900 leading-relaxed font-bold space-y-2">
                           <p className="font-extrabold uppercase text-[10px] text-red-800 tracking-wide flex items-center gap-1">
-                            ⚠️ Critical integration requirements:
+                            ⚠️ Why is my shopping cart still empty? (Check list):
                           </p>
-                          <ul className="list-disc list-inside space-y-1 pl-1">
-                            <li><span className="text-red-950">HTTP Functions only execute on published Live sites</span>: Testing inside the Wix Editor's "Preview" mode does not expose backend endpoints, meaning profiles will not be created. You must click <span className="underline">Publish</span> first!</li>
-                            <li><span className="text-red-950">Wix requires Frontend code to populate the Cart</span>: Out of the box, Wix Stores do not automatically add products from a redirect URL parameter. You <span className="underline">MUST</span> paste a simple 10-line Frontend Cart script (provided below) on your Wix Cart Page to enable instant cart population!</li>
+                          <ul className="list-disc list-inside space-y-1.5 pl-1 text-[10.5px]">
+                            <li>
+                              <span className="text-red-950 font-black">1. Product Catalog Visibility (Most Common)</span>: Wix Stores strictly forbid adding invisible (<code className="bg-red-100 px-1 py-0.5 rounded text-red-900 font-mono text-[9px]">visible: false</code>) items to the cart from the frontend.
+                              <div className="pl-3 text-red-800 text-[10px] mt-0.5 font-normal">
+                                • For Velo API mode: Change <code className="bg-red-100 font-mono text-[9px]">visible: false</code> to <code className="bg-red-100 font-mono text-[9px] font-bold text-green-950">visible: true</code> in your backend code (updated below).
+                                <br />• For Placeholder mode: Go to your Wix Dashboard and verify your payment placeholder product is set to <span className="underline">Active</span>, set to <span className="underline">Visible</span>, and has "In Stock" or "Track Inventory" disabled.
+                              </div>
+                            </li>
+                            <li>
+                              <span className="text-red-950 font-black">2. Product ID UUID vs. SKU/Name</span>: You MUST copy the true 36-character Wix internal product UUID (e.g., <code className="bg-red-100 font-mono text-[9px]">xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</code>) into Settings. Do NOT use the SKU or Product Name.
+                              <div className="pl-3 text-red-800 text-[10px] mt-0.5 font-normal">
+                                • Finding the ID: Open the product editor in your Wix Dashboard. The Product ID is the long alphanumeric code at the very end of your browser's address bar.
+                              </div>
+                            </li>
+                            <li>
+                              <span className="text-red-950 font-black">3. Cart Slug Match</span>: Your "Wix Shopping Cart Page Slug" in Settings (e.g. <code className="bg-red-100 font-mono text-[9px]">/cart</code>) must match your active Wix cart page URL. Standard Wix stores use <code className="bg-red-100 font-mono text-[9px]">/cart</code>.
+                            </li>
+                            <li>
+                              <span className="text-red-950 font-black">4. Live site only</span>: Velo APIs and Custom page handlers do NOT run in "Preview" mode inside the Wix Editor. You <span className="underline">MUST</span> click <span className="font-extrabold">Publish</span> in your Wix Editor, then open your live site domain!
+                            </li>
                           </ul>
                         </div>
 
@@ -1146,6 +1197,7 @@ $w.onReady(function () {
   const query = wixLocation.query;
   let productId = query.productId;
   let quantity = parseInt(query.quantity || query.qty || "1", 10);
+  let details = query.details || "";
 
   // Fallback: If productId is not found directly, try parsing appSectionParams
   if (!productId && query.appSectionParams) {
@@ -1167,8 +1219,18 @@ $w.onReady(function () {
   }
 
   if (productId) {
-    console.log("Adding product to cart:", productId, "Quantity:", quantity);
-    cart.addProducts([{ productId, quantity }])
+    const options = {};
+    if (details) {
+      options.customTextFields = [
+        { 
+          title: "Job Details", 
+          value: decodeURIComponent(details).substring(0, 500) 
+        }
+      ];
+    }
+
+    console.log("Adding product to cart:", productId, "Quantity:", quantity, "Options:", options);
+    cart.addProducts([{ productId, quantity, options }])
       .then(() => {
         console.log("Successfully added to cart. Cleaning URL...");
         // Redirect back to your Cart page without query parameters
@@ -1190,6 +1252,7 @@ $w.onReady(function () {
   const query = wixLocation.query;
   let productId = query.productId;
   let quantity = parseInt(query.quantity || query.qty || "1", 10);
+  let details = query.details || "";
 
   // Fallback: If productId is not found directly, try parsing appSectionParams
   if (!productId && query.appSectionParams) {
@@ -1211,8 +1274,18 @@ $w.onReady(function () {
   }
 
   if (productId) {
-    console.log("Adding product to cart:", productId, "Quantity:", quantity);
-    cart.addProducts([{ productId, quantity }])
+    const options = {};
+    if (details) {
+      options.customTextFields = [
+        { 
+          title: "Job Details", 
+          value: decodeURIComponent(details).substring(0, 500) 
+        }
+      ];
+    }
+
+    console.log("Adding product to cart:", productId, "Quantity:", quantity, "Options:", options);
+    cart.addProducts([{ productId, quantity, options }])
       .then(() => {
         console.log("Successfully added to cart. Cleaning URL...");
         // Redirect back to your Cart page without query parameters
@@ -1242,12 +1315,11 @@ $w.onReady(function () {
 
                             <div className="space-y-1">
                               <span className="text-[9px] font-black text-brand-800 uppercase tracking-wider block">Step 1: Backend Integration (File: backend/http-functions.js)</span>
-                              <p className="text-[10px] text-brand-600">Creates the CRM contact profile, writes design notes, creates the catalog product, and redirects securely:</p>
+                              <p className="text-[10px] text-brand-600">Creates the CRM contact profile, writes complete design notes, and redirects to your checkout cart with your single pre-existing placeholder product (no new product is created):</p>
                               <div className="relative">
                                 <pre className="bg-brand-950 text-brand-100 p-3 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto max-h-44 shadow-inner border border-brand-900">
 {`// File: backend/http-functions.js
 import { ok, serverError } from 'wix-http-functions';
-import { createProduct } from 'wix-stores-backend';
 import { contacts } from 'wix-crm-backend';
 
 export async function post_syncQuote(request) {
@@ -1267,6 +1339,9 @@ export async function post_syncQuote(request) {
     const totalNum = payload.totalNum || 0;
     const notes = payload.notes || '';
     const summary = payload.summary || '';
+    const detailsString = payload.detailsString || '';
+    const placeholderProductId = payload.placeholderProductId || '';
+    const baseUnitPrice = payload.baseUnitPrice || 1.00;
 
     // 1. CRM Integration: Search or Create Contact Profile & Append Notes
     let contactId = null;
@@ -1299,7 +1374,7 @@ export async function post_syncQuote(request) {
                             "Client Name: " + clientName + "\\n" +
                             "Phone: " + clientPhone + "\\n" +
                             "Email: " + clientEmail + "\\n\\n" +
-                            "Job Summary: " + summary + "\\n" +
+                            "Job Summary: " + (detailsString || summary) + "\\n" +
                             "Special Notes: " + notes + "\\n\\n" +
                             "Total Quote Amount: $" + totalNum.toFixed(2) + " CAD\\n" +
                             "Synced on: " + new Date().toLocaleString();
@@ -1310,19 +1385,17 @@ export async function post_syncQuote(request) {
       }
     }
 
-    // 2. Create bespoke product in Wix Stores Catalog
-    const productInfo = {
-      name: clientName ? "Bespoke Custom: " + clientName : "Custom Jewelry Piece",
-      price: totalNum,
-      description: "Custom jewelry piece (Quote ID #" + transactionId + ")",
-      visible: false,
-      productType: "physical"
-    };
-
-    const newProduct = await createProduct(productInfo);
+    // 2. Redirect to Checkout using the Single Pre-existing Placeholder Product (No product is created!)
+    const isCentProduct = baseUnitPrice === 0.01;
+    const computedQty = isCentProduct ? Math.round(totalNum * 100) : Math.round(totalNum);
+    const finalQty = Math.max(1, computedQty);
     
-    // Return custom cart redirection params
-    const checkoutUrl = "${formattedCartSlug}?productId=" + newProduct._id + "&quantity=1";
+    // Fallback: If no placeholder Product ID is received, fall back to placeholder ID
+    const productId = placeholderProductId || "YOUR_PLACEHOLDER_PRODUCT_ID";
+
+    // Build the dynamic checkout redirect URL with details parameter
+    const finalDetails = encodeURIComponent(detailsString || ("Quote #" + transactionId + " - " + summary));
+    const checkoutUrl = "${formattedCartSlug}?productId=" + productId + "&quantity=" + finalQty + "&details=" + finalDetails;
 
     return ok({
       body: { 
@@ -1352,7 +1425,6 @@ export function options_syncQuote(request) {
                                   onClick={() => {
                                     navigator.clipboard.writeText(`// File: backend/http-functions.js
 import { ok, serverError } from 'wix-http-functions';
-import { createProduct } from 'wix-stores-backend';
 import { contacts } from 'wix-crm-backend';
 
 export async function post_syncQuote(request) {
@@ -1372,6 +1444,9 @@ export async function post_syncQuote(request) {
     const totalNum = payload.totalNum || 0;
     const notes = payload.notes || '';
     const summary = payload.summary || '';
+    const detailsString = payload.detailsString || '';
+    const placeholderProductId = payload.placeholderProductId || '';
+    const baseUnitPrice = payload.baseUnitPrice || 1.00;
 
     // 1. CRM Integration: Search or Create Contact Profile & Append Notes
     let contactId = null;
@@ -1404,7 +1479,7 @@ export async function post_syncQuote(request) {
                             "Client Name: " + clientName + "\\n" +
                             "Phone: " + clientPhone + "\\n" +
                             "Email: " + clientEmail + "\\n\\n" +
-                            "Job Summary: " + summary + "\\n" +
+                            "Job Summary: " + (detailsString || summary) + "\\n" +
                             "Special Notes: " + notes + "\\n\\n" +
                             "Total Quote Amount: $" + totalNum.toFixed(2) + " CAD\\n" +
                             "Synced on: " + new Date().toLocaleString();
@@ -1415,19 +1490,17 @@ export async function post_syncQuote(request) {
       }
     }
 
-    // 2. Create bespoke product in Wix Stores Catalog
-    const productInfo = {
-      name: clientName ? "Bespoke Custom: " + clientName : "Custom Jewelry Piece",
-      price: totalNum,
-      description: "Custom jewelry piece (Quote ID #" + transactionId + ")",
-      visible: false,
-      productType: "physical"
-    };
-
-    const newProduct = await createProduct(productInfo);
+    // 2. Redirect to Checkout using the Single Pre-existing Placeholder Product (No product is created!)
+    const isCentProduct = baseUnitPrice === 0.01;
+    const computedQty = isCentProduct ? Math.round(totalNum * 100) : Math.round(totalNum);
+    const finalQty = Math.max(1, computedQty);
     
-    // Return custom cart redirection params
-    const checkoutUrl = "${formattedCartSlug}?productId=" + newProduct._id + "&quantity=1";
+    // Fallback: If no placeholder Product ID is received, fall back to placeholder ID
+    const productId = placeholderProductId || "YOUR_PLACEHOLDER_PRODUCT_ID";
+
+    // Build the dynamic checkout redirect URL with details parameter
+    const finalDetails = encodeURIComponent(detailsString || ("Quote #" + transactionId + " - " + summary));
+    const checkoutUrl = "${formattedCartSlug}?productId=" + productId + "&quantity=" + finalQty + "&details=" + finalDetails;
 
     return ok({
       body: { 
@@ -1474,6 +1547,7 @@ $w.onReady(function () {
   const query = wixLocation.query;
   let productId = query.productId;
   let quantity = parseInt(query.quantity || query.qty || "1", 10);
+  let details = query.details || "";
 
   // Fallback: If productId is not found directly, try parsing appSectionParams
   if (!productId && query.appSectionParams) {
@@ -1495,8 +1569,18 @@ $w.onReady(function () {
   }
 
   if (productId) {
-    console.log("Adding product to cart:", productId, "Quantity:", quantity);
-    cart.addProducts([{ productId, quantity }])
+    const options = {};
+    if (details) {
+      options.customTextFields = [
+        { 
+          title: "Job Details", 
+          value: decodeURIComponent(details).substring(0, 500) 
+        }
+      ];
+    }
+
+    console.log("Adding product to cart:", productId, "Quantity:", quantity, "Options:", options);
+    cart.addProducts([{ productId, quantity, options }])
       .then(() => {
         console.log("Successfully added to cart. Cleaning URL...");
         // Redirect back to your Cart page without query parameters
@@ -1518,6 +1602,7 @@ $w.onReady(function () {
   const query = wixLocation.query;
   let productId = query.productId;
   let quantity = parseInt(query.quantity || query.qty || "1", 10);
+  let details = query.details || "";
 
   // Fallback: If productId is not found directly, try parsing appSectionParams
   if (!productId && query.appSectionParams) {
@@ -1539,8 +1624,18 @@ $w.onReady(function () {
   }
 
   if (productId) {
-    console.log("Adding product to cart:", productId, "Quantity:", quantity);
-    cart.addProducts([{ productId, quantity }])
+    const options = {};
+    if (details) {
+      options.customTextFields = [
+        { 
+          title: "Job Details", 
+          value: decodeURIComponent(details).substring(0, 500) 
+        }
+      ];
+    }
+
+    console.log("Adding product to cart:", productId, "Quantity:", quantity, "Options:", options);
+    cart.addProducts([{ productId, quantity, options }])
       .then(() => {
         console.log("Successfully added to cart. Cleaning URL...");
         // Redirect back to your Cart page without query parameters

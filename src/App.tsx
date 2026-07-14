@@ -25,6 +25,7 @@ import SettingsView from './components/SettingsView';
 import Sketchpad from './components/Sketchpad';
 import SpotPriceView from './components/SpotPriceView';
 import CubanBraceletBuilder from './components/CubanBraceletBuilder';
+import WholesaleRepairView from './components/WholesaleRepairView';
 
 // Firebase cloud sync helpers
 import { listenCollection, saveDocument, deleteDocument, syncLocalToCloud } from './firebase';
@@ -998,7 +999,7 @@ export default function App() {
             className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm border ${activeTab === 'wholesale' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
           >
             <Landmark size={14} />
-            Wholesale Manufacturing
+            Wholesale Repair
           </button>
           <button
             type="button"
