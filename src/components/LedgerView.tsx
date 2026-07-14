@@ -1371,7 +1371,8 @@ export async function post_syncQuote(request) {
       }
 
       const contactInfo = {
-        name: { first: firstName, last: lastName }
+        name: { first: firstName, last: lastName },
+        description: "GOLD & ROSE BESPOKE JEWELRY JOB BREAKDOWN: " + (detailsString || summary) + (notes ? " | Special Notes: " + notes : "")
       };
       if (clientEmail) {
         contactInfo.emails = [{ email: clientEmail, tag: "MAIN", primary: true }];
@@ -1384,18 +1385,33 @@ export async function post_syncQuote(request) {
         const contactResult = await contacts.appendOrCreateContact(contactInfo);
         contactId = contactResult.contactId;
 
-        const noteTitle = "Bespoke Jewelry Quote #" + transactionId;
-        const noteContent = "GOLD & ROSE BESPOKE JEWELRY QUOTE\\n" +
+        const noteContent = "GOLD & ROSE BESPOKE JEWELRY JOB BREAKDOWN\\n" +
                             "-----------------------------------------\\n" +
-                            "Client Name: " + clientName + "\\n" +
+                            "Job Name: " + (payload.jobName || clientName || "Custom Jewelry Job") + "\\n" +
                             "Phone: " + clientPhone + "\\n" +
                             "Email: " + clientEmail + "\\n\\n" +
-                            "Job Summary: " + (detailsString || summary) + "\\n" +
-                            "Special Notes: " + notes + "\\n\\n" +
+                            "Job Details: " + (detailsString || summary) + "\\n\\n" +
+                            "Special Notes: " + (notes || "None") + "\\n\\n" +
                             "Total Quote Amount: $" + totalNum.toFixed(2) + " CAD\\n" +
                             "Synced on: " + new Date().toLocaleString();
 
-        await contacts.addNote(contactId, { title: noteTitle, content: noteContent });
+        // Robust defensive note sync supporting all versions of Wix CRM Velo APIs
+        try {
+          // Attempt 1: Modern/Standard Contacts V2 API note with content property (Most common for new stores)
+          await contacts.addNote(contactId, { content: noteContent });
+        } catch (noteObjErr) {
+          try {
+            // Attempt 2: Legacy CRM API note with simple string parameter (Common in older sites)
+            await contacts.addNote(contactId, noteContent);
+          } catch (noteStrErr) {
+            try {
+              // Attempt 3: Alternative CRM API with title and content properties
+              await contacts.addNote(contactId, { title: "Job Breakdown #" + transactionId, content: noteContent });
+            } catch (anyErr) {
+              console.error("All Wix addNote API strategies failed: ", anyErr.message);
+            }
+          }
+        }
       } catch (crmErr) {
         console.error("Wix CRM contact synching failed:", crmErr.message);
       }
@@ -1476,7 +1492,8 @@ export async function post_syncQuote(request) {
       }
 
       const contactInfo = {
-        name: { first: firstName, last: lastName }
+        name: { first: firstName, last: lastName },
+        description: "GOLD & ROSE BESPOKE JEWELRY JOB BREAKDOWN: " + (detailsString || summary) + (notes ? " | Special Notes: " + notes : "")
       };
       if (clientEmail) {
         contactInfo.emails = [{ email: clientEmail, tag: "MAIN", primary: true }];
@@ -1489,18 +1506,33 @@ export async function post_syncQuote(request) {
         const contactResult = await contacts.appendOrCreateContact(contactInfo);
         contactId = contactResult.contactId;
 
-        const noteTitle = "Bespoke Jewelry Quote #" + transactionId;
-        const noteContent = "GOLD & ROSE BESPOKE JEWELRY QUOTE\\n" +
+        const noteContent = "GOLD & ROSE BESPOKE JEWELRY JOB BREAKDOWN\\n" +
                             "-----------------------------------------\\n" +
-                            "Client Name: " + clientName + "\\n" +
+                            "Job Name: " + (payload.jobName || clientName || "Custom Jewelry Job") + "\\n" +
                             "Phone: " + clientPhone + "\\n" +
                             "Email: " + clientEmail + "\\n\\n" +
-                            "Job Summary: " + (detailsString || summary) + "\\n" +
-                            "Special Notes: " + notes + "\\n\\n" +
+                            "Job Details: " + (detailsString || summary) + "\\n\\n" +
+                            "Special Notes: " + (notes || "None") + "\\n\\n" +
                             "Total Quote Amount: $" + totalNum.toFixed(2) + " CAD\\n" +
                             "Synced on: " + new Date().toLocaleString();
 
-        await contacts.addNote(contactId, { title: noteTitle, content: noteContent });
+        // Robust defensive note sync supporting all versions of Wix CRM Velo APIs
+        try {
+          // Attempt 1: Modern/Standard Contacts V2 API note with content property (Most common for new stores)
+          await contacts.addNote(contactId, { content: noteContent });
+        } catch (noteObjErr) {
+          try {
+            // Attempt 2: Legacy CRM API note with simple string parameter (Common in older sites)
+            await contacts.addNote(contactId, noteContent);
+          } catch (noteStrErr) {
+            try {
+              // Attempt 3: Alternative CRM API with title and content properties
+              await contacts.addNote(contactId, { title: "Job Breakdown #" + transactionId, content: noteContent });
+            } catch (anyErr) {
+              console.error("All Wix addNote API strategies failed: ", anyErr.message);
+            }
+          }
+        }
       } catch (crmErr) {
         console.error("Wix CRM contact synching failed:", crmErr.message);
       }
