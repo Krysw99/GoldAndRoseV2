@@ -269,6 +269,14 @@ export default function LedgerView({
     const rings = (activeTx as QuoteTransaction).fullData?.rings || [];
     if (rings.length > 0) {
       const piecesDetails = rings.map((r, idx) => {
+        if (r.category === 'repair') {
+          const ops = (r.repairs || []).map(rep => `${rep.name}${rep.option ? ' (' + rep.option + ')' : ''} x${rep.qty}`).join(', ');
+          const addons = (r.addons || []).map(a => `${a.desc} (Fee: $${a.fee})`).join(', ');
+          let repDesc = `Repair Job ${idx + 1}`;
+          if (ops) repDesc += `: [${ops}]`;
+          if (addons) repDesc += ` with Addons: [${addons}]`;
+          return repDesc;
+        }
         const catLabel = r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Wedding Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : r.category === 'tennisBracelet' ? 'Tennis Bracelet' : 'Custom Piece';
         const metal = `${r.metalColor} ${r.goldKarat ? r.goldKarat + 'k' : ''} ${r.material}`;
         const center = r.centerStone?.carats ? `${r.centerStone.carats}ct ${r.centerStone.shape} ${r.centerStone.type}` : '';
@@ -335,7 +343,15 @@ export default function LedgerView({
               placeholderProductId: settings.wixProductId || "",
               baseUnitPrice: settings.wixBaseUnitPrice || 1.00,
               fullDetails: (activeTx as QuoteTransaction).fullData,
-              syncedAt: new Date().toISOString()
+              syncedAt: new Date().toISOString(),
+              // Explicit user-requested fields
+              jobName: activeTx.name || "Custom Jewelry Job",
+              contactDetails: {
+                phone: activeTx.phone || "",
+                email: (activeTx as QuoteTransaction).fullData?.cEmail || ""
+              },
+              jobDetails: detailsString,
+              totalPrice: cleanPrice
             })
           });
 
@@ -686,11 +702,11 @@ export default function LedgerView({
                     Load in Editor
                   </button>
                 )}
-                {selectedTx.type === 'retail' && (
+                {(selectedTx.type === 'retail' || selectedTx.type === 'wholesale') && (
                   <button
                     type="button"
                     onClick={handleWixSync}
-                    className="bg-[#002eec] hover:bg-[#0024ba] text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-md"
+                    className="bg-[#002eec] hover:bg-[#0024ba] text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
                     title="Generate custom checkout link and sync with Wix Store"
                   >
                     <ShoppingBag size={12} />
@@ -1105,9 +1121,9 @@ export default function LedgerView({
                       <Check size={14} />
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs font-black text-green-800 uppercase tracking-wider">Ready for Checkout</p>
+                      <p className="text-xs font-black text-green-800 uppercase tracking-wider">Successfully Sent to Wix</p>
                       <p className="text-[11px] text-green-700 leading-relaxed">
-                        Your bespoke jewelry specification has been processed. {generatedWixUrl.includes('cartId') || generatedWixUrl.includes('custom-order') || !generatedWixUrl.includes('appSectionParams') ? 'Dynamic checkout session established.' : 'Client deep-link generated.'} Click below to redirect straight to checkout.
+                        Your job name, contact details, job details, and total price have been securely sent and created in your Wix Store backend.
                       </p>
                     </div>
                   </div>
@@ -1676,21 +1692,10 @@ $w.onReady(function () {
               <button
                 type="button"
                 onClick={() => setIsWixModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl border border-brand-200 text-brand-800 text-xs font-bold hover:bg-brand-50 transition-all"
+                className="px-5 py-2.5 bg-brand-900 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-brand-950 transition-all cursor-pointer shadow-md"
               >
-                Close Panel
+                Done & Close
               </button>
-              {wixSyncState === 'done' && (
-                <a
-                  href={generatedWixUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-5 py-2.5 bg-[#002eec] hover:bg-[#0024ba] text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-md"
-                >
-                  <ExternalLink size={13} />
-                  Proceed to Wix Checkout
-                </a>
-              )}
             </div>
           </div>
         </div>
