@@ -1013,19 +1013,21 @@ export default function WholesaleRepairView({
                 <PenTool size={18} className="text-brand-300 mx-auto mb-1 group-hover:scale-110 transition-transform" />
                 <span className="text-[9px] text-brand-400 font-bold uppercase tracking-wider">Draw Bench Sketch</span>
               </div>
-            ) : (
+             ) : (
               <div className="grid grid-cols-3 gap-2.5">
                 {(activeItem.referenceSketches || []).map((sk, sIdx) => (
-                  <div key={sIdx} className="relative aspect-square bg-slate-50 rounded-xl border border-brand-150 overflow-hidden group shadow-inner">
-                    <img src={sk} alt={`Sketch ${sIdx+1}`} className="w-full h-full object-contain pointer-events-none" />
-                    <div className="absolute inset-0 bg-brand-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                  <div key={sIdx} className="flex flex-col gap-1.5 items-center">
+                    <div className="w-full aspect-square bg-slate-50 rounded-xl border border-brand-150 overflow-hidden shadow-inner flex items-center justify-center">
+                      <img src={sk} alt={`Sketch ${sIdx+1}`} className="w-full h-full object-contain pointer-events-none" />
+                    </div>
+                    <div className="flex items-center gap-1.5 justify-center w-full">
                       <button
                         type="button"
                         onClick={() => { playClickSound('click'); onLaunchSketch('sketch', sIdx); }}
-                        className="bg-white p-1 rounded hover:bg-brand-50 cursor-pointer text-brand-800"
+                        className="bg-white hover:bg-brand-50 border border-brand-200 text-brand-800 p-1 rounded-md cursor-pointer flex items-center justify-center shadow-sm w-8 h-8"
                         title="Edit sketch"
                       >
-                        <Edit2 size={10} />
+                        <Edit2 size={12} />
                       </button>
                       <button
                         type="button"
@@ -1034,10 +1036,10 @@ export default function WholesaleRepairView({
                           const updated = (activeItem.referenceSketches || []).filter((_, idx) => idx !== sIdx);
                           updateItemFields({ referenceSketches: updated });
                         }}
-                        className="bg-white p-1 rounded hover:bg-red-50 text-red-600 cursor-pointer"
+                        className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 p-1 rounded-md cursor-pointer flex items-center justify-center shadow-sm w-8 h-8"
                         title="Delete sketch"
                       >
-                        <Trash2 size={10} />
+                        <Trash2 size={12} />
                       </button>
                     </div>
                   </div>
@@ -1073,8 +1075,10 @@ export default function WholesaleRepairView({
             ) : (
               <div className="grid grid-cols-3 gap-2.5">
                 {(activeItem.referencePhotos || []).map((ph, pIdx) => (
-                  <div key={pIdx} className="relative aspect-square bg-slate-50 rounded-xl border border-brand-150 overflow-hidden group shadow-inner">
-                    <img src={ph} alt={`Intake ${pIdx+1}`} className="w-full h-full object-cover pointer-events-none" referrerPolicy="no-referrer" />
+                  <div key={pIdx} className="flex flex-col gap-1.5 items-center">
+                    <div className="w-full aspect-square bg-slate-50 rounded-xl border border-brand-150 overflow-hidden shadow-inner flex items-center justify-center">
+                      <img src={ph} alt={`Intake ${pIdx+1}`} className="w-full h-full object-cover pointer-events-none" referrerPolicy="no-referrer" />
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
@@ -1082,9 +1086,11 @@ export default function WholesaleRepairView({
                         const updated = (activeItem.referencePhotos || []).filter((_, idx) => idx !== pIdx);
                         updateItemFields({ referencePhotos: updated });
                       }}
-                      className="absolute top-1 right-1 bg-white/90 p-1 rounded-md text-red-500 hover:text-red-700 hover:bg-white cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 p-1 rounded-md cursor-pointer flex items-center justify-center shadow-sm w-full h-8"
+                      title="Delete photo"
                     >
-                      <Trash2 size={10} />
+                      <Trash2 size={12} className="mr-1" />
+                      <span className="text-[10px] font-bold uppercase">Delete</span>
                     </button>
                   </div>
                 ))}

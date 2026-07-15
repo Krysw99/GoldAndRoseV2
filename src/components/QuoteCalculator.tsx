@@ -19,7 +19,7 @@ import {
 } from '../constants';
 import { 
   getEmptyRing, getTennisEstimates, calculateBandWeight, 
-  calculateRingCost, calculateRawCost, hasRingData 
+  calculateRingCost, calculateRawCost, hasRingData, compressImage
 } from '../utils';
 import { printElement } from '../utils/printHelper';
 import SignaturePad from './SignaturePad';
@@ -2964,32 +2964,27 @@ export default function QuoteCalculator({
                           </div>
                         ) : (
                           sketches.map((sketchUrl, sIdx) => (
-                            <div
-                              key={sIdx}
-                              onClick={() => setEnlargeImage(sketchUrl)}
-                              className="relative group border border-brand-150 bg-white rounded-xl p-0.5 w-16 h-16 flex flex-col items-center justify-center shadow-sm cursor-pointer overflow-hidden transition-all"
-                              title="Click to enlarge"
-                            >
-                              <img src={sketchUrl} alt={`Sketch ${sIdx + 1}`} className="w-full h-full object-cover rounded-lg" />
-                              <div className="absolute inset-0 bg-brand-900/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                            <div key={sIdx} className="flex flex-col items-center gap-1">
+                              <div
+                                onClick={() => setEnlargeImage(sketchUrl)}
+                                className="border border-brand-150 bg-white rounded-xl p-0.5 w-16 h-16 flex items-center justify-center shadow-sm cursor-pointer overflow-hidden transition-all hover:scale-105"
+                                title="Click to enlarge"
+                              >
+                                <img src={sketchUrl} alt={`Sketch ${sIdx + 1}`} className="w-full h-full object-cover rounded-lg" />
+                              </div>
+                              <div className="flex items-center gap-1">
                                 <button
                                   type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onLaunchSketch('sketch', sIdx);
-                                  }}
-                                  className="p-1 bg-white text-brand-900 rounded-md hover:bg-brand-50 transition-colors shadow"
+                                  onClick={() => onLaunchSketch('sketch', sIdx)}
+                                  className="p-1 bg-white border border-brand-200 text-brand-900 rounded-md hover:bg-brand-50 transition-colors shadow-sm cursor-pointer"
                                   title="Edit Sketch"
                                 >
                                   <Sparkles size={10} className="text-brand-gold" />
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateSketches(sketches.filter((_, i) => i !== sIdx));
-                                  }}
-                                  className="p-1 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors shadow"
+                                  onClick={() => updateSketches(sketches.filter((_, i) => i !== sIdx))}
+                                  className="p-1 bg-red-50 border border-red-200 text-red-600 rounded-md hover:bg-red-100 hover:text-red-700 transition-colors shadow-sm cursor-pointer"
                                   title="Delete"
                                 >
                                   <Trash2 size={10} />
@@ -3024,32 +3019,27 @@ export default function QuoteCalculator({
                           </div>
                         ) : (
                           photos.map((photoUrl, pIdx) => (
-                            <div
-                              key={pIdx}
-                              onClick={() => setEnlargeImage(photoUrl)}
-                              className="relative group border border-brand-150 bg-white rounded-xl p-0.5 w-16 h-16 flex flex-col items-center justify-center shadow-sm cursor-pointer overflow-hidden transition-all"
-                              title="Click to enlarge"
-                            >
-                              <img src={photoUrl} alt={`Photo ${pIdx + 1}`} className="w-full h-full object-cover rounded-lg" />
-                              <div className="absolute inset-0 bg-brand-900/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                            <div key={pIdx} className="flex flex-col items-center gap-1">
+                              <div
+                                onClick={() => setEnlargeImage(photoUrl)}
+                                className="border border-brand-150 bg-white rounded-xl p-0.5 w-16 h-16 flex items-center justify-center shadow-sm cursor-pointer overflow-hidden transition-all hover:scale-105"
+                                title="Click to enlarge"
+                              >
+                                <img src={photoUrl} alt={`Photo ${pIdx + 1}`} className="w-full h-full object-cover rounded-lg" />
+                              </div>
+                              <div className="flex items-center gap-1">
                                 <button
                                   type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onLaunchSketch('photo', pIdx);
-                                  }}
-                                  className="p-1 bg-white text-brand-900 rounded-md hover:bg-brand-50 transition-colors shadow"
+                                  onClick={() => onLaunchSketch('photo', pIdx)}
+                                  className="p-1 bg-white border border-brand-200 text-brand-900 rounded-md hover:bg-brand-50 transition-colors shadow-sm cursor-pointer"
                                   title="Edit Photo"
                                 >
                                   <Camera size={10} className="text-brand-gold" />
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updatePhotos(photos.filter((_, i) => i !== pIdx));
-                                  }}
-                                  className="p-1 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors shadow"
+                                  onClick={() => updatePhotos(photos.filter((_, i) => i !== pIdx))}
+                                  className="p-1 bg-red-50 border border-red-200 text-red-600 rounded-md hover:bg-red-100 hover:text-red-700 transition-colors shadow-sm cursor-pointer"
                                   title="Delete"
                                 >
                                   <Trash2 size={10} />
@@ -3070,9 +3060,10 @@ export default function QuoteCalculator({
                           const file = e.target.files?.[0];
                           if (!file) return;
                           const reader = new FileReader();
-                          reader.onload = (ev) => {
+                          reader.onload = async (ev) => {
                             const result = ev.target?.result as string;
-                            updatePhotos([...photos, result]);
+                            const compressed = await compressImage(result, 800);
+                            updatePhotos([...photos, compressed]);
                           };
                           reader.readAsDataURL(file);
                         }}

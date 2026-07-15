@@ -10,6 +10,7 @@ import {
   Undo2, Redo2, Ruler, Grid3X3, Minus, Maximize2
 } from 'lucide-react';
 import { CENTER_SHAPES } from '../constants';
+import { compressImage } from '../utils';
 
 // --- Visual Jewelry Cut Stamp Icons Helper ---
 const StampIcon = ({ shape, className = "w-5 h-5" }: { shape: string; className?: string }) => {
@@ -1816,9 +1817,10 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const result = ev.target?.result as string;
-      setBgSrc(result);
+      const compressed = await compressImage(result, 800);
+      setBgSrc(compressed);
       const img = new Image();
       img.onload = () => {
         setBgImage(img);
@@ -1836,7 +1838,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
           setTool('transform');
         }
       };
-      img.src = result;
+      img.src = compressed;
     };
     reader.readAsDataURL(file);
   };
@@ -2170,7 +2172,22 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     // 2. Draw transparency-flattened drawing layer on top
     ctx.drawImage(canvas, 0, 0);
 
-    const flattenedDataUrl = virtualCanvas.toDataURL('image/jpeg', 0.85);
+    // Compress the flattened image to a max dimension of 800px to avoid localStorage quota issues
+    const MAX_DIM = 800;
+    let exportCanvas = virtualCanvas;
+    if (virtualCanvas.width > MAX_DIM || virtualCanvas.height > MAX_DIM) {
+      const scale = Math.min(MAX_DIM / virtualCanvas.width, MAX_DIM / virtualCanvas.height);
+      const compressCanvas = document.createElement('canvas');
+      compressCanvas.width = Math.round(virtualCanvas.width * scale);
+      compressCanvas.height = Math.round(virtualCanvas.height * scale);
+      const compressCtx = compressCanvas.getContext('2d');
+      if (compressCtx) {
+        compressCtx.drawImage(virtualCanvas, 0, 0, compressCanvas.width, compressCanvas.height);
+        exportCanvas = compressCanvas;
+      }
+    }
+
+    const flattenedDataUrl = exportCanvas.toDataURL('image/jpeg', 0.85);
     onSave(flattenedDataUrl);
   };
 

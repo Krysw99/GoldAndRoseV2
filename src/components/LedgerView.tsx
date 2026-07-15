@@ -1383,7 +1383,7 @@ export async function post_syncQuote(request) {
 
       try {
         const contactResult = await contacts.appendOrCreateContact(contactInfo);
-        contactId = contactResult.contactId;
+        contactId = (contactResult.contact && contactResult.contact.id) || contactResult.contactId;
 
         const noteContent = "GOLD & ROSE BESPOKE JEWELRY JOB BREAKDOWN\\n" +
                             "-----------------------------------------\\n" +
@@ -1504,7 +1504,7 @@ export async function post_syncQuote(request) {
 
       try {
         const contactResult = await contacts.appendOrCreateContact(contactInfo);
-        contactId = contactResult.contactId;
+        contactId = (contactResult.contact && contactResult.contact.id) || contactResult.contactId;
 
         const noteContent = "GOLD & ROSE BESPOKE JEWELRY JOB BREAKDOWN\\n" +
                             "-----------------------------------------\\n" +

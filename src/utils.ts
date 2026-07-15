@@ -190,6 +190,37 @@ export function getEmptyQuoteSession(): QuoteSession {
   };
 }
 
+export function compressImage(base64Str: string, maxDim: number = 800): Promise<string> {
+  return new Promise((resolve) => {
+    if (!base64Str || typeof base64Str !== 'string' || !base64Str.startsWith('data:')) {
+      resolve(base64Str);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      if (img.width <= maxDim && img.height <= maxDim) {
+        resolve(base64Str);
+        return;
+      }
+      const scale = Math.min(maxDim / img.width, maxDim / img.height);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      } else {
+        resolve(base64Str);
+      }
+    };
+    img.onerror = () => {
+      resolve(base64Str);
+    };
+    img.src = base64Str;
+  });
+}
+
 export function safeSetLocalStorage(key: string, data: any): void {
   try {
     localStorage.setItem(key, JSON.stringify(data));
@@ -206,7 +237,9 @@ export function safeSetLocalStorage(key: string, data: any): void {
                 rings: item.fullData.rings.map((r: any) => ({
                   ...r,
                   referencePhoto: r.referencePhoto ? "(Image too large, omitted from local persistent history)" : null,
-                  referencePhotos: r.referencePhotos ? r.referencePhotos.map(() => "(Image too large, omitted)") : []
+                  referencePhotos: r.referencePhotos ? r.referencePhotos.map(() => "(Image too large, omitted)") : [],
+                  referenceSketch: r.referenceSketch ? "(Image too large, omitted from local persistent history)" : null,
+                  referenceSketches: r.referenceSketches ? r.referenceSketches.map(() => "(Image too large, omitted)") : []
                 }))
               }
             };
