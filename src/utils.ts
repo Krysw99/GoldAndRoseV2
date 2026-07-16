@@ -190,7 +190,7 @@ export function getEmptyQuoteSession(): QuoteSession {
   };
 }
 
-export function compressImage(base64Str: string, maxDim: number = 800): Promise<string> {
+export function compressImage(base64Str: string, maxDim: number = 600, quality: number = 0.6): Promise<string> {
   return new Promise((resolve) => {
     if (!base64Str || typeof base64Str !== 'string' || !base64Str.startsWith('data:')) {
       resolve(base64Str);
@@ -198,18 +198,15 @@ export function compressImage(base64Str: string, maxDim: number = 800): Promise<
     }
     const img = new Image();
     img.onload = () => {
-      if (img.width <= maxDim && img.height <= maxDim) {
-        resolve(base64Str);
-        return;
-      }
-      const scale = Math.min(maxDim / img.width, maxDim / img.height);
+      // Scale down if greater than maxDim, otherwise keep natural dimension but convert to JPEG 0.6 quality
+      const scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(img.width * scale);
       canvas.height = Math.round(img.height * scale);
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        resolve(canvas.toDataURL('image/jpeg', quality));
       } else {
         resolve(base64Str);
       }
@@ -219,6 +216,133 @@ export function compressImage(base64Str: string, maxDim: number = 800): Promise<
     };
     img.src = base64Str;
   });
+}
+
+export function safeParseDate(dateStr: string): number {
+  if (!dateStr) return 0;
+
+  // Clean the string:
+  // - Replace narrow non-breaking spaces (\u202f) and standard non-breaking spaces (\u00a0) with regular spaces.
+  // - Standardize dots in a.m. / p.m. to am / pm.
+  const cleaned = dateStr
+    .replace(/[\u202f\u00a0]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Try standard Date.parse first after cleaning
+  let parsed = Date.parse(cleaned);
+  if (!isNaN(parsed)) return parsed;
+
+  // Try another standard cleaning: Safari sometimes dislikes commas or the word "at"
+  const cleanedForSafari = cleaned
+    .replace(/,/, '')
+    .replace(/\bat\b/i, '')
+    .trim();
+  parsed = Date.parse(cleanedForSafari);
+  if (!isNaN(parsed)) return parsed;
+
+  // Fallback: Custom manual parsing
+  try {
+    const months = [
+      'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+      'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
+    ];
+    
+    let monthIndex = -1;
+    const lowerStr = cleaned.toLowerCase();
+    for (let i = 0; i < months.length; i++) {
+      if (lowerStr.includes(months[i])) {
+        monthIndex = i;
+        break;
+      }
+    }
+
+    // Extract all numeric sequences
+    const parts = cleaned.match(/\d+/g);
+    if (!parts || parts.length < 2) return 0;
+
+    let year = new Date().getFullYear();
+    let month = 0; // 0-indexed
+    let day = 1;
+    let hour = 0;
+    let minute = 0;
+    let second = 0;
+
+    // Determine the year. A 4-digit number is almost certainly the year.
+    let yearIdx = parts.findIndex(p => p.length === 4);
+    if (yearIdx !== -1) {
+      year = parseInt(parts[yearIdx]);
+    } else {
+      // If no 4-digit number is found, see if parts[2] is a 2-digit year (e.g. DD/MM/YY)
+      if (parts[2] && parts[2].length === 2) {
+        yearIdx = 2;
+        year = parseInt("20" + parts[2]);
+      } else {
+        yearIdx = -1;
+      }
+    }
+
+    if (monthIndex !== -1) {
+      // We found a text month!
+      month = monthIndex;
+      // Filter out the year from the numeric parts to locate the day
+      const nonYearParts = parts.filter((_, idx) => idx !== yearIdx);
+      if (nonYearParts.length > 0) {
+        day = parseInt(nonYearParts[0]);
+      }
+      
+      const timeParts = nonYearParts.slice(1);
+      if (timeParts.length > 0) hour = parseInt(timeParts[0]) || 0;
+      if (timeParts.length > 1) minute = parseInt(timeParts[1]) || 0;
+      if (timeParts.length > 2) second = parseInt(timeParts[2]) || 0;
+    } else {
+      // No text month, numeric only
+      if (yearIdx === 0) {
+        // YYYY-MM-DD
+        month = (parseInt(parts[1]) || 1) - 1;
+        day = parseInt(parts[2]) || 1;
+        
+        if (parts.length > 3) hour = parseInt(parts[3]) || 0;
+        if (parts.length > 4) minute = parseInt(parts[4]) || 0;
+        if (parts.length > 5) second = parseInt(parts[5]) || 0;
+      } else if (yearIdx === 2 || yearIdx === -1) {
+        // DD/MM/YYYY or MM/DD/YYYY
+        const p1 = parseInt(parts[0]) || 1;
+        const p2 = parseInt(parts[1]) || 1;
+        
+        if (p1 > 12) {
+          day = p1;
+          month = p2 - 1;
+        } else if (p2 > 12) {
+          month = p1 - 1;
+          day = p2;
+        } else {
+          // Default to US format (MM/DD/YYYY)
+          month = p1 - 1;
+          day = p2;
+        }
+
+        const baseIdx = yearIdx === 2 ? 3 : 2;
+        if (parts.length > baseIdx) hour = parseInt(parts[baseIdx]) || 0;
+        if (parts.length > baseIdx + 1) minute = parseInt(parts[baseIdx + 1]) || 0;
+        if (parts.length > baseIdx + 2) second = parseInt(parts[baseIdx + 2]) || 0;
+      }
+    }
+
+    // Check for am/pm
+    if (/p\.?m\.?/i.test(cleaned) && hour < 12) {
+      hour += 12;
+    } else if (/a\.?m\.?/i.test(cleaned) && hour === 12) {
+      hour = 0;
+    }
+
+    const d = new Date(year, month, day, hour, minute, second);
+    const time = d.getTime();
+    return isNaN(time) ? 0 : time;
+  } catch (err) {
+    console.error("Failed custom parsing of date string on iPad:", dateStr, err);
+    return 0;
+  }
 }
 
 export function safeSetLocalStorage(key: string, data: any): void {
@@ -242,6 +366,13 @@ export function safeSetLocalStorage(key: string, data: any): void {
                   referenceSketches: r.referenceSketches ? r.referenceSketches.map(() => "(Image too large, omitted)") : []
                 }))
               }
+            };
+          }
+          if (item && ('image' in item || 'signature' in item)) {
+            return {
+              ...item,
+              image: item.image ? "(Image too large, omitted from local persistent history)" : null,
+              signature: item.signature ? "(Signature too large, omitted)" : null
             };
           }
           return item;

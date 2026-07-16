@@ -10,5 +10,8 @@ service cloud.firestore {
     match /wholesale_ledger/{document} {
       allow read, write: if true;
     }
+    match /app_settings/{document} {
+      allow read, write: if true;
+    }
   }
 }

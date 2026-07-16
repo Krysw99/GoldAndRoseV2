@@ -2172,8 +2172,8 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     // 2. Draw transparency-flattened drawing layer on top
     ctx.drawImage(canvas, 0, 0);
 
-    // Compress the flattened image to a max dimension of 800px to avoid localStorage quota issues
-    const MAX_DIM = 800;
+    // Compress the flattened image to a max dimension of 600px to avoid localStorage quota issues
+    const MAX_DIM = 600;
     let exportCanvas = virtualCanvas;
     if (virtualCanvas.width > MAX_DIM || virtualCanvas.height > MAX_DIM) {
       const scale = Math.min(MAX_DIM / virtualCanvas.width, MAX_DIM / virtualCanvas.height);
@@ -2187,7 +2187,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       }
     }
 
-    const flattenedDataUrl = exportCanvas.toDataURL('image/jpeg', 0.85);
+    const flattenedDataUrl = exportCanvas.toDataURL('image/jpeg', 0.6);
     onSave(flattenedDataUrl);
   };
 

@@ -3062,7 +3062,7 @@ export default function QuoteCalculator({
                           const reader = new FileReader();
                           reader.onload = async (ev) => {
                             const result = ev.target?.result as string;
-                            const compressed = await compressImage(result, 800);
+                            const compressed = await compressImage(result, 600, 0.6);
                             updatePhotos([...photos, compressed]);
                           };
                           reader.readAsDataURL(file);

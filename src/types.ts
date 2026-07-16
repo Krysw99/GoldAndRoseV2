@@ -148,6 +148,7 @@ export interface ScrapItem {
 export interface ScrapTransaction {
   id: string;
   date: string;
+  timestamp?: number;
   name: string;
   phone: string;
   address: string;
@@ -168,6 +169,7 @@ export interface ScrapTransaction {
 export interface QuoteTransaction {
   id: string;
   date: string;
+  timestamp?: number;
   name: string;
   phone: string;
   summary: string;

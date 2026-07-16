@@ -15,7 +15,7 @@ import {
   ScrapItem, JewelryItem 
 } from './types';
 import { DEFAULT_SETTINGS, TROY_ONCE_GRAMS, FANCY_SHAPES, ROUND_MELEE } from './constants';
-import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage } from './utils';
+import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeParseDate } from './utils';
 
 // Modular Components
 import ScrapCalculator from './components/ScrapCalculator';
@@ -101,6 +101,7 @@ export default function App() {
   };
 
   const isLoadedRef = useRef(false);
+  const lastCloudSettingsRef = useRef<string>("");
   const [isPersistenceLoaded, setIsPersistenceLoaded] = useState(false);
   const [isCloudSynced, setIsCloudSynced] = useState(false);
 
@@ -203,6 +204,7 @@ export default function App() {
         const demoTx: QuoteTransaction = {
           id: demoSession.id,
           date: new Date().toLocaleString(),
+          timestamp: Date.now(),
           name: demoSession.cName,
           phone: demoSession.cPhone,
           summary: "Ring: 4.8g | Band: 3.5g | Men's: 7.2g",
@@ -272,7 +274,14 @@ export default function App() {
   // Persist master settings on changes ONLY after loading has successfully finished!
   useEffect(() => {
     if (isLoadedRef.current) {
-      localStorage.setItem('gr_master_settings', JSON.stringify(settings));
+      const currentStr = JSON.stringify(settings);
+      localStorage.setItem('gr_master_settings', currentStr);
+      
+      // Save to Firebase too, but only if it's different from what we last pulled from the cloud
+      if (currentStr !== lastCloudSettingsRef.current) {
+        lastCloudSettingsRef.current = currentStr;
+        saveDocument('app_settings', 'master', settings);
+      }
     }
   }, [settings]);
 
@@ -284,6 +293,7 @@ export default function App() {
     let unsubScrap: (() => void) | null = null;
     let unsubRetail: (() => void) | null = null;
     let unsubWholesale: (() => void) | null = null;
+    let unsubSettings: (() => void) | null = null;
 
     const runSyncAndListen = async () => {
       try {
@@ -300,8 +310,8 @@ export default function App() {
         unsubScrap = listenCollection('scrap_ledger', (docs) => {
           if (!active) return;
           const sorted = [...docs].sort((a, b) => {
-            const tA = a.date ? Date.parse(a.date) : 0;
-            const tB = b.date ? Date.parse(b.date) : 0;
+            const tA = a.timestamp || (a.date ? safeParseDate(a.date) : 0);
+            const tB = b.timestamp || (b.date ? safeParseDate(b.date) : 0);
             return tB - tA; // Newest first
           });
           setScrapTransactions(sorted);
@@ -312,8 +322,8 @@ export default function App() {
         unsubRetail = listenCollection('retail_ledger', (docs) => {
           if (!active) return;
           const sorted = [...docs].sort((a, b) => {
-            const tA = a.date ? Date.parse(a.date) : 0;
-            const tB = b.date ? Date.parse(b.date) : 0;
+            const tA = a.timestamp || (a.date ? safeParseDate(a.date) : 0);
+            const tB = b.timestamp || (b.date ? safeParseDate(b.date) : 0);
             return tB - tA; // Newest first
           });
           setRingQuoteTransactions(sorted);
@@ -324,12 +334,46 @@ export default function App() {
         unsubWholesale = listenCollection('wholesale_ledger', (docs) => {
           if (!active) return;
           const sorted = [...docs].sort((a, b) => {
-            const tA = a.date ? Date.parse(a.date) : 0;
-            const tB = b.date ? Date.parse(b.date) : 0;
+            const tA = a.timestamp || (a.date ? safeParseDate(a.date) : 0);
+            const tB = b.timestamp || (b.date ? safeParseDate(b.date) : 0);
             return tB - tA; // Newest first
           });
           setWholesaleTransactions(sorted);
           safeSetLocalStorage('gr_wholesale_ledger', sorted);
+        });
+
+        // 5. Set up real-time listener for Master App Settings (including Wholesale Client Profiles)
+        unsubSettings = listenCollection('app_settings', (docs) => {
+          if (!active) return;
+          const masterDoc = docs.find(d => d.id === 'master');
+          if (masterDoc) {
+            const cleanMasterDoc = { ...masterDoc };
+            delete cleanMasterDoc.id; // remove Firestore id prop
+            
+            const cloudSettingsStr = JSON.stringify(cleanMasterDoc);
+            lastCloudSettingsRef.current = cloudSettingsStr;
+            
+            setSettings(prev => {
+              const merged = {
+                ...prev,
+                ...cleanMasterDoc,
+                wholesale: { ...prev.wholesale, ...(cleanMasterDoc.wholesale || {}) },
+                wholesaleProfiles: cleanMasterDoc.wholesaleProfiles || [],
+                centerStoneRates: { ...prev.centerStoneRates, ...(cleanMasterDoc.centerStoneRates || {}) },
+                centerStoneRawRates: { ...prev.centerStoneRawRates, ...(cleanMasterDoc.centerStoneRawRates || {}) },
+                cubanMultipliers: cleanMasterDoc.cubanMultipliers || prev.cubanMultipliers,
+                tennisMultipliers: cleanMasterDoc.tennisMultipliers || prev.tennisMultipliers,
+              };
+              
+              if (JSON.stringify(prev) === JSON.stringify(merged)) {
+                return prev;
+              }
+              return merged;
+            });
+          } else {
+            // master settings doc doesn't exist in the cloud yet, let's bootstrap/upload our local settings
+            saveDocument('app_settings', 'master', settings);
+          }
         });
 
         setIsCloudSynced(true);
@@ -346,6 +390,7 @@ export default function App() {
       if (unsubScrap) unsubScrap();
       if (unsubRetail) unsubRetail();
       if (unsubWholesale) unsubWholesale();
+      if (unsubSettings) unsubSettings();
     };
   }, [isPersistenceLoaded]);
 
@@ -434,6 +479,7 @@ export default function App() {
       const updatedTx: ScrapTransaction = {
         id: existingId,
         date: original ? original.date : new Date().toLocaleString(),
+        timestamp: original ? (original.timestamp || Date.now()) : Date.now(),
         name: data.name,
         phone: data.phone,
         address: data.address,
@@ -463,6 +509,7 @@ export default function App() {
       const newTx: ScrapTransaction = {
         id: Math.random().toString(36).substring(2, 11),
         date: new Date().toLocaleString(),
+        timestamp: Date.now(),
         name: data.name,
         phone: data.phone,
         address: data.address,
@@ -536,9 +583,13 @@ export default function App() {
 
     const nameToLog = activeSession.cName || (activeSession.jobNum ? `Job #${activeSession.jobNum}` : 'Wholesale Client');
 
+    const list = isWholesale ? wholesaleTransactions : ringQuoteTransactions;
+    const existingTx = list.find(q => q.id === activeSession.id);
+
     const newTx: QuoteTransaction = {
       id: activeSession.id,
-      date: new Date().toLocaleString(),
+      date: existingTx ? existingTx.date : new Date().toLocaleString(),
+      timestamp: existingTx ? (existingTx.timestamp || Date.now()) : Date.now(),
       name: nameToLog,
       phone: activeSession.cPhone,
       summary: sum,
@@ -753,6 +804,7 @@ export default function App() {
     const demoTx: QuoteTransaction = {
       id: demoSession.id,
       date: new Date().toLocaleString(),
+      timestamp: Date.now(),
       name: demoSession.cName,
       phone: demoSession.cPhone,
       summary: "Ring: 4.8g | Band: 3.5g | Men's: 7.2g",
@@ -999,7 +1051,7 @@ export default function App() {
             className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm border ${activeTab === 'wholesale' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
           >
             <Landmark size={14} />
-            Wholesale Repair
+            Wholesale
           </button>
           <button
             type="button"

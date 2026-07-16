@@ -215,8 +215,8 @@ export default function ScrapCalculator({
       const sourceWidth = (cropState.w / 100) * img.naturalWidth;
       const sourceHeight = (cropState.h / 100) * img.naturalHeight;
 
-      // Output at extremely high resolution: cap maximum dimension at 1800px
-      const maxOutputDim = 1800;
+      // Output optimized for storage: cap maximum dimension at 600px
+      const maxOutputDim = 600;
       let targetWidth = sourceWidth;
       let targetHeight = sourceHeight;
       
@@ -236,7 +236,7 @@ export default function ScrapCalculator({
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
+        ctx.imageSmoothingQuality = 'medium';
         ctx.drawImage(
           img,
           sourceX,
@@ -249,8 +249,8 @@ export default function ScrapCalculator({
           targetHeight
         );
         
-        // Output as high-res JPEG at 0.95 quality for ultimate text legibility
-        const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+        // Output as highly optimized JPEG at 0.6 quality to keep within storage caps
+        const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
         setScrapImage(croppedDataUrl);
         setIsCropModalOpen(false);
       }
