@@ -106,8 +106,22 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
   // Active custom quote sessions
-  const [retailSession, setRetailSession] = useState<QuoteSession>(getEmptyQuoteSession());
-  const [wholesaleSession, setWholesaleSession] = useState<QuoteSession>(getEmptyQuoteSession());
+  const [retailSession, setRetailSession] = useState<QuoteSession>(() => {
+    try {
+      const raw = localStorage.getItem('gr_active_retail_session');
+      return raw ? JSON.parse(raw) : getEmptyQuoteSession();
+    } catch {
+      return getEmptyQuoteSession();
+    }
+  });
+  const [wholesaleSession, setWholesaleSession] = useState<QuoteSession>(() => {
+    try {
+      const raw = localStorage.getItem('gr_active_wholesale_session');
+      return raw ? JSON.parse(raw) : getEmptyQuoteSession();
+    } catch {
+      return getEmptyQuoteSession();
+    }
+  });
 
   // Real-time synchronization refs and helpers for in-progress quote calculators
   const lastRetailLocalChangeTimeRef = useRef<number>(0);
@@ -143,6 +157,7 @@ export default function App() {
     lastRetailLocalChangeTimeRef.current = Date.now();
     setRetailSession(prev => {
       const next = typeof newSessionOrUpdater === 'function' ? newSessionOrUpdater(prev) : newSessionOrUpdater;
+      safeSetLocalStorage('gr_active_retail_session', next);
       if (immediate) {
         syncRetailSessionImmediately(next);
       } else {
@@ -156,6 +171,7 @@ export default function App() {
     lastWholesaleLocalChangeTimeRef.current = Date.now();
     setWholesaleSession(prev => {
       const next = typeof newSessionOrUpdater === 'function' ? newSessionOrUpdater(prev) : newSessionOrUpdater;
+      safeSetLocalStorage('gr_active_wholesale_session', next);
       if (immediate) {
         syncWholesaleSessionImmediately(next);
       } else {
@@ -368,7 +384,27 @@ export default function App() {
         // 1. Set up real-time listener for Scrap Buyback Ledger
         unsubScrap = listenCollection('scrap_ledger', (docs) => {
           if (!active) return;
-          const sorted = [...docs].sort((a, b) => {
+          const cloudIds = new Set(docs.map(d => d.id));
+          const localItems = (() => {
+            try {
+              const raw = localStorage.getItem('gr_scrap_ledger');
+              return raw ? JSON.parse(raw) : [];
+            } catch { return []; }
+          })();
+          
+          const merged = [...docs];
+          const fifteenMinutes = 15 * 60 * 1000;
+          for (const localItem of localItems) {
+            if (localItem && localItem.id && !cloudIds.has(localItem.id)) {
+              const localTime = localItem.timestamp || (localItem.date ? safeParseDate(localItem.date) : Date.now());
+              const ageMs = Date.now() - localTime;
+              if (ageMs < fifteenMinutes) {
+                merged.push(localItem);
+              }
+            }
+          }
+
+          const sorted = merged.sort((a, b) => {
             const tA = a.timestamp || (a.date ? safeParseDate(a.date) : 0);
             const tB = b.timestamp || (b.date ? safeParseDate(b.date) : 0);
             return tB - tA; // Newest first
@@ -380,7 +416,27 @@ export default function App() {
         // 2. Set up real-time listener for Retail Quote Ledger
         unsubRetail = listenCollection('retail_ledger', (docs) => {
           if (!active) return;
-          const sorted = [...docs].sort((a, b) => {
+          const cloudIds = new Set(docs.map(d => d.id));
+          const localItems = (() => {
+            try {
+              const raw = localStorage.getItem('gr_quote_ledger');
+              return raw ? JSON.parse(raw) : [];
+            } catch { return []; }
+          })();
+
+          const merged = [...docs];
+          const fifteenMinutes = 15 * 60 * 1000;
+          for (const localItem of localItems) {
+            if (localItem && localItem.id && !cloudIds.has(localItem.id)) {
+              const localTime = localItem.timestamp || (localItem.date ? safeParseDate(localItem.date) : Date.now());
+              const ageMs = Date.now() - localTime;
+              if (ageMs < fifteenMinutes) {
+                merged.push(localItem);
+              }
+            }
+          }
+
+          const sorted = merged.sort((a, b) => {
             const tA = a.timestamp || (a.date ? safeParseDate(a.date) : 0);
             const tB = b.timestamp || (b.date ? safeParseDate(b.date) : 0);
             return tB - tA; // Newest first
@@ -392,7 +448,27 @@ export default function App() {
         // 3. Set up real-time listener for Wholesale Ledger
         unsubWholesale = listenCollection('wholesale_ledger', (docs) => {
           if (!active) return;
-          const sorted = [...docs].sort((a, b) => {
+          const cloudIds = new Set(docs.map(d => d.id));
+          const localItems = (() => {
+            try {
+              const raw = localStorage.getItem('gr_wholesale_ledger');
+              return raw ? JSON.parse(raw) : [];
+            } catch { return []; }
+          })();
+
+          const merged = [...docs];
+          const fifteenMinutes = 15 * 60 * 1000;
+          for (const localItem of localItems) {
+            if (localItem && localItem.id && !cloudIds.has(localItem.id)) {
+              const localTime = localItem.timestamp || (localItem.date ? safeParseDate(localItem.date) : Date.now());
+              const ageMs = Date.now() - localTime;
+              if (ageMs < fifteenMinutes) {
+                merged.push(localItem);
+              }
+            }
+          }
+
+          const sorted = merged.sort((a, b) => {
             const tA = a.timestamp || (a.date ? safeParseDate(a.date) : 0);
             const tB = b.timestamp || (b.date ? safeParseDate(b.date) : 0);
             return tB - tA; // Newest first
@@ -404,8 +480,30 @@ export default function App() {
         // 4. Set up real-time listener for Cuban Estimates
         unsubCuban = listenCollection('cuban_estimates', (docs) => {
           if (!active) return;
-          const sorted = [...docs].sort((a, b) => {
-            return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+          const cloudIds = new Set(docs.map(d => d.id));
+          const localItems = (() => {
+            try {
+              const raw = localStorage.getItem('gr_cuban_estimates');
+              return raw ? JSON.parse(raw) : [];
+            } catch { return []; }
+          })();
+
+          const merged = [...docs];
+          const fifteenMinutes = 15 * 60 * 1000;
+          for (const localItem of localItems) {
+            if (localItem && localItem.id && !cloudIds.has(localItem.id)) {
+              const localTime = localItem.timestamp ? new Date(localItem.timestamp).getTime() : Date.now();
+              const ageMs = Date.now() - localTime;
+              if (ageMs < fifteenMinutes) {
+                merged.push(localItem);
+              }
+            }
+          }
+
+          const sorted = merged.sort((a, b) => {
+            const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+            const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            return tB - tA;
           });
           setCubanEstimates(sorted);
           safeSetLocalStorage('gr_cuban_estimates', sorted);
@@ -443,6 +541,7 @@ export default function App() {
              const timeSinceLocalChange = Date.now() - lastRetailLocalChangeTimeRef.current;
              if (timeSinceLocalChange >= 2500) {
                setRetailSession(cleanRetail as QuoteSession);
+               safeSetLocalStorage('gr_active_retail_session', cleanRetail as QuoteSession);
              }
            }
 
@@ -453,6 +552,7 @@ export default function App() {
              const timeSinceLocalChange = Date.now() - lastWholesaleLocalChangeTimeRef.current;
              if (timeSinceLocalChange >= 2500) {
                setWholesaleSession(cleanWholesale as QuoteSession);
+               safeSetLocalStorage('gr_active_wholesale_session', cleanWholesale as QuoteSession);
              }
            }
          });
@@ -623,11 +723,18 @@ setIsCloudSynced(true);
         return updated;
       });
 
-      // Sync to cloud Firestore
-      saveDocument('scrap_ledger', existingId, updatedTx);
+      // Sync to cloud Firestore with callbacks
+      saveDocument('scrap_ledger', existingId, updatedTx)
+        .then(() => {
+          playClickSound('success');
+          showToast("Scrap payout adjusted and synced to cloud ledger!", "success");
+        })
+        .catch(err => {
+          console.error("Cloud sync failed on scrap edit:", err);
+          showToast("Scrap payout adjusted locally (sync pending)!", "info");
+        });
+
       setEditingScrapTx(null);
-      playClickSound('success');
-      showToast("Scrap payout adjusted and updated successfully in Ledger!", "success");
       return updatedTx;
     } else {
       const newTx: ScrapTransaction = {
@@ -653,15 +760,22 @@ setIsCloudSynced(true);
         return updated;
       });
 
-      // Sync to cloud Firestore
-      saveDocument('scrap_ledger', newTx.id, newTx);
-      playClickSound('success');
-      showToast("Scrap payout logged successfully to Ledger!", "success");
+      // Sync to cloud Firestore with callbacks
+      saveDocument('scrap_ledger', newTx.id, newTx)
+        .then(() => {
+          playClickSound('success');
+          showToast("Scrap payout logged and synced to cloud ledger!", "success");
+        })
+        .catch(err => {
+          console.error("Cloud sync failed on scrap save:", err);
+          showToast("Scrap payout logged locally (sync pending)!", "info");
+        });
+
       return newTx;
     }
   };
 
-  const handleSaveQuote = (isWholesale: boolean) => {
+  const handleSaveQuote = async (isWholesale: boolean, resetSessionAfterSave = true) => {
     const activeSession = isWholesale ? wholesaleSession : retailSession;
     if (!activeSession.cName && !isWholesale) {
       alert("Please enter customer name inside the 'Summary & Tax' subtab first.");
@@ -733,11 +847,23 @@ setIsCloudSynced(true);
       }
 
       safeSetLocalStorage('gr_wholesale_ledger', updated);
-
       setWholesaleTransactions(updated);
-      updateWholesaleSessionLocal(getEmptyQuoteSession(), true);
-      // Save to cloud Firestore
-      saveDocument('wholesale_ledger', newTx.id, newTx);
+
+      try {
+        await saveDocument('wholesale_ledger', newTx.id, newTx);
+        if (resetSessionAfterSave) {
+          updateWholesaleSessionLocal(getEmptyQuoteSession(), true);
+        }
+        playClickSound('success');
+        showToast("Wholesale job order successfully saved and synced!", "success");
+      } catch (err) {
+        console.error("Cloud sync failed on wholesale save:", err);
+        if (resetSessionAfterSave) {
+          updateWholesaleSessionLocal(getEmptyQuoteSession(), true);
+        }
+        playClickSound('success');
+        showToast("Job order saved locally (sync pending/offline)!", "info");
+      }
     } else {
       const idx = ringQuoteTransactions.findIndex(q => q.id === activeSession.id);
       let updated: QuoteTransaction[];
@@ -749,15 +875,24 @@ setIsCloudSynced(true);
       }
 
       safeSetLocalStorage('gr_quote_ledger', updated);
-
       setRingQuoteTransactions(updated);
-      updateRetailSessionLocal(getEmptyQuoteSession(), true);
-      // Save to cloud Firestore
-      saveDocument('retail_ledger', newTx.id, newTx);
-    }
 
-    playClickSound('success');
-    showToast("Quote successfully logged into Ledger!", "success");
+      try {
+        await saveDocument('retail_ledger', newTx.id, newTx);
+        if (resetSessionAfterSave) {
+          updateRetailSessionLocal(getEmptyQuoteSession(), true);
+        }
+        playClickSound('success');
+        showToast("Retail custom quote saved and synced successfully!", "success");
+      } catch (err) {
+        console.error("Cloud sync failed on retail save:", err);
+        if (resetSessionAfterSave) {
+          updateRetailSessionLocal(getEmptyQuoteSession(), true);
+        }
+        playClickSound('success');
+        showToast("Quote saved locally (sync pending/offline)!", "info");
+      }
+    }
   };
 
   const getTennisEstimates = (r: JewelryItem) => {
@@ -1225,11 +1360,32 @@ setIsCloudSynced(true);
               spotPrices={spotPrices}
               settings={settings}
               estimates={cubanEstimates}
-              onSaveEstimate={(newEst) => {
-                saveDocument('cuban_estimates', newEst.id, newEst);
+              onSaveEstimate={async (newEst) => {
+                const updated = [newEst, ...cubanEstimates.filter(e => e.id !== newEst.id)];
+                setCubanEstimates(updated);
+                safeSetLocalStorage('gr_cuban_estimates', updated);
+                try {
+                  await saveDocument('cuban_estimates', newEst.id, newEst);
+                  playClickSound('success');
+                  showToast("Cuban estimate saved and synced to cloud ledger!", "success");
+                } catch (err) {
+                  console.error("Cloud sync failed on Cuban save:", err);
+                  showToast("Cuban estimate saved locally (sync pending)!", "info");
+                }
               }}
-              onDeleteEstimate={(id) => {
-                deleteDocument('cuban_estimates', id);
+              onDeleteEstimate={async (id) => {
+                if (!window.confirm("Permanently delete this Cuban estimate?")) return;
+                const updated = cubanEstimates.filter(e => e.id !== id);
+                setCubanEstimates(updated);
+                safeSetLocalStorage('gr_cuban_estimates', updated);
+                try {
+                  await deleteDocument('cuban_estimates', id);
+                  playClickSound('click');
+                  showToast("Cuban estimate deleted successfully!", "success");
+                } catch (err) {
+                  console.error("Cloud delete failed:", err);
+                  showToast("Estimate deleted locally (delete pending)!", "info");
+                }
               }}
             />
           </div>
@@ -1238,7 +1394,8 @@ setIsCloudSynced(true);
             <QuoteCalculator
               session={retailSession}
               onChangeSession={updateRetailSessionLocal}
-              onSaveQuote={() => handleSaveQuote(false)}
+              onSaveQuote={() => handleSaveQuote(false, true)}
+              onSaveQuoteNoReset={() => handleSaveQuote(false, false)}
               onLaunchSketch={(type, index = null) => {
                 setEditingImageType(type);
                 setEditingImageIndex(index);
@@ -1257,7 +1414,8 @@ setIsCloudSynced(true);
             <QuoteCalculator
               session={wholesaleSession}
               onChangeSession={updateWholesaleSessionLocal}
-              onSaveQuote={() => handleSaveQuote(true)}
+              onSaveQuote={() => handleSaveQuote(true, true)}
+              onSaveQuoteNoReset={() => handleSaveQuote(true, false)}
               onLaunchSketch={(type, index = null) => {
                 setEditingImageType(type);
                 setEditingImageIndex(index);

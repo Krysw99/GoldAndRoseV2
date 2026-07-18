@@ -866,12 +866,14 @@ interface QuoteCalculatorProps {
   scrapTransactions?: ScrapTransaction[];
   onTriggerPrint?: (printFn: () => void) => void;
   isIframe?: boolean;
+  onSaveQuoteNoReset?: () => Promise<void>;
 }
 
 export default function QuoteCalculator({
   session,
   onChangeSession,
   onSaveQuote,
+  onSaveQuoteNoReset,
   onLaunchSketch,
   settings,
   spotPrices,
@@ -4752,7 +4754,10 @@ export default function QuoteCalculator({
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
+                  if (onSaveQuoteNoReset) {
+                    await onSaveQuoteNoReset();
+                  }
                   const targetId = isDesignerMode ? 'quote-cad-specs-box' : 'quote-client-invoice-box';
                   if (isIframe && onTriggerPrint) {
                     onTriggerPrint(() => printElement(targetId));

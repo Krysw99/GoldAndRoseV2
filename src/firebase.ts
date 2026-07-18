@@ -77,6 +77,80 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 /**
+ * Compresses heavy base64 image strings using browser canvas API to fit Firestore 1MB limits.
+ */
+async function compressBase64Image(dataUrl: string, maxWidth = 300, maxHeight = 300, quality = 0.5): Promise<string> {
+  if (!dataUrl || !dataUrl.startsWith('data:image/')) return dataUrl;
+  // If the dataUrl is already small (e.g. < 40KB), don't compress it
+  if (dataUrl.length < 40000) return dataUrl;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressed);
+          return;
+        }
+      } catch (e) {
+        console.warn("Base64 image compression failed:", e);
+      }
+      resolve(dataUrl);
+    };
+    img.onerror = () => {
+      resolve(dataUrl);
+    };
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * Recursively scans and compresses heavy base64 images inside any transaction payload.
+ */
+export async function compressPayload(obj: any): Promise<any> {
+  if (!obj || typeof obj !== 'object') return obj;
+
+  if (Array.isArray(obj)) {
+    const list = [];
+    for (const item of obj) {
+      list.push(await compressPayload(item));
+    }
+    return list;
+  }
+
+  const copy = { ...obj };
+  for (const key of Object.keys(copy)) {
+    const val = copy[key];
+    if (typeof val === 'string' && val.startsWith('data:image/')) {
+      copy[key] = await compressBase64Image(val);
+    } else if (typeof val === 'object' && val !== null) {
+      copy[key] = await compressPayload(val);
+    }
+  }
+  return copy;
+}
+
+/**
  * Syncs a single document to Firestore.
  */
 export async function saveDocument(collectionName: string, id: string, data: any) {
@@ -85,7 +159,9 @@ export async function saveDocument(collectionName: string, id: string, data: any
     const docRef = doc(db, collectionName, id);
     // Sanitize any undefined properties before uploading to Firestore
     const sanitized = JSON.parse(JSON.stringify(data));
-    await setDoc(docRef, sanitized, { merge: true });
+    // Compress heavy base64 image attachments to avoid exceeding Firestore limits
+    const compressed = await compressPayload(sanitized);
+    await setDoc(docRef, compressed, { merge: true });
     console.log(`Successfully synced document ${id} to collection ${collectionName}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -141,7 +217,8 @@ export async function syncLocalToCloud(collectionName: string, localItems: any[]
       if (item && item.id && !cloudIds.has(item.id)) {
         const docRef = doc(db, collectionName, item.id);
         const sanitized = JSON.parse(JSON.stringify(item));
-        batch.set(docRef, sanitized);
+        const compressed = await compressPayload(sanitized);
+        batch.set(docRef, compressed);
         count++;
       }
     }
