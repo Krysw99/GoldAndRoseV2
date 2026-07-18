@@ -69,10 +69,38 @@ export default function App() {
   const [quickGrams, setQuickGrams] = useState('');
 
   // Ledger Transactions (Firestore backed, loaded dynamically via real-time sync listeners)
-  const [scrapTransactions, setScrapTransactions] = useState<ScrapTransaction[]>([]);
-  const [ringQuoteTransactions, setRingQuoteTransactions] = useState<QuoteTransaction[]>([]);
-  const [wholesaleTransactions, setWholesaleTransactions] = useState<QuoteTransaction[]>([]);
-  const [cubanEstimates, setCubanEstimates] = useState<any[]>([]);
+  const [scrapTransactions, setScrapTransactions] = useState<ScrapTransaction[]>(() => {
+    try {
+      const raw = localStorage.getItem('gr_scrap_ledger');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [ringQuoteTransactions, setRingQuoteTransactions] = useState<QuoteTransaction[]>(() => {
+    try {
+      const raw = localStorage.getItem('gr_quote_ledger');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [wholesaleTransactions, setWholesaleTransactions] = useState<QuoteTransaction[]>(() => {
+    try {
+      const raw = localStorage.getItem('gr_wholesale_ledger');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [cubanEstimates, setCubanEstimates] = useState<any[]>(() => {
+    try {
+      const raw = localStorage.getItem('gr_cuban_estimates');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
 
   // Master settings
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -302,6 +330,41 @@ export default function App() {
 
         if (!active) return;
 
+        // Sync any offline local items to cloud on boot
+        const localScrap = (() => {
+          try {
+            const raw = localStorage.getItem('gr_scrap_ledger');
+            return raw ? JSON.parse(raw) : [];
+          } catch { return []; }
+        })();
+        const localRetail = (() => {
+          try {
+            const raw = localStorage.getItem('gr_quote_ledger');
+            return raw ? JSON.parse(raw) : [];
+          } catch { return []; }
+        })();
+        const localWholesale = (() => {
+          try {
+            const raw = localStorage.getItem('gr_wholesale_ledger');
+            return raw ? JSON.parse(raw) : [];
+          } catch { return []; }
+        })();
+        const localCuban = (() => {
+          try {
+            const raw = localStorage.getItem('gr_cuban_estimates');
+            return raw ? JSON.parse(raw) : [];
+          } catch { return []; }
+        })();
+
+        await Promise.all([
+          syncLocalToCloud('scrap_ledger', localScrap),
+          syncLocalToCloud('retail_ledger', localRetail),
+          syncLocalToCloud('wholesale_ledger', localWholesale),
+          syncLocalToCloud('cuban_estimates', localCuban)
+        ]).catch(err => {
+          console.warn("Offline local-to-cloud sync warning:", err);
+        });
+
         // 1. Set up real-time listener for Scrap Buyback Ledger
         unsubScrap = listenCollection('scrap_ledger', (docs) => {
           if (!active) return;
@@ -311,6 +374,7 @@ export default function App() {
             return tB - tA; // Newest first
           });
           setScrapTransactions(sorted);
+          safeSetLocalStorage('gr_scrap_ledger', sorted);
         });
 
         // 2. Set up real-time listener for Retail Quote Ledger
@@ -322,6 +386,7 @@ export default function App() {
             return tB - tA; // Newest first
           });
           setRingQuoteTransactions(sorted);
+          safeSetLocalStorage('gr_quote_ledger', sorted);
         });
 
         // 3. Set up real-time listener for Wholesale Ledger
@@ -333,6 +398,7 @@ export default function App() {
             return tB - tA; // Newest first
           });
           setWholesaleTransactions(sorted);
+          safeSetLocalStorage('gr_wholesale_ledger', sorted);
         });
 
         // 4. Set up real-time listener for Cuban Estimates
@@ -342,6 +408,7 @@ export default function App() {
             return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
           });
           setCubanEstimates(sorted);
+          safeSetLocalStorage('gr_cuban_estimates', sorted);
         });
 
                   // 5. Set up real-time listener for Master App Settings (including Wholesale Client Profiles and Google API key)
