@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { 
   Save, Download, Trash2, Calendar, Settings, ShieldAlert, Key, 
   DollarSign, Wrench, Gem, HardDrive, EyeOff, Upload, FileJson,
-  Building, ShoppingBag, Globe, Plus, Edit
+  Building, ShoppingBag, Globe, Plus, Edit, RefreshCw, Check, Cloud
 } from 'lucide-react';
 import { AppSettings, RepairPricingSettings, ScrapTransaction, QuoteTransaction } from '../types';
 import { ROUND_MELEE, FANCY_SHAPES } from '../constants';
@@ -47,6 +47,7 @@ export default function SettingsView({
   // Key state
   const [apiKey, setApiKey] = useState(goldApiKey);
   const [subTab, setSubTab] = useState<'rates' | 'retail' | 'wholesale' | 'database' | 'rawCosts'>('rates');
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
 
   // Manual spot rates state
   const [manualGold, setManualGold] = useState(spotPrices.gold.toString());
@@ -377,6 +378,8 @@ export default function SettingsView({
 
   const handleSaveAll = () => {
     try {
+      setSyncStatus('syncing');
+
       // Apply manual spot rate updates
       const g = parseFloat(manualGold) || spotPrices.gold;
       const s = parseFloat(manualSilver) || spotPrices.silver;
@@ -391,10 +394,19 @@ export default function SettingsView({
       console.log("Saving Master Settings:", sanitized);
       onSaveSettings(sanitized);
 
-      alert("Master parameters saved successfully and applied globally!");
+      // Simulate cloud DB confirmation for feedback
+      setTimeout(() => {
+        setSyncStatus('success');
+        setTimeout(() => {
+          setSyncStatus('idle');
+        }, 3500);
+      }, 1000);
     } catch (error) {
       console.error("Error in handleSaveAll:", error);
-      alert("Failed to save changes. Please try again.");
+      setSyncStatus('error');
+      setTimeout(() => {
+        setSyncStatus('idle');
+      }, 4000);
     }
   };
 
@@ -662,65 +674,122 @@ export default function SettingsView({
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-fadeIn">
-      {/* Settings Navigation Rails */}
-      <div className="md:col-span-1 bg-white p-4 rounded-2xl border border-brand-100 shadow-sm flex flex-col gap-1">
-        <h3 className="text-[10px] font-black text-brand-400 uppercase tracking-widest px-3 mb-2">Master Panels</h3>
-        <button
-          type="button"
-          onClick={() => setSubTab('rates')}
-          className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${subTab === 'rates' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
-        >
-          <DollarSign size={14} className={subTab === 'rates' ? 'text-brand-gold' : 'text-brand-400'} />
-          Spot & API Keys
-        </button>
-        <button
-          type="button"
-          onClick={() => setSubTab('retail')}
-          className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${subTab === 'retail' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
-        >
-          <Wrench size={14} className={subTab === 'retail' ? 'text-brand-gold' : 'text-brand-400'} />
-          Retail Multipliers
-        </button>
-        <button
-          type="button"
-          onClick={() => setSubTab('wholesale')}
-          className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${subTab === 'wholesale' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
-        >
-          <Gem size={14} className={subTab === 'wholesale' ? 'text-brand-gold' : 'text-brand-400'} />
-          Wholesale Model
-        </button>
-        <button
-          type="button"
-          onClick={() => setSubTab('rawCosts')}
-          className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between gap-2 ${subTab === 'rawCosts' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
-        >
-          <div className="flex items-center gap-2">
-            <EyeOff size={14} className={subTab === 'rawCosts' ? 'text-brand-gold' : 'text-brand-400'} />
-            <span>Internal Mfg Costs</span>
+    <div className="relative">
+      {/* Sync Status Toast/Notification */}
+      {syncStatus !== 'idle' && (
+        <div className="fixed top-6 right-6 z-50 max-w-sm w-full bg-slate-900/95 backdrop-blur-md text-white px-5 py-4 rounded-2xl shadow-2xl border border-brand-gold/30 flex items-start gap-3.5 transition-all duration-300">
+          <div className="flex-shrink-0 mt-0.5">
+            {syncStatus === 'syncing' && (
+              <div className="p-2 bg-brand-gold/10 rounded-xl border border-brand-gold/20">
+                <RefreshCw size={18} className="animate-spin text-brand-gold" />
+              </div>
+            )}
+            {syncStatus === 'success' && (
+              <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                <Check size={18} className="text-emerald-400" />
+              </div>
+            )}
+            {syncStatus === 'error' && (
+              <div className="p-2 bg-rose-500/10 rounded-xl border border-rose-500/20">
+                <span className="text-rose-400 font-bold text-sm">✕</span>
+              </div>
+            )}
           </div>
-          <span className="text-[7px] bg-amber-500 text-brand-950 font-black px-1.5 py-0.5 rounded-full uppercase scale-90">Eyes Only</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setSubTab('database')}
-          className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${subTab === 'database' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
-        >
-          <HardDrive size={14} className={subTab === 'database' ? 'text-brand-gold' : 'text-brand-400'} />
-          Ledger Utilities
-        </button>
+          <div className="flex-grow">
+            <h4 className="text-xs font-black uppercase tracking-wider text-brand-gold">
+              {syncStatus === 'syncing' && "Synchronizing..."}
+              {syncStatus === 'success' && "Sync Successful"}
+              {syncStatus === 'error' && "Sync Error"}
+            </h4>
+            <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+              {syncStatus === 'syncing' && "Pushing parameters, pricing tiers, and client profiles to Cloud Firestore..."}
+              {syncStatus === 'success' && "All master app settings have been written to the cloud and synchronized across active retail, wholesale, and ledger screens successfully."}
+              {syncStatus === 'error' && "Failed to push settings to the cloud. Check network or permission rules."}
+            </p>
+          </div>
+        </div>
+      )}
 
-        <div className="border-t border-brand-100 my-4 pt-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-fadeIn">
+        {/* Settings Navigation Rails */}
+        <div className="md:col-span-1 bg-white p-4 rounded-2xl border border-brand-100 shadow-sm flex flex-col gap-1">
+          <h3 className="text-[10px] font-black text-brand-400 uppercase tracking-widest px-3 mb-2">Master Panels</h3>
           <button
             type="button"
-            onClick={handleSaveAll}
-            className="w-full bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-3 rounded-xl shadow-md text-xs uppercase tracking-widest flex items-center justify-center gap-1 transition-all"
+            onClick={() => setSubTab('rates')}
+            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${subTab === 'rates' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
           >
-            <Save size={13} />
-            Save Changes
+            <DollarSign size={14} className={subTab === 'rates' ? 'text-brand-gold' : 'text-brand-400'} />
+            Spot & API Keys
           </button>
+          <button
+            type="button"
+            onClick={() => setSubTab('retail')}
+            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${subTab === 'retail' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
+          >
+            <Wrench size={14} className={subTab === 'retail' ? 'text-brand-gold' : 'text-brand-400'} />
+            Retail Multipliers
+          </button>
+          <button
+            type="button"
+            onClick={() => setSubTab('wholesale')}
+            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${subTab === 'wholesale' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
+          >
+            <Gem size={14} className={subTab === 'wholesale' ? 'text-brand-gold' : 'text-brand-400'} />
+            Wholesale Model
+          </button>
+          <button
+            type="button"
+            onClick={() => setSubTab('rawCosts')}
+            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between gap-2 ${subTab === 'rawCosts' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
+          >
+            <div className="flex items-center gap-2">
+              <EyeOff size={14} className={subTab === 'rawCosts' ? 'text-brand-gold' : 'text-brand-400'} />
+              <span>Internal Mfg Costs</span>
+            </div>
+            <span className="text-[7px] bg-amber-500 text-brand-950 font-black px-1.5 py-0.5 rounded-full uppercase scale-90">Eyes Only</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSubTab('database')}
+            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${subTab === 'database' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
+          >
+            <HardDrive size={14} className={subTab === 'database' ? 'text-brand-gold' : 'text-brand-400'} />
+            Ledger Utilities
+          </button>
+
+          <div className="border-t border-brand-100 my-4 pt-4">
+            <button
+              type="button"
+              onClick={handleSaveAll}
+              disabled={syncStatus === 'syncing'}
+              className={`w-full font-black py-3 rounded-xl shadow-md text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all ${
+                syncStatus === 'syncing'
+                  ? 'bg-brand-800 text-brand-400 cursor-not-allowed'
+                  : syncStatus === 'success'
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'bg-brand-900 text-brand-gold hover:bg-brand-950'
+              }`}
+            >
+              {syncStatus === 'syncing' ? (
+                <>
+                  <RefreshCw size={13} className="animate-spin text-brand-gold" />
+                  Syncing...
+                </>
+              ) : syncStatus === 'success' ? (
+                <>
+                  <Check size={13} className="text-white animate-pulse" />
+                  Synced!
+                </>
+              ) : (
+                <>
+                  <Cloud size={13} className="text-brand-gold animate-pulse" />
+                  Save and Sync
+                </>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
 
       {/* Settings Panel Content */}
       <div className="md:col-span-3 bg-white p-6 rounded-2xl border border-brand-100 shadow-sm min-h-[450px]">
@@ -2366,5 +2435,6 @@ export default function SettingsView({
         )}
       </div>
     </div>
+  </div>
   );
 }

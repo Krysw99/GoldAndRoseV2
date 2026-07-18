@@ -80,6 +80,62 @@ export default function App() {
   // Active custom quote sessions
   const [retailSession, setRetailSession] = useState<QuoteSession>(getEmptyQuoteSession());
   const [wholesaleSession, setWholesaleSession] = useState<QuoteSession>(getEmptyQuoteSession());
+
+  // Real-time synchronization refs and helpers for in-progress quote calculators
+  const lastRetailLocalChangeTimeRef = useRef<number>(0);
+  const lastWholesaleLocalChangeTimeRef = useRef<number>(0);
+  const retailSaveTimeoutRef = useRef<any>(null);
+  const wholesaleSaveTimeoutRef = useRef<any>(null);
+
+  const syncRetailSessionImmediately = (session: QuoteSession) => {
+    if (retailSaveTimeoutRef.current) clearTimeout(retailSaveTimeoutRef.current);
+    saveDocument('app_settings', 'active_retail_session', session);
+  };
+
+  const syncWholesaleSessionImmediately = (session: QuoteSession) => {
+    if (wholesaleSaveTimeoutRef.current) clearTimeout(wholesaleSaveTimeoutRef.current);
+    saveDocument('app_settings', 'active_wholesale_session', session);
+  };
+
+  const saveRetailSessionDebounced = (session: QuoteSession) => {
+    if (retailSaveTimeoutRef.current) clearTimeout(retailSaveTimeoutRef.current);
+    retailSaveTimeoutRef.current = setTimeout(() => {
+      saveDocument('app_settings', 'active_retail_session', session);
+    }, 1500);
+  };
+
+  const saveWholesaleSessionDebounced = (session: QuoteSession) => {
+    if (wholesaleSaveTimeoutRef.current) clearTimeout(wholesaleSaveTimeoutRef.current);
+    wholesaleSaveTimeoutRef.current = setTimeout(() => {
+      saveDocument('app_settings', 'active_wholesale_session', session);
+    }, 1500);
+  };
+
+  const updateRetailSessionLocal = (newSessionOrUpdater: QuoteSession | ((prev: QuoteSession) => QuoteSession), immediate = false) => {
+    lastRetailLocalChangeTimeRef.current = Date.now();
+    setRetailSession(prev => {
+      const next = typeof newSessionOrUpdater === 'function' ? newSessionOrUpdater(prev) : newSessionOrUpdater;
+      if (immediate) {
+        syncRetailSessionImmediately(next);
+      } else {
+        saveRetailSessionDebounced(next);
+      }
+      return next;
+    });
+  };
+
+  const updateWholesaleSessionLocal = (newSessionOrUpdater: QuoteSession | ((prev: QuoteSession) => QuoteSession), immediate = false) => {
+    lastWholesaleLocalChangeTimeRef.current = Date.now();
+    setWholesaleSession(prev => {
+      const next = typeof newSessionOrUpdater === 'function' ? newSessionOrUpdater(prev) : newSessionOrUpdater;
+      if (immediate) {
+        syncWholesaleSessionImmediately(next);
+      } else {
+        saveWholesaleSessionDebounced(next);
+      }
+      return next;
+    });
+  };
   const [editingScrapTx, setEditingScrapTx] = useState<ScrapTransaction | null>(null);
 
   // Sketchpad state triggers
@@ -311,6 +367,26 @@ export default function App() {
            const apiKeyDoc = docs.find(d => d.id === 'gold_api_key');
            if (apiKeyDoc) {
              setGoldApiKey(apiKeyDoc.key || '');
+           }
+
+           const retailDoc = docs.find(d => d.id === 'active_retail_session');
+           if (retailDoc) {
+             const cleanRetail = { ...retailDoc };
+             delete cleanRetail.id;
+             const timeSinceLocalChange = Date.now() - lastRetailLocalChangeTimeRef.current;
+             if (timeSinceLocalChange >= 2500) {
+               setRetailSession(cleanRetail as QuoteSession);
+             }
+           }
+
+           const wholesaleDoc = docs.find(d => d.id === 'active_wholesale_session');
+           if (wholesaleDoc) {
+             const cleanWholesale = { ...wholesaleDoc };
+             delete cleanWholesale.id;
+             const timeSinceLocalChange = Date.now() - lastWholesaleLocalChangeTimeRef.current;
+             if (timeSinceLocalChange >= 2500) {
+               setWholesaleSession(cleanWholesale as QuoteSession);
+             }
            }
          });
 
@@ -592,7 +668,7 @@ setIsCloudSynced(true);
       safeSetLocalStorage('gr_wholesale_ledger', updated);
 
       setWholesaleTransactions(updated);
-      setWholesaleSession(getEmptyQuoteSession());
+      updateWholesaleSessionLocal(getEmptyQuoteSession(), true);
       // Save to cloud Firestore
       saveDocument('wholesale_ledger', newTx.id, newTx);
     } else {
@@ -608,7 +684,7 @@ setIsCloudSynced(true);
       safeSetLocalStorage('gr_quote_ledger', updated);
 
       setRingQuoteTransactions(updated);
-      setRetailSession(getEmptyQuoteSession());
+      updateRetailSessionLocal(getEmptyQuoteSession(), true);
       // Save to cloud Firestore
       saveDocument('retail_ledger', newTx.id, newTx);
     }
@@ -646,10 +722,10 @@ setIsCloudSynced(true);
     fullData.rings = fullData.rings.map(upgradeRingData);
 
     if (isWholesale) {
-      setWholesaleSession(fullData);
+      updateWholesaleSessionLocal(fullData, true);
       setActiveTab('wholesale');
     } else {
-      setRetailSession(fullData);
+      updateRetailSessionLocal(fullData, true);
       setActiveTab('quote');
     }
   };
@@ -806,7 +882,7 @@ setIsCloudSynced(true);
   // Sketchpad trigger handlers
   const handleSketchSave = (dataUrl: string) => {
     const isWholesale = activeTab === 'wholesale';
-    const onChange = isWholesale ? setWholesaleSession : setRetailSession;
+    const onChange = isWholesale ? updateWholesaleSessionLocal : updateRetailSessionLocal;
 
     onChange(prev => ({
       ...prev,
@@ -832,7 +908,7 @@ setIsCloudSynced(true);
         }
         return r;
       })
-    }));
+    }), true);
 
     setIsSketching(false);
     setEditingImageIndex(null);
@@ -1094,7 +1170,7 @@ setIsCloudSynced(true);
           <div className={activeTab === 'quote' ? "" : "hidden"}>
             <QuoteCalculator
               session={retailSession}
-              onChangeSession={setRetailSession}
+              onChangeSession={updateRetailSessionLocal}
               onSaveQuote={() => handleSaveQuote(false)}
               onLaunchSketch={(type, index = null) => {
                 setEditingImageType(type);
@@ -1113,7 +1189,7 @@ setIsCloudSynced(true);
           <div className={activeTab === 'wholesale' ? "" : "hidden"}>
             <QuoteCalculator
               session={wholesaleSession}
-              onChangeSession={setWholesaleSession}
+              onChangeSession={updateWholesaleSessionLocal}
               onSaveQuote={() => handleSaveQuote(true)}
               onLaunchSketch={(type, index = null) => {
                 setEditingImageType(type);
