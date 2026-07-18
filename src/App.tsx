@@ -385,9 +385,6 @@ export default function App() {
                }
                return merged;
              });
-           } else {
-             // master settings doc doesn't exist in the cloud yet, let's bootstrap/upload our local settings
-             saveDocument('app_settings', 'master', settings);
            }
          });
 

@@ -68,10 +68,12 @@ export default function SettingsView({
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
 
   // 1. Sync settings prop into localSettings when parent settings changes from the outside (e.g. cloud sync).
+  const isSyncingFromPropRef = React.useRef(false);
   const lastPropSettingsRef = React.useRef(settings);
   React.useEffect(() => {
     if (JSON.stringify(lastPropSettingsRef.current) !== JSON.stringify(settings)) {
       lastPropSettingsRef.current = settings;
+      isSyncingFromPropRef.current = true;
       setLocalSettings({
         ...settings,
         wholesaleProfiles: settings.wholesaleProfiles || [],
@@ -84,6 +86,10 @@ export default function SettingsView({
   React.useEffect(() => {
     if (isFirstRenderRef.current) {
       isFirstRenderRef.current = false;
+      return;
+    }
+    if (isSyncingFromPropRef.current) {
+      isSyncingFromPropRef.current = false;
       return;
     }
     onNotifyLocalChange?.();
