@@ -65,27 +65,17 @@ export default function SettingsView({
 
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
 
-  // 1. Sync settings prop into localSettings. To prevent cursor jumping and typing glitching,
-  // we do not overwrite localSettings if the user has unsaved local edits (isDirty),
-  // except to merge changes to the list of client profiles.
+  // 1. Sync settings prop into localSettings when parent settings changes from the outside (e.g. cloud sync).
+  const lastPropSettingsRef = React.useRef(settings);
   React.useEffect(() => {
-    const isDirty = JSON.stringify(localSettings) !== JSON.stringify(settings);
-    if (!isDirty) {
+    if (JSON.stringify(lastPropSettingsRef.current) !== JSON.stringify(settings)) {
+      lastPropSettingsRef.current = settings;
       setLocalSettings({
         ...settings,
         wholesaleProfiles: settings.wholesaleProfiles || [],
       });
-    } else {
-      const localProfilesStr = JSON.stringify(localSettings.wholesaleProfiles || []);
-      const parentProfilesStr = JSON.stringify(settings.wholesaleProfiles || []);
-      if (localProfilesStr !== parentProfilesStr) {
-        setLocalSettings(prev => ({
-          ...prev,
-          wholesaleProfiles: settings.wholesaleProfiles || [],
-        }));
-      }
     }
-  }, [settings, localSettings]);
+  }, [settings]);
 
 
 
