@@ -1350,17 +1350,14 @@ export default function QuoteCalculator({
 
   const handleLinkLatestScrap = () => {
     try {
-      const raw = localStorage.getItem('gr_scrap_ledger');
-      if (raw) {
-        const items = JSON.parse(raw);
-        if (items && items.length > 0) {
-          const latest = items[0];
-          const payout = latest.payoutAmount || 0;
-          if (payout > 0) {
-            onChangeSession(prev => ({ ...prev, scrapCredit: parseFloat(payout.toFixed(2)) }));
-            alert(`Successfully linked latest scrap buyout of $${payout.toFixed(2)} CAD as a credit!`);
-            return;
-          }
+      const items = scrapTransactions;
+      if (items && items.length > 0) {
+        const latest = items[0];
+        const payout = parseFloat(latest.total) || 0;
+        if (payout > 0) {
+          onChangeSession(prev => ({ ...prev, scrapCredit: parseFloat(payout.toFixed(2)) }));
+          alert(`Successfully linked latest scrap buyout of $${payout.toFixed(2)} CAD as a credit!`);
+          return;
         }
       }
       alert("No recent scrap transactions found in ledger.");

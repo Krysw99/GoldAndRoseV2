@@ -13,5 +13,8 @@ service cloud.firestore {
     match /app_settings/{document} {
       allow read, write: if true;
     }
+    match /cuban_estimates/{document} {
+      allow read, write: if true;
+    }
   }
 }

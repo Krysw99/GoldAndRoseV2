@@ -1,0 +1,95 @@
+{
+  "entities": {
+    "ScrapTransaction": {
+      "title": "ScrapTransaction",
+      "description": "A transaction log for scrap metal buyout/buyback.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "driversLicense": { "type": "string" },
+        "stoneRemovalQty": { "type": "string" },
+        "summary": { "type": "string" },
+        "total": { "type": "string" }
+      },
+      "required": ["id", "date", "name", "total"]
+    },
+    "QuoteTransaction": {
+      "title": "QuoteTransaction",
+      "description": "A transaction log for jewelry/ring design and sales quote.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "summary": { "type": "string" },
+        "total": { "type": "string" },
+        "isWholesale": { "type": "boolean" }
+      },
+      "required": ["id", "date", "name", "total"]
+    },
+    "CubanEstimate": {
+      "title": "CubanEstimate",
+      "description": "Handmade Cuban chain or bracelet custom build estimate.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string" },
+        "material": { "type": "string" },
+        "goldKarat": { "type": "number" },
+        "metalColor": { "type": "string" },
+        "width": { "type": "number" },
+        "length": { "type": "number" },
+        "style": { "type": "string" },
+        "weightNominal": { "type": "number" },
+        "weightMin": { "type": "number" },
+        "weightMax": { "type": "number" },
+        "laborType": { "type": "string" },
+        "laborRate": { "type": "number" },
+        "metalCost": { "type": "number" },
+        "laborCost": { "type": "number" },
+        "totalCostMin": { "type": "number" },
+        "totalCostMax": { "type": "number" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "customerName", "material", "width", "length"]
+    },
+    "AppSettings": {
+      "title": "AppSettings",
+      "description": "Application settings and master configurations.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" }
+      },
+      "required": ["id"]
+    }
+  },
+  "firestore": {
+    "/scrap_ledger/{document}": {
+      "schema": "ScrapTransaction",
+      "description": "Scrap buyback ledger entries."
+    },
+    "/retail_ledger/{document}": {
+      "schema": "QuoteTransaction",
+      "description": "Retail ring design quotes."
+    },
+    "/wholesale_ledger/{document}": {
+      "schema": "QuoteTransaction",
+      "description": "Wholesale client quotes."
+    },
+    "/cuban_estimates/{document}": {
+      "schema": "CubanEstimate",
+      "description": "Logged handmade Cuban custom estimates."
+    },
+    "/app_settings/{document}": {
+      "schema": "AppSettings",
+      "description": "Master settings documents."
+    }
+  }
+}

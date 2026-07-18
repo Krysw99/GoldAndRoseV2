@@ -11,6 +11,7 @@ import {
   writeBatch,
   getDocs
 } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 // Configuration loaded from the firebase-applet-config.json
 const firebaseConfig = {
@@ -26,11 +27,60 @@ const app = initializeApp(firebaseConfig);
 
 // Use the custom databaseId provided in the applet config
 const db = getFirestore(app, "ai-studio-goldroseexecutiv-24ffabdd-e90e-4dd9-8e2b-4b1051c7eea0");
+const auth = getAuth(app);
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid || null,
+      email: auth.currentUser?.email || null,
+      emailVerified: auth.currentUser?.emailVerified || null,
+      isAnonymous: auth.currentUser?.isAnonymous || null,
+      tenantId: auth.currentUser?.tenantId || null,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 /**
  * Syncs a single document to Firestore.
  */
 export async function saveDocument(collectionName: string, id: string, data: any) {
+  const path = `${collectionName}/${id}`;
   try {
     const docRef = doc(db, collectionName, id);
     // Sanitize any undefined properties before uploading to Firestore
@@ -38,7 +88,7 @@ export async function saveDocument(collectionName: string, id: string, data: any
     await setDoc(docRef, sanitized, { merge: true });
     console.log(`Successfully synced document ${id} to collection ${collectionName}`);
   } catch (error) {
-    console.error(`Error syncing document ${id} to ${collectionName}:`, error);
+    handleFirestoreError(error, OperationType.WRITE, path);
   }
 }
 
@@ -46,12 +96,13 @@ export async function saveDocument(collectionName: string, id: string, data: any
  * Deletes a document from Firestore.
  */
 export async function deleteDocument(collectionName: string, id: string) {
+  const path = `${collectionName}/${id}`;
   try {
     const docRef = doc(db, collectionName, id);
     await firestoreDeleteDoc(docRef);
     console.log(`Successfully deleted document ${id} from collection ${collectionName}`);
   } catch (error) {
-    console.error(`Error deleting document ${id} from ${collectionName}:`, error);
+    handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
@@ -69,7 +120,7 @@ export function listenCollection(collectionName: string, onUpdate: (docs: any[])
     }));
     onUpdate(docs);
   }, (error) => {
-    console.error(`Error listening to collection ${collectionName}:`, error);
+    handleFirestoreError(error, OperationType.GET, collectionName);
   });
 }
 
@@ -100,6 +151,6 @@ export async function syncLocalToCloud(collectionName: string, localItems: any[]
       console.log(`Uploaded ${count} offline items to collection ${collectionName}`);
     }
   } catch (error) {
-    console.error(`Failed to sync local items to collection ${collectionName}:`, error);
+    handleFirestoreError(error, OperationType.WRITE, collectionName);
   }
 }

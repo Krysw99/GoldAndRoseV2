@@ -68,102 +68,14 @@ export default function App() {
   const [quickPurity, setQuickPurity] = useState('gold_14');
   const [quickGrams, setQuickGrams] = useState('');
 
-  // Ledger Transactions (localStorage backed, loaded synchronously to avoid race conditions)
-  const [scrapTransactions, setScrapTransactions] = useState<ScrapTransaction[]>(() => {
-    try {
-      const st = localStorage.getItem('gr_scrap_ledger');
-      if (st) return JSON.parse(st);
-    } catch (e) {
-      console.error("Error initializing gr_scrap_ledger:", e);
-    }
-    return [];
-  });
-
-  const [ringQuoteTransactions, setRingQuoteTransactions] = useState<QuoteTransaction[]>(() => {
-    try {
-      const rt = localStorage.getItem('gr_quote_ledger');
-      if (rt) return JSON.parse(rt);
-      
-      // If none, default to empty or bootstrap a demo
-      const demoSession = getDemoQuoteSession();
-      let gT = 0;
-      let tD = 0;
-      demoSession.rings.forEach(r => {
-        const cost = calculateRingCost(r, DEFAULT_SETTINGS, { gold: 2350, silver: 30, platinum: 1050 }, 'retail', demoSession.overridePrices);
-        gT += cost;
-        const val = parseFloat(r.discount) || 0;
-        tD += r.discountType === '%' ? cost * (val / 100) : val;
-      });
-      const sub = Math.max(0, gT - tD - Number(demoSession.scrapCredit));
-      const finalInvoiceAmount = sub + (demoSession.applyTax ? sub * 0.12 : 0);
-      const demoTotal = `$${finalInvoiceAmount.toFixed(2)}`;
-
-      const demoTx: QuoteTransaction = {
-        id: demoSession.id,
-        date: new Date().toLocaleString(),
-        timestamp: Date.now(),
-        name: demoSession.cName,
-        phone: demoSession.cPhone,
-        summary: "Ring: 4.8g | Band: 3.5g | Men's: 7.2g",
-        total: demoTotal,
-        fullData: demoSession,
-        isWholesale: false
-      };
-      
-      try {
-        localStorage.setItem('gr_quote_ledger', JSON.stringify([demoTx]));
-      } catch (_) {}
-      return [demoTx];
-    } catch (e) {
-      console.error("Error initializing gr_quote_ledger:", e);
-    }
-    return [];
-  });
-
-  const [wholesaleTransactions, setWholesaleTransactions] = useState<QuoteTransaction[]>(() => {
-    try {
-      const wt = localStorage.getItem('gr_wholesale_ledger');
-      if (wt) return JSON.parse(wt);
-    } catch (e) {
-      console.error("Error initializing gr_wholesale_ledger:", e);
-    }
-    return [];
-  });
+  // Ledger Transactions (Firestore backed, loaded dynamically via real-time sync listeners)
+  const [scrapTransactions, setScrapTransactions] = useState<ScrapTransaction[]>([]);
+  const [ringQuoteTransactions, setRingQuoteTransactions] = useState<QuoteTransaction[]>([]);
+  const [wholesaleTransactions, setWholesaleTransactions] = useState<QuoteTransaction[]>([]);
+  const [cubanEstimates, setCubanEstimates] = useState<any[]>([]);
 
   // Master settings
-  const [settings, setSettings] = useState<AppSettings>(() => {
-    try {
-      const s = localStorage.getItem('gr_master_settings');
-      if (s) {
-        const parsed = JSON.parse(s);
-        return {
-          ...DEFAULT_SETTINGS,
-          ...parsed,
-          wholesale: { ...DEFAULT_SETTINGS.wholesale, ...(parsed.wholesale || {}) },
-          wholesaleProfiles: parsed.wholesaleProfiles || [],
-          centerStoneRates: { ...DEFAULT_SETTINGS.centerStoneRates, ...(parsed.centerStoneRates || {}) },
-          centerStoneRawRates: { ...DEFAULT_SETTINGS.centerStoneRawRates, ...(parsed.centerStoneRawRates || {}) },
-          cubanMultipliers: parsed.cubanMultipliers || DEFAULT_SETTINGS.cubanMultipliers || [
-            { minWidth: 5, maxWidth: 7, multiplier: 1.8 },
-            { minWidth: 8, maxWidth: 10, multiplier: 1.6 },
-            { minWidth: 11, maxWidth: 13, multiplier: 1.5 },
-            { minWidth: 14, maxWidth: 24, multiplier: 1.4 }
-          ],
-          tennisMultipliers: parsed.tennisMultipliers || DEFAULT_SETTINGS.tennisMultipliers || [
-            { minWidth: 1.0, maxWidth: 1.9, multiplier: 1.6 },
-            { minWidth: 2.0, maxWidth: 4.0, multiplier: 1.4 }
-          ],
-          tennisDiamondPricePerCt: parsed.tennisDiamondPricePerCt !== undefined ? parsed.tennisDiamondPricePerCt : (DEFAULT_SETTINGS.tennisDiamondPricePerCt !== undefined ? DEFAULT_SETTINGS.tennisDiamondPricePerCt : 600)
-        };
-      }
-    } catch (e) {
-      console.error("Error initializing settings from localStorage:", e);
-    }
-    return {
-      ...DEFAULT_SETTINGS,
-      wholesaleProfiles: []
-    };
-  });
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
   // Active custom quote sessions
   const [retailSession, setRetailSession] = useState<QuoteSession>(getEmptyQuoteSession());
@@ -263,14 +175,6 @@ export default function App() {
 
   // Load remaining fast-parsing keys on initialization
   useEffect(() => {
-    // 1. API Keys
-    try {
-      const k = localStorage.getItem('gr_gold_api_key');
-      if (k) setGoldApiKey(k.trim());
-    } catch (e) {
-      console.error("Error parsing gr_gold_api_key:", e);
-    }
-
     isLoadedRef.current = true;
     setIsPersistenceLoaded(true);
   }, []);
@@ -283,14 +187,6 @@ export default function App() {
     saveDocument('app_settings', 'master', newSettings);
   };
 
-  // Persist master settings to localStorage on changes
-  useEffect(() => {
-    if (isLoadedRef.current) {
-      const currentStr = JSON.stringify(settings);
-      localStorage.setItem('gr_master_settings', currentStr);
-    }
-  }, [settings]);
-
   // Firestore server synchronization & real-time updates
   useEffect(() => {
     if (!isPersistenceLoaded) return;
@@ -300,19 +196,15 @@ export default function App() {
     let unsubRetail: (() => void) | null = null;
     let unsubWholesale: (() => void) | null = null;
     let unsubSettings: (() => void) | null = null;
+    let unsubCuban: (() => void) | null = null;
 
     const runSyncAndListen = async () => {
       try {
         console.log("Starting server synchronization...");
-        
-        // 1. Sync any existing local items created offline or stored locally to Firestore
-        await syncLocalToCloud('scrap_ledger', scrapTransactions);
-        await syncLocalToCloud('retail_ledger', ringQuoteTransactions);
-        await syncLocalToCloud('wholesale_ledger', wholesaleTransactions);
 
         if (!active) return;
 
-        // 2. Set up real-time listener for Scrap Buyback Ledger
+        // 1. Set up real-time listener for Scrap Buyback Ledger
         unsubScrap = listenCollection('scrap_ledger', (docs) => {
           if (!active) return;
           const sorted = [...docs].sort((a, b) => {
@@ -321,10 +213,9 @@ export default function App() {
             return tB - tA; // Newest first
           });
           setScrapTransactions(sorted);
-          localStorage.setItem('gr_scrap_ledger', JSON.stringify(sorted));
         });
 
-        // 3. Set up real-time listener for Retail Quote Ledger
+        // 2. Set up real-time listener for Retail Quote Ledger
         unsubRetail = listenCollection('retail_ledger', (docs) => {
           if (!active) return;
           const sorted = [...docs].sort((a, b) => {
@@ -333,10 +224,9 @@ export default function App() {
             return tB - tA; // Newest first
           });
           setRingQuoteTransactions(sorted);
-          safeSetLocalStorage('gr_quote_ledger', sorted);
         });
 
-        // 4. Set up real-time listener for Wholesale Ledger
+        // 3. Set up real-time listener for Wholesale Ledger
         unsubWholesale = listenCollection('wholesale_ledger', (docs) => {
           if (!active) return;
           const sorted = [...docs].sort((a, b) => {
@@ -345,10 +235,18 @@ export default function App() {
             return tB - tA; // Newest first
           });
           setWholesaleTransactions(sorted);
-          safeSetLocalStorage('gr_wholesale_ledger', sorted);
         });
 
-         // 5. Set up real-time listener for Master App Settings (including Wholesale Client Profiles)
+        // 4. Set up real-time listener for Cuban Estimates
+        unsubCuban = listenCollection('cuban_estimates', (docs) => {
+          if (!active) return;
+          const sorted = [...docs].sort((a, b) => {
+            return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+          });
+          setCubanEstimates(sorted);
+        });
+
+         // 5. Set up real-time listener for Master App Settings (including Wholesale Client Profiles and Google API key)
          unsubSettings = listenCollection('app_settings', (docs) => {
            if (!active) return;
 
@@ -386,6 +284,11 @@ export default function App() {
                return merged;
              });
            }
+
+           const apiKeyDoc = docs.find(d => d.id === 'gold_api_key');
+           if (apiKeyDoc) {
+             setGoldApiKey(apiKeyDoc.key || '');
+           }
          });
 
         setIsCloudSynced(true);
@@ -403,6 +306,7 @@ export default function App() {
       if (unsubRetail) unsubRetail();
       if (unsubWholesale) unsubWholesale();
       if (unsubSettings) unsubSettings();
+      if (unsubCuban) unsubCuban();
     };
   }, [isPersistenceLoaded]);
 
@@ -1154,6 +1058,13 @@ export default function App() {
             <CubanBraceletBuilder
               spotPrices={spotPrices}
               settings={settings}
+              estimates={cubanEstimates}
+              onSaveEstimate={(newEst) => {
+                saveDocument('cuban_estimates', newEst.id, newEst);
+              }}
+              onDeleteEstimate={(id) => {
+                deleteDocument('cuban_estimates', id);
+              }}
             />
           </div>
 
@@ -1215,12 +1126,20 @@ export default function App() {
               settings={settings}
               onSaveSettings={handleSaveSettings}
               goldApiKey={goldApiKey}
-              onSaveApiKey={(key) => { const trimmed = key.trim(); setGoldApiKey(trimmed); localStorage.setItem('gr_gold_api_key', trimmed); }}
+              onSaveApiKey={(key) => { 
+                const trimmed = key.trim(); 
+                setGoldApiKey(trimmed); 
+                saveDocument('app_settings', 'gold_api_key', { key: trimmed }); 
+              }}
               onExportCsv={handleExportCsv}
               onClearHistory={handleClearHistory}
               spotPrices={spotPrices}
               onUpdateSpotPrices={setSpotPrices}
               onNotifyLocalChange={() => { lastLocalChangeTimeRef.current = Date.now(); }}
+              scrapTransactions={scrapTransactions}
+              ringQuoteTransactions={ringQuoteTransactions}
+              wholesaleTransactions={wholesaleTransactions}
+              cubanEstimates={cubanEstimates}
             />
           </div>
         </div>

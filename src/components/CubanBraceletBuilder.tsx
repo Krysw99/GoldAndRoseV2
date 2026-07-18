@@ -35,9 +35,18 @@ interface CubanEstimate {
 interface CubanBraceletBuilderProps {
   spotPrices: { gold: number; silver: number; platinum: number };
   settings: any;
+  estimates?: CubanEstimate[];
+  onSaveEstimate?: (estimate: CubanEstimate) => void;
+  onDeleteEstimate?: (id: string) => void;
 }
 
-export default function CubanBraceletBuilder({ spotPrices, settings }: CubanBraceletBuilderProps) {
+export default function CubanBraceletBuilder({ 
+  spotPrices, 
+  settings,
+  estimates = [],
+  onSaveEstimate,
+  onDeleteEstimate
+}: CubanBraceletBuilderProps) {
   // Input parameters
   const [material, setMaterial] = useState<'gold' | 'silver' | 'platinum'>('gold');
   const [goldKarat, setGoldKarat] = useState<number>(14);
@@ -56,32 +65,9 @@ export default function CubanBraceletBuilder({ spotPrices, settings }: CubanBrac
 
   // Customer Logging State
   const [customerName, setCustomerName] = useState<string>('');
-  const [estimates, setEstimates] = useState<CubanEstimate[]>([]);
 
   // Simulation parameters
   const [simViewMode, setSimViewMode] = useState<'realistic' | 'blueprint'>('realistic');
-
-  // Load saved estimates from local storage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('gr_cuban_estimates');
-      if (saved) {
-        setEstimates(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.error("Failed to load Cuban estimates:", e);
-    }
-  }, []);
-
-  // Save estimates to local storage
-  const saveEstimatesToStorage = (updated: CubanEstimate[]) => {
-    try {
-      localStorage.setItem('gr_cuban_estimates', JSON.stringify(updated));
-      setEstimates(updated);
-    } catch (e) {
-      console.error("Failed to save Cuban estimates:", e);
-    }
-  };
 
   // Purity list
   const goldKarats = [10, 14, 18, 22, 24];
@@ -225,16 +211,18 @@ export default function CubanBraceletBuilder({ spotPrices, settings }: CubanBrac
       timestamp: new Date().toLocaleDateString('en-US', { hour: '2-digit', minute: '2-digit' })
     };
 
-    const updated = [newEst, ...estimates];
-    saveEstimatesToStorage(updated);
+    if (onSaveEstimate) {
+      onSaveEstimate(newEst);
+    }
     setCustomerName('');
-    alert("Handmade Cuban estimate logged successfully to local session ledger!");
+    alert("Handmade Cuban estimate logged successfully to live ledger!");
   };
 
   // Handle deletion
   const handleDeleteEstimate = (id: string) => {
-    const updated = estimates.filter(e => e.id !== id);
-    saveEstimatesToStorage(updated);
+    if (onDeleteEstimate) {
+      onDeleteEstimate(id);
+    }
   };
 
   // Material Colors

@@ -9,8 +9,9 @@ import {
   DollarSign, Wrench, Gem, HardDrive, EyeOff, Upload, FileJson,
   Building, ShoppingBag, Globe, Plus, Edit
 } from 'lucide-react';
-import { AppSettings, RepairPricingSettings } from '../types';
+import { AppSettings, RepairPricingSettings, ScrapTransaction, QuoteTransaction } from '../types';
 import { ROUND_MELEE, FANCY_SHAPES } from '../constants';
+import { saveDocument } from '../firebase';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -22,6 +23,10 @@ interface SettingsViewProps {
   spotPrices: { gold: number; silver: number; platinum: number };
   onUpdateSpotPrices: (spot: { gold: number; silver: number; platinum: number }) => void;
   onNotifyLocalChange?: () => void;
+  scrapTransactions: ScrapTransaction[];
+  ringQuoteTransactions: QuoteTransaction[];
+  wholesaleTransactions: QuoteTransaction[];
+  cubanEstimates: any[];
 }
 
 export default function SettingsView({
@@ -33,7 +38,11 @@ export default function SettingsView({
   onClearHistory,
   spotPrices,
   onUpdateSpotPrices,
-  onNotifyLocalChange
+  onNotifyLocalChange,
+  scrapTransactions,
+  ringQuoteTransactions,
+  wholesaleTransactions,
+  cubanEstimates
 }: SettingsViewProps) {
   // Key state
   const [apiKey, setApiKey] = useState(goldApiKey);
@@ -195,12 +204,12 @@ export default function SettingsView({
   // Cross-Device Synchronization Backup/Restore Utilities
   const handleExportBackupJSON = () => {
     const backupData = {
-      scrapLedger: localStorage.getItem('gr_scrap_ledger') || '[]',
-      quoteLedger: localStorage.getItem('gr_quote_ledger') || '[]',
-      wholesaleLedger: localStorage.getItem('gr_wholesale_ledger') || '[]',
-      masterSettings: localStorage.getItem('gr_master_settings') || '{}',
-      cubanEstimates: localStorage.getItem('gr_cuban_estimates') || '[]',
-      goldApiKey: localStorage.getItem('gr_gold_api_key') || '',
+      scrapLedger: JSON.stringify(scrapTransactions),
+      quoteLedger: JSON.stringify(ringQuoteTransactions),
+      wholesaleLedger: JSON.stringify(wholesaleTransactions),
+      masterSettings: JSON.stringify(settings),
+      cubanEstimates: JSON.stringify(cubanEstimates),
+      goldApiKey: goldApiKey,
       exportDate: new Date().toISOString(),
       appVersion: '1.0.0'
     };
@@ -221,7 +230,7 @@ export default function SettingsView({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const json = JSON.parse(e.target?.result as string);
         if (!json.scrapLedger && !json.quoteLedger && !json.wholesaleLedger) {
@@ -229,15 +238,76 @@ export default function SettingsView({
           return;
         }
 
-        if (window.confirm("This will merge or overwrite your current local ledger history and settings with the data in this backup file. Proceed?")) {
-          if (json.scrapLedger) localStorage.setItem('gr_scrap_ledger', json.scrapLedger);
-          if (json.quoteLedger) localStorage.setItem('gr_quote_ledger', json.quoteLedger);
-          if (json.wholesaleLedger) localStorage.setItem('gr_wholesale_ledger', json.wholesaleLedger);
-          if (json.masterSettings && json.masterSettings !== '{}') localStorage.setItem('gr_master_settings', json.masterSettings);
-          if (json.cubanEstimates) localStorage.setItem('gr_cuban_estimates', json.cubanEstimates);
-          if (json.goldApiKey) localStorage.setItem('gr_gold_api_key', json.goldApiKey);
+        if (window.confirm("This will merge and upload all backup data directly to your Firestore database. Proceed?")) {
+          if (json.scrapLedger) {
+            try {
+              const items = JSON.parse(json.scrapLedger);
+              if (Array.isArray(items)) {
+                for (const item of items) {
+                  if (item && item.id) {
+                    await saveDocument('scrap_ledger', item.id, item);
+                  }
+                }
+              }
+            } catch (err) {
+              console.error("Failed to import scrap ledger:", err);
+            }
+          }
+          if (json.quoteLedger) {
+            try {
+              const items = JSON.parse(json.quoteLedger);
+              if (Array.isArray(items)) {
+                for (const item of items) {
+                  if (item && item.id) {
+                    await saveDocument('retail_ledger', item.id, item);
+                  }
+                }
+              }
+            } catch (err) {
+              console.error("Failed to import retail ledger:", err);
+            }
+          }
+          if (json.wholesaleLedger) {
+            try {
+              const items = JSON.parse(json.wholesaleLedger);
+              if (Array.isArray(items)) {
+                for (const item of items) {
+                  if (item && item.id) {
+                    await saveDocument('wholesale_ledger', item.id, item);
+                  }
+                }
+              }
+            } catch (err) {
+              console.error("Failed to import wholesale ledger:", err);
+            }
+          }
+          if (json.masterSettings && json.masterSettings !== '{}') {
+            try {
+              const master = JSON.parse(json.masterSettings);
+              await saveDocument('app_settings', 'master', master);
+            } catch (err) {
+              console.error("Failed to import master settings:", err);
+            }
+          }
+          if (json.cubanEstimates) {
+            try {
+              const items = JSON.parse(json.cubanEstimates);
+              if (Array.isArray(items)) {
+                for (const item of items) {
+                  if (item && item.id) {
+                    await saveDocument('cuban_estimates', item.id, item);
+                  }
+                }
+              }
+            } catch (err) {
+              console.error("Failed to import cuban estimates:", err);
+            }
+          }
+          if (json.goldApiKey) {
+            await saveDocument('app_settings', 'gold_api_key', { key: json.goldApiKey });
+          }
 
-          alert("Sync data successfully imported! The application will now reload to apply all synced records.");
+          alert("Sync data successfully imported and synced to Firestore! The application will now reload to apply all synced records.");
           window.location.reload();
         }
       } catch (err) {
