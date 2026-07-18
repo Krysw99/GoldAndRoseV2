@@ -104,6 +104,7 @@ export default function App() {
   const isLoadedRef = useRef(true);
   const lastLocalChangeTimeRef = useRef<number>(0);
   const lastCloudSettingsRef = useRef<string>("");
+  const pendingCloudSettingsRef = useRef<any>(null);
   const [isPersistenceLoaded, setIsPersistenceLoaded] = useState(true);
   const [isCloudSynced, setIsCloudSynced] = useState(false);
 
@@ -179,6 +180,47 @@ export default function App() {
     setIsPersistenceLoaded(true);
   }, []);
 
+  // Shared helper to apply master settings from Firebase cloud updates
+  const applyCloudSettings = (cleanMasterDoc: any) => {
+    const cloudSettingsStr = JSON.stringify(cleanMasterDoc);
+    lastCloudSettingsRef.current = cloudSettingsStr;
+    
+    setSettings(prev => {
+      const cloudProfiles = cleanMasterDoc.wholesaleProfiles || prev.wholesaleProfiles || [];
+      const merged = {
+        ...prev,
+        ...cleanMasterDoc,
+        wholesale: { ...prev.wholesale, ...(cleanMasterDoc.wholesale || {}) },
+        wholesaleProfiles: cloudProfiles,
+        centerStoneRates: { ...prev.centerStoneRates, ...(cleanMasterDoc.centerStoneRates || {}) },
+        centerStoneRawRates: { ...prev.centerStoneRawRates, ...(cleanMasterDoc.centerStoneRawRates || {}) },
+        cubanMultipliers: cleanMasterDoc.cubanMultipliers || prev.cubanMultipliers,
+        tennisMultipliers: cleanMasterDoc.tennisMultipliers || prev.tennisMultipliers,
+      };
+      
+      if (JSON.stringify(prev) === JSON.stringify(merged)) {
+        return prev;
+      }
+      return merged;
+    });
+  };
+
+  // Periodically check and apply pending cloud settings when the user is inactive
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (pendingCloudSettingsRef.current) {
+        const timeSinceLocalChange = Date.now() - lastLocalChangeTimeRef.current;
+        if (timeSinceLocalChange >= 2500) {
+          console.log("Applying pending cloud settings sync after 2.5 seconds of user inactivity...", pendingCloudSettingsRef.current);
+          applyCloudSettings(pendingCloudSettingsRef.current);
+          pendingCloudSettingsRef.current = null;
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Save settings explicitly to both local state and Firebase
   const handleSaveSettings = (newSettings: AppSettings) => {
     lastLocalChangeTimeRef.current = Date.now();
@@ -246,43 +288,24 @@ export default function App() {
           setCubanEstimates(sorted);
         });
 
-         // 5. Set up real-time listener for Master App Settings (including Wholesale Client Profiles and Google API key)
+                  // 5. Set up real-time listener for Master App Settings (including Wholesale Client Profiles and Google API key)
          unsubSettings = listenCollection('app_settings', (docs) => {
            if (!active) return;
-
-           // Protect active edits from being overwritten by incoming cloud sync
-           const timeSinceLocalChange = Date.now() - lastLocalChangeTimeRef.current;
-           if (timeSinceLocalChange < 2500) {
-             console.log("Ignoring cloud settings sync to protect recent local edits...");
-             return;
-           }
 
            const masterDoc = docs.find(d => d.id === 'master');
            if (masterDoc) {
              const cleanMasterDoc = { ...masterDoc };
              delete cleanMasterDoc.id; // remove Firestore id prop
              
-             const cloudSettingsStr = JSON.stringify(cleanMasterDoc);
-             lastCloudSettingsRef.current = cloudSettingsStr;
-             
-             setSettings(prev => {
-               const cloudProfiles = cleanMasterDoc.wholesaleProfiles || prev.wholesaleProfiles || [];
-               const merged = {
-                 ...prev,
-                 ...cleanMasterDoc,
-                 wholesale: { ...prev.wholesale, ...(cleanMasterDoc.wholesale || {}) },
-                 wholesaleProfiles: cloudProfiles,
-                 centerStoneRates: { ...prev.centerStoneRates, ...(cleanMasterDoc.centerStoneRates || {}) },
-                 centerStoneRawRates: { ...prev.centerStoneRawRates, ...(cleanMasterDoc.centerStoneRawRates || {}) },
-                 cubanMultipliers: cleanMasterDoc.cubanMultipliers || prev.cubanMultipliers,
-                 tennisMultipliers: cleanMasterDoc.tennisMultipliers || prev.tennisMultipliers,
-               };
-               
-               if (JSON.stringify(prev) === JSON.stringify(merged)) {
-                 return prev;
-               }
-               return merged;
-             });
+             // Protect active edits from being overwritten by incoming cloud sync
+             const timeSinceLocalChange = Date.now() - lastLocalChangeTimeRef.current;
+             if (timeSinceLocalChange < 2500) {
+               console.log("Ignoring cloud settings sync to protect recent local edits. Storing in pending...");
+               pendingCloudSettingsRef.current = cleanMasterDoc;
+             } else {
+               pendingCloudSettingsRef.current = null;
+               applyCloudSettings(cleanMasterDoc);
+             }
            }
 
            const apiKeyDoc = docs.find(d => d.id === 'gold_api_key');
@@ -291,7 +314,7 @@ export default function App() {
            }
          });
 
-        setIsCloudSynced(true);
+setIsCloudSynced(true);
         console.log("Server synchronization initialized successfully.");
       } catch (err) {
         console.error("Error setting up server synchronization:", err);
