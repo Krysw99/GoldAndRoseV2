@@ -62,7 +62,7 @@ export default function App() {
   const [spotPrices, setSpotPrices] = useState({ gold: 2350, silver: 30, platinum: 1050 });
   const [lastUpdated, setLastUpdated] = useState('Manual Default');
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const [goldApiKey, setGoldApiKey] = useState('aIVgYkLBIuAnCpTYolSh0JKBIAuEkFwCP0nhcjjI');
+  const [goldApiKey, setGoldApiKey] = useState('goldapi-6b3f1e7fd4f618448db8a51de9fd9511-io');
 
   // Quick Calculator state
   const [quickPurity, setQuickPurity] = useState('gold_14');
