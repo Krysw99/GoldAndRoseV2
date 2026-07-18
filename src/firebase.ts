@@ -79,7 +79,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 /**
  * Compresses heavy base64 image strings using browser canvas API to fit Firestore 1MB limits.
  */
-async function compressBase64Image(dataUrl: string, maxWidth = 300, maxHeight = 300, quality = 0.5): Promise<string> {
+async function compressBase64Image(dataUrl: string, maxWidth = 800, maxHeight = 800, quality = 0.7): Promise<string> {
   if (!dataUrl || !dataUrl.startsWith('data:image/')) return dataUrl;
   // If the dataUrl is already small (e.g. < 40KB), don't compress it
   if (dataUrl.length < 40000) return dataUrl;
@@ -128,7 +128,14 @@ async function compressBase64Image(dataUrl: string, maxWidth = 300, maxHeight = 
  * Recursively scans and compresses heavy base64 images inside any transaction payload.
  */
 export async function compressPayload(obj: any): Promise<any> {
-  if (!obj || typeof obj !== 'object') return obj;
+  if (!obj) return obj;
+
+  if (typeof obj === 'string') {
+    if (obj.startsWith('data:image/')) {
+      return await compressBase64Image(obj);
+    }
+    return obj;
+  }
 
   if (Array.isArray(obj)) {
     const list = [];
@@ -138,16 +145,15 @@ export async function compressPayload(obj: any): Promise<any> {
     return list;
   }
 
-  const copy = { ...obj };
-  for (const key of Object.keys(copy)) {
-    const val = copy[key];
-    if (typeof val === 'string' && val.startsWith('data:image/')) {
-      copy[key] = await compressBase64Image(val);
-    } else if (typeof val === 'object' && val !== null) {
-      copy[key] = await compressPayload(val);
+  if (typeof obj === 'object') {
+    const copy = { ...obj };
+    for (const key of Object.keys(copy)) {
+      copy[key] = await compressPayload(copy[key]);
     }
+    return copy;
   }
-  return copy;
+
+  return obj;
 }
 
 /**
