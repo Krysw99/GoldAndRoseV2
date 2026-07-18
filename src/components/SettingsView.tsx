@@ -21,6 +21,7 @@ interface SettingsViewProps {
   onClearHistory: (range: 'all' | '365' | 'custom', startDate?: string, endDate?: string) => void;
   spotPrices: { gold: number; silver: number; platinum: number };
   onUpdateSpotPrices: (spot: { gold: number; silver: number; platinum: number }) => void;
+  onNotifyLocalChange?: () => void;
 }
 
 export default function SettingsView({
@@ -31,7 +32,8 @@ export default function SettingsView({
   onExportCsv,
   onClearHistory,
   spotPrices,
-  onUpdateSpotPrices
+  onUpdateSpotPrices,
+  onNotifyLocalChange
 }: SettingsViewProps) {
   // Key state
   const [apiKey, setApiKey] = useState(goldApiKey);
@@ -76,6 +78,16 @@ export default function SettingsView({
       });
     }
   }, [settings]);
+
+  // 1.1 Notify parent of any local settings changes to protect active edits from being overwritten
+  const isFirstRenderRef = React.useRef(true);
+  React.useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
+    onNotifyLocalChange?.();
+  }, [localSettings, onNotifyLocalChange]);
 
 
 

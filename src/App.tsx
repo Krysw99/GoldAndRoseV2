@@ -68,13 +68,102 @@ export default function App() {
   const [quickPurity, setQuickPurity] = useState('gold_14');
   const [quickGrams, setQuickGrams] = useState('');
 
-  // Ledger Transactions (localStorage backed)
-  const [scrapTransactions, setScrapTransactions] = useState<ScrapTransaction[]>([]);
-  const [ringQuoteTransactions, setRingQuoteTransactions] = useState<QuoteTransaction[]>([]);
-  const [wholesaleTransactions, setWholesaleTransactions] = useState<QuoteTransaction[]>([]);
+  // Ledger Transactions (localStorage backed, loaded synchronously to avoid race conditions)
+  const [scrapTransactions, setScrapTransactions] = useState<ScrapTransaction[]>(() => {
+    try {
+      const st = localStorage.getItem('gr_scrap_ledger');
+      if (st) return JSON.parse(st);
+    } catch (e) {
+      console.error("Error initializing gr_scrap_ledger:", e);
+    }
+    return [];
+  });
+
+  const [ringQuoteTransactions, setRingQuoteTransactions] = useState<QuoteTransaction[]>(() => {
+    try {
+      const rt = localStorage.getItem('gr_quote_ledger');
+      if (rt) return JSON.parse(rt);
+      
+      // If none, default to empty or bootstrap a demo
+      const demoSession = getDemoQuoteSession();
+      let gT = 0;
+      let tD = 0;
+      demoSession.rings.forEach(r => {
+        const cost = calculateRingCost(r, DEFAULT_SETTINGS, { gold: 2350, silver: 30, platinum: 1050 }, 'retail', demoSession.overridePrices);
+        gT += cost;
+        const val = parseFloat(r.discount) || 0;
+        tD += r.discountType === '%' ? cost * (val / 100) : val;
+      });
+      const sub = Math.max(0, gT - tD - Number(demoSession.scrapCredit));
+      const finalInvoiceAmount = sub + (demoSession.applyTax ? sub * 0.12 : 0);
+      const demoTotal = `$${finalInvoiceAmount.toFixed(2)}`;
+
+      const demoTx: QuoteTransaction = {
+        id: demoSession.id,
+        date: new Date().toLocaleString(),
+        timestamp: Date.now(),
+        name: demoSession.cName,
+        phone: demoSession.cPhone,
+        summary: "Ring: 4.8g | Band: 3.5g | Men's: 7.2g",
+        total: demoTotal,
+        fullData: demoSession,
+        isWholesale: false
+      };
+      
+      try {
+        localStorage.setItem('gr_quote_ledger', JSON.stringify([demoTx]));
+      } catch (_) {}
+      return [demoTx];
+    } catch (e) {
+      console.error("Error initializing gr_quote_ledger:", e);
+    }
+    return [];
+  });
+
+  const [wholesaleTransactions, setWholesaleTransactions] = useState<QuoteTransaction[]>(() => {
+    try {
+      const wt = localStorage.getItem('gr_wholesale_ledger');
+      if (wt) return JSON.parse(wt);
+    } catch (e) {
+      console.error("Error initializing gr_wholesale_ledger:", e);
+    }
+    return [];
+  });
 
   // Master settings
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    try {
+      const s = localStorage.getItem('gr_master_settings');
+      if (s) {
+        const parsed = JSON.parse(s);
+        return {
+          ...DEFAULT_SETTINGS,
+          ...parsed,
+          wholesale: { ...DEFAULT_SETTINGS.wholesale, ...(parsed.wholesale || {}) },
+          wholesaleProfiles: parsed.wholesaleProfiles || [],
+          centerStoneRates: { ...DEFAULT_SETTINGS.centerStoneRates, ...(parsed.centerStoneRates || {}) },
+          centerStoneRawRates: { ...DEFAULT_SETTINGS.centerStoneRawRates, ...(parsed.centerStoneRawRates || {}) },
+          cubanMultipliers: parsed.cubanMultipliers || DEFAULT_SETTINGS.cubanMultipliers || [
+            { minWidth: 5, maxWidth: 7, multiplier: 1.8 },
+            { minWidth: 8, maxWidth: 10, multiplier: 1.6 },
+            { minWidth: 11, maxWidth: 13, multiplier: 1.5 },
+            { minWidth: 14, maxWidth: 24, multiplier: 1.4 }
+          ],
+          tennisMultipliers: parsed.tennisMultipliers || DEFAULT_SETTINGS.tennisMultipliers || [
+            { minWidth: 1.0, maxWidth: 1.9, multiplier: 1.6 },
+            { minWidth: 2.0, maxWidth: 4.0, multiplier: 1.4 }
+          ],
+          tennisDiamondPricePerCt: parsed.tennisDiamondPricePerCt !== undefined ? parsed.tennisDiamondPricePerCt : (DEFAULT_SETTINGS.tennisDiamondPricePerCt !== undefined ? DEFAULT_SETTINGS.tennisDiamondPricePerCt : 600)
+        };
+      }
+    } catch (e) {
+      console.error("Error initializing settings from localStorage:", e);
+    }
+    return {
+      ...DEFAULT_SETTINGS,
+      wholesaleProfiles: []
+    };
+  });
 
   // Active custom quote sessions
   const [retailSession, setRetailSession] = useState<QuoteSession>(getEmptyQuoteSession());
@@ -100,9 +189,10 @@ export default function App() {
     }
   };
 
-  const isLoadedRef = useRef(false);
+  const isLoadedRef = useRef(true);
+  const lastLocalChangeTimeRef = useRef<number>(0);
   const lastCloudSettingsRef = useRef<string>("");
-  const [isPersistenceLoaded, setIsPersistenceLoaded] = useState(false);
+  const [isPersistenceLoaded, setIsPersistenceLoaded] = useState(true);
   const [isCloudSynced, setIsCloudSynced] = useState(false);
 
   // Request persistent storage on load (Safari/Chrome/iOS support to prevent auto-eviction)
@@ -171,64 +261,9 @@ export default function App() {
     };
   }, []);
 
-  // Load persistence data on initialization
+  // Load remaining fast-parsing keys on initialization
   useEffect(() => {
-    // 1. Scrap Ledger
-    try {
-      const st = localStorage.getItem('gr_scrap_ledger');
-      if (st) setScrapTransactions(JSON.parse(st));
-    } catch (e) {
-      console.error("Error parsing gr_scrap_ledger:", e);
-    }
-
-    // 2. Retail/Custom Quote Ledger
-    try {
-      const rt = localStorage.getItem('gr_quote_ledger');
-      if (rt) {
-        setRingQuoteTransactions(JSON.parse(rt));
-      } else {
-        // Seed with custom demo 3-piece wedding set
-        const demoSession = getDemoQuoteSession();
-        let gT = 0;
-        let tD = 0;
-        demoSession.rings.forEach(r => {
-          const cost = calculateRingCost(r, DEFAULT_SETTINGS, { gold: 2350, silver: 30, platinum: 1050 }, 'retail', demoSession.overridePrices);
-          gT += cost;
-          const val = parseFloat(r.discount) || 0;
-          tD += r.discountType === '%' ? cost * (val / 100) : val;
-        });
-        const sub = Math.max(0, gT - tD - Number(demoSession.scrapCredit));
-        const finalInvoiceAmount = sub + (demoSession.applyTax ? sub * 0.12 : 0);
-        const demoTotal = `$${finalInvoiceAmount.toFixed(2)}`;
-
-        const demoTx: QuoteTransaction = {
-          id: demoSession.id,
-          date: new Date().toLocaleString(),
-          timestamp: Date.now(),
-          name: demoSession.cName,
-          phone: demoSession.cPhone,
-          summary: "Ring: 4.8g | Band: 3.5g | Men's: 7.2g",
-          total: demoTotal,
-          fullData: demoSession,
-          isWholesale: false
-        };
-
-        setRingQuoteTransactions([demoTx]);
-        localStorage.setItem('gr_quote_ledger', JSON.stringify([demoTx]));
-      }
-    } catch (e) {
-      console.error("Error parsing gr_quote_ledger:", e);
-    }
-
-    // 3. Wholesale Ledger
-    try {
-      const wt = localStorage.getItem('gr_wholesale_ledger');
-      if (wt) setWholesaleTransactions(JSON.parse(wt));
-    } catch (e) {
-      console.error("Error parsing gr_wholesale_ledger:", e);
-    }
-
-    // 4. API Keys
+    // 1. API Keys
     try {
       const k = localStorage.getItem('gr_gold_api_key');
       if (k) setGoldApiKey(k.trim());
@@ -236,43 +271,13 @@ export default function App() {
       console.error("Error parsing gr_gold_api_key:", e);
     }
 
-    // 5. Master Settings
-    try {
-      const s = localStorage.getItem('gr_master_settings');
-      if (s) {
-        const parsed = JSON.parse(s);
-        setSettings(prev => ({
-          ...prev,
-          ...parsed,
-          // ensure child objects are fully initialized to avoid missing attributes
-          wholesale: { ...prev.wholesale, ...(parsed.wholesale || {}) },
-          wholesaleProfiles: parsed.wholesaleProfiles || [],
-          centerStoneRates: { ...prev.centerStoneRates, ...(parsed.centerStoneRates || {}) },
-          centerStoneRawRates: { ...prev.centerStoneRawRates, ...(parsed.centerStoneRawRates || {}) },
-          cubanMultipliers: parsed.cubanMultipliers || prev.cubanMultipliers || [
-            { minWidth: 5, maxWidth: 7, multiplier: 1.8 },
-            { minWidth: 8, maxWidth: 10, multiplier: 1.6 },
-            { minWidth: 11, maxWidth: 13, multiplier: 1.5 },
-            { minWidth: 14, maxWidth: 24, multiplier: 1.4 }
-          ],
-          tennisMultipliers: parsed.tennisMultipliers || prev.tennisMultipliers || [
-            { minWidth: 1.0, maxWidth: 1.9, multiplier: 1.6 },
-            { minWidth: 2.0, maxWidth: 4.0, multiplier: 1.4 }
-          ],
-          tennisDiamondPricePerCt: parsed.tennisDiamondPricePerCt !== undefined ? parsed.tennisDiamondPricePerCt : (prev.tennisDiamondPricePerCt !== undefined ? prev.tennisDiamondPricePerCt : 600)
-        }));
-      }
-    } catch (e) {
-      console.error("Error parsing gr_master_settings:", e);
-    }
-
-    // Explicitly mark initialization loading complete
     isLoadedRef.current = true;
     setIsPersistenceLoaded(true);
   }, []);
 
   // Save settings explicitly to both local state and Firebase
   const handleSaveSettings = (newSettings: AppSettings) => {
+    lastLocalChangeTimeRef.current = Date.now();
     setSettings(newSettings);
     // Sync to cloud Firestore immediately on manual save/profile operations
     saveDocument('app_settings', 'master', newSettings);
@@ -343,40 +348,48 @@ export default function App() {
           safeSetLocalStorage('gr_wholesale_ledger', sorted);
         });
 
-        // 5. Set up real-time listener for Master App Settings (including Wholesale Client Profiles)
-        unsubSettings = listenCollection('app_settings', (docs) => {
-          if (!active) return;
-          const masterDoc = docs.find(d => d.id === 'master');
-          if (masterDoc) {
-            const cleanMasterDoc = { ...masterDoc };
-            delete cleanMasterDoc.id; // remove Firestore id prop
-            
-            const cloudSettingsStr = JSON.stringify(cleanMasterDoc);
-            lastCloudSettingsRef.current = cloudSettingsStr;
-            
-            setSettings(prev => {
-              const cloudProfiles = cleanMasterDoc.wholesaleProfiles || prev.wholesaleProfiles || [];
-              const merged = {
-                ...prev,
-                ...cleanMasterDoc,
-                wholesale: { ...prev.wholesale, ...(cleanMasterDoc.wholesale || {}) },
-                wholesaleProfiles: cloudProfiles,
-                centerStoneRates: { ...prev.centerStoneRates, ...(cleanMasterDoc.centerStoneRates || {}) },
-                centerStoneRawRates: { ...prev.centerStoneRawRates, ...(cleanMasterDoc.centerStoneRawRates || {}) },
-                cubanMultipliers: cleanMasterDoc.cubanMultipliers || prev.cubanMultipliers,
-                tennisMultipliers: cleanMasterDoc.tennisMultipliers || prev.tennisMultipliers,
-              };
-              
-              if (JSON.stringify(prev) === JSON.stringify(merged)) {
-                return prev;
-              }
-              return merged;
-            });
-          } else {
-            // master settings doc doesn't exist in the cloud yet, let's bootstrap/upload our local settings
-            saveDocument('app_settings', 'master', settings);
-          }
-        });
+         // 5. Set up real-time listener for Master App Settings (including Wholesale Client Profiles)
+         unsubSettings = listenCollection('app_settings', (docs) => {
+           if (!active) return;
+
+           // Protect active edits from being overwritten by incoming cloud sync
+           const timeSinceLocalChange = Date.now() - lastLocalChangeTimeRef.current;
+           if (timeSinceLocalChange < 2500) {
+             console.log("Ignoring cloud settings sync to protect recent local edits...");
+             return;
+           }
+
+           const masterDoc = docs.find(d => d.id === 'master');
+           if (masterDoc) {
+             const cleanMasterDoc = { ...masterDoc };
+             delete cleanMasterDoc.id; // remove Firestore id prop
+             
+             const cloudSettingsStr = JSON.stringify(cleanMasterDoc);
+             lastCloudSettingsRef.current = cloudSettingsStr;
+             
+             setSettings(prev => {
+               const cloudProfiles = cleanMasterDoc.wholesaleProfiles || prev.wholesaleProfiles || [];
+               const merged = {
+                 ...prev,
+                 ...cleanMasterDoc,
+                 wholesale: { ...prev.wholesale, ...(cleanMasterDoc.wholesale || {}) },
+                 wholesaleProfiles: cloudProfiles,
+                 centerStoneRates: { ...prev.centerStoneRates, ...(cleanMasterDoc.centerStoneRates || {}) },
+                 centerStoneRawRates: { ...prev.centerStoneRawRates, ...(cleanMasterDoc.centerStoneRawRates || {}) },
+                 cubanMultipliers: cleanMasterDoc.cubanMultipliers || prev.cubanMultipliers,
+                 tennisMultipliers: cleanMasterDoc.tennisMultipliers || prev.tennisMultipliers,
+               };
+               
+               if (JSON.stringify(prev) === JSON.stringify(merged)) {
+                 return prev;
+               }
+               return merged;
+             });
+           } else {
+             // master settings doc doesn't exist in the cloud yet, let's bootstrap/upload our local settings
+             saveDocument('app_settings', 'master', settings);
+           }
+         });
 
         setIsCloudSynced(true);
         console.log("Server synchronization initialized successfully.");
@@ -1117,7 +1130,7 @@ export default function App() {
 
         {/* ACTIVE MODULE CONTAINER */}
         <div className="min-h-[500px]">
-          {activeTab === 'scrap' && (
+          <div className={activeTab === 'scrap' ? "" : "hidden"}>
             <ScrapCalculator
               spotPrices={spotPrices}
               onUpdateSpotPrices={setSpotPrices}
@@ -1129,25 +1142,25 @@ export default function App() {
               onTriggerPrint={handleTriggerPrint}
               isIframe={isIframe}
             />
-          )}
+          </div>
 
-          {activeTab === 'spot' && (
+          <div className={activeTab === 'spot' ? "" : "hidden"}>
             <SpotPriceView
               spotPrices={spotPrices}
               onUpdateSpotPrices={setSpotPrices}
               syncStatus={syncStatus}
               onFetchLivePrices={fetchLivePrices}
             />
-          )}
+          </div>
 
-          {activeTab === 'cuban' && (
+          <div className={activeTab === 'cuban' ? "" : "hidden"}>
             <CubanBraceletBuilder
               spotPrices={spotPrices}
               settings={settings}
             />
-          )}
+          </div>
 
-          {activeTab === 'quote' && (
+          <div className={activeTab === 'quote' ? "" : "hidden"}>
             <QuoteCalculator
               session={retailSession}
               onChangeSession={setRetailSession}
@@ -1164,9 +1177,9 @@ export default function App() {
               onTriggerPrint={handleTriggerPrint}
               isIframe={isIframe}
             />
-          )}
+          </div>
 
-          {activeTab === 'wholesale' && (
+          <div className={activeTab === 'wholesale' ? "" : "hidden"}>
             <QuoteCalculator
               session={wholesaleSession}
               onChangeSession={setWholesaleSession}
@@ -1183,9 +1196,9 @@ export default function App() {
               onTriggerPrint={handleTriggerPrint}
               isIframe={isIframe}
             />
-          )}
+          </div>
 
-          {activeTab === 'ledger' && (
+          <div className={activeTab === 'ledger' ? "" : "hidden"}>
             <LedgerView
               scrapTransactions={scrapTransactions}
               ringQuoteTransactions={ringQuoteTransactions}
@@ -1198,9 +1211,9 @@ export default function App() {
               onTriggerPrint={handleTriggerPrint}
               isIframe={isIframe}
             />
-          )}
+          </div>
 
-          {activeTab === 'settings' && (
+          <div className={activeTab === 'settings' ? "" : "hidden"}>
             <SettingsView
               settings={settings}
               onSaveSettings={handleSaveSettings}
@@ -1210,8 +1223,9 @@ export default function App() {
               onClearHistory={handleClearHistory}
               spotPrices={spotPrices}
               onUpdateSpotPrices={setSpotPrices}
+              onNotifyLocalChange={() => { lastLocalChangeTimeRef.current = Date.now(); }}
             />
-          )}
+          </div>
         </div>
       </main>
 
