@@ -65,6 +65,31 @@ export default function SettingsView({
 
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
 
+  // 1. Sync settings prop into localSettings if they differ (background/cloud updates)
+  React.useEffect(() => {
+    const currentStr = JSON.stringify(localSettings);
+    const incomingStr = JSON.stringify(settings);
+    if (currentStr !== incomingStr) {
+      setLocalSettings(prev => ({
+        ...prev,
+        ...settings,
+        wholesaleProfiles: settings.wholesaleProfiles || [],
+      }));
+    }
+  }, [settings, localSettings]);
+
+  // 2. Propagate localSettings changes back to onSaveSettings automatically with a debounce
+  React.useEffect(() => {
+    const handler = setTimeout(() => {
+      onSaveSettings(localSettings);
+    }, 400);
+
+    return () => {
+      clearTimeout(handler);
+      onSaveSettings(localSettings);
+    };
+  }, [localSettings, onSaveSettings]);
+
   const currentWholesaleSettings = selectedProfileId
     ? (localSettings.wholesaleProfiles?.find(p => p.id === selectedProfileId)?.settings || localSettings.wholesale)
     : localSettings.wholesale;

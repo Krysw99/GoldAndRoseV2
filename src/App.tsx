@@ -62,7 +62,7 @@ export default function App() {
   const [spotPrices, setSpotPrices] = useState({ gold: 2350, silver: 30, platinum: 1050 });
   const [lastUpdated, setLastUpdated] = useState('Manual Default');
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const [goldApiKey, setGoldApiKey] = useState('goldapi-6b3f1e7fd4f618448db8a51de9fd9511-io');
+  const [goldApiKey, setGoldApiKey] = useState('');
 
   // Quick Calculator state
   const [quickPurity, setQuickPurity] = useState('gold_14');
@@ -231,7 +231,7 @@ export default function App() {
     // 4. API Keys
     try {
       const k = localStorage.getItem('gr_gold_api_key');
-      if (k) setGoldApiKey(k);
+      if (k) setGoldApiKey(k.trim());
     } catch (e) {
       console.error("Error parsing gr_gold_api_key:", e);
     }
@@ -396,7 +396,8 @@ export default function App() {
 
   // Fetch GoldAPI CAD Spot Indices
   const fetchLivePrices = async () => {
-    if (!goldApiKey || goldApiKey === 'INSERT_YOUR_NEW_KEY_HERE') {
+    const trimmedKey = goldApiKey ? goldApiKey.trim() : '';
+    if (!trimmedKey || trimmedKey === 'INSERT_YOUR_NEW_KEY_HERE') {
       alert("Please configure a valid GoldAPI.io Access Token in the Master Settings panel first.");
       return;
     }
@@ -404,29 +405,70 @@ export default function App() {
     setSyncStatus("Syncing...");
     try {
       const headers = {
-        'x-access-token': goldApiKey,
+        'x-access-token': trimmedKey,
         'Content-Type': 'application/json'
       };
 
       const results = await Promise.all(
-        ['XAU', 'XAG', 'XPT'].map(metal =>
-          fetch(`https://www.goldapi.io/api/${metal}/CAD`, { headers }).then(r => r.json())
-        )
+        ['XAU', 'XAG', 'XPT'].map(async (metal) => {
+          try {
+            const res = await fetch(`https://www.goldapi.io/api/${metal}/CAD`, { headers });
+            const data = await res.json();
+            return { metal, status: res.status, data };
+          } catch (e: any) {
+            return { metal, error: e.message || 'Network request failed' };
+          }
+        })
       );
 
+      const xau = results.find(r => r.metal === 'XAU');
+      const xag = results.find(r => r.metal === 'XAG');
+      const xpt = results.find(r => r.metal === 'XPT');
+
+      const priceGold = xau?.data?.price;
+      const priceSilver = xag?.data?.price;
+      const pricePlatinum = xpt?.data?.price;
+
       // Verify that values are returned and not error codes
-      if (results[0]?.price && results[1]?.price && results[2]?.price) {
+      if (priceGold && priceSilver && pricePlatinum) {
         const spot = {
-          gold: results[0].price,
-          silver: results[1].price,
-          platinum: results[2].price
+          gold: priceGold,
+          silver: priceSilver,
+          platinum: pricePlatinum
         };
         setSpotPrices(spot);
         const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         setLastUpdated(timeStr);
         setSyncStatus(`Synced at ${timeStr}`);
       } else {
-        throw new Error("Invalid response keys from GoldAPI. Check your quota/token.");
+        // Build detailed error report from responses
+        const errors: string[] = [];
+        results.forEach(res => {
+          const metalLabel = res.metal === 'XAU' ? 'Gold' : res.metal === 'XAG' ? 'Silver' : 'Platinum';
+          if ('error' in res) {
+            errors.push(`${metalLabel}: ${res.error}`);
+          } else {
+            const d = res.data;
+            if (!d) {
+              errors.push(`${metalLabel}: Received empty response`);
+            } else if (d.error) {
+              errors.push(`${metalLabel}: ${d.error}`);
+            } else if (d.message) {
+              errors.push(`${metalLabel}: ${d.message}`);
+            } else if (d.error_code) {
+              errors.push(`${metalLabel}: ${d.error_code}`);
+            } else if (!d.price) {
+              // Sometimes APIs return text like "Unauthenticated" as string if the content-type is wrong, or standard error objects
+              const keys = typeof d === 'object' && d !== null ? Object.keys(d).join(', ') : 'non-object';
+              errors.push(`${metalLabel}: Price missing. Fields returned: [${keys}]`);
+            }
+          }
+        });
+
+        const detailedMsg = errors.length > 0 
+          ? errors.join('\n') 
+          : "Unknown error. Price keys not returned by GoldAPI.";
+        throw new Error(`GoldAPI returned validation/quota issues:\n\n${detailedMsg}`);
       }
     } catch (err: any) {
       setSyncStatus("Error");
@@ -1161,7 +1203,7 @@ export default function App() {
               settings={settings}
               onSaveSettings={setSettings}
               goldApiKey={goldApiKey}
-              onSaveApiKey={(key) => { setGoldApiKey(key); localStorage.setItem('gr_gold_api_key', key); }}
+              onSaveApiKey={(key) => { const trimmed = key.trim(); setGoldApiKey(trimmed); localStorage.setItem('gr_gold_api_key', trimmed); }}
               onExportCsv={handleExportCsv}
               onClearHistory={handleClearHistory}
               spotPrices={spotPrices}

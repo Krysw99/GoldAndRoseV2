@@ -947,17 +947,18 @@ export default function QuoteCalculator({
       let mCarats = 0;
       r.melee.forEach(m => {
         const q = Number(m.qty) || 0;
+        if (q <= 0) return;
         const rate = Number(w.meleeRates?.[m.size] ?? 400);
         mQ += q;
         const carats = q * Number(m.carat);
         mCarats += carats;
         mC += carats * rate;
+        stoneSupplyDetails.push(`${ringLabel}: Melee ${m.size}mm (${carats.toFixed(2)}ct) @ $${rate.toFixed(2)}/ct`);
       });
       if (mQ > 0) {
         settingLabor += mQ * Number(w.settingMelee);
         settingLaborDetails.push(`${ringLabel}: ${mQ}x Melee setting x $${Number(w.settingMelee).toFixed(2)}`);
         stoneSupplyCost += mC;
-        stoneSupplyDetails.push(`${ringLabel}: ${mCarats.toFixed(2)}ct Melee x wholesale rate`);
       }
 
       // supplied fancy
@@ -965,21 +966,22 @@ export default function QuoteCalculator({
       let fC = 0;
       let fCarats = 0;
       r.fancy.forEach(f => {
+        const q = Number(f.qty) || 0;
+        if (q <= 0) return;
         const aF = FANCY_SHAPES[f.shape] || [];
         const fd = aF[f.sizeIdx] || { carat: 0, label: '' };
-        const q = Number(f.qty) || 0;
         const key = fd.label ? `${f.shape}-${fd.label}` : '';
         const rate = Number((key && w.fancyRates?.[key]) ?? w.fancyRates?.[f.shape] ?? 500);
         fQ += q;
         const carats = q * Number(fd.carat);
         fCarats += carats;
         fC += carats * rate;
+        stoneSupplyDetails.push(`${ringLabel}: Fancy ${f.shape} ${fd.label} (${carats.toFixed(2)}ct) @ $${rate.toFixed(2)}/ct`);
       });
       if (fQ > 0) {
         settingLabor += fQ * Number(w.settingFancy);
         settingLaborDetails.push(`${ringLabel}: ${fQ}x Fancy setting x $${Number(w.settingFancy).toFixed(2)}`);
         stoneSupplyCost += fC;
-        stoneSupplyDetails.push(`${ringLabel}: ${fCarats.toFixed(2)}ct Fancy x wholesale rate`);
       }
 
       // client stones setting
@@ -3959,6 +3961,7 @@ export default function QuoteCalculator({
                           const discVal = parseFloat(r.discount) || 0;
                           const discDeduction = r.discountType === '%' ? cost * (discVal / 100) : discVal;
                           const finalPieceCost = Math.max(0, cost - discDeduction);
+                          const w = (session.wholesaleProfileId && settings.wholesaleProfiles?.find(p => p.id === session.wholesaleProfileId)?.settings) || settings.wholesale;
 
                           return (
                             <tr key={r.id} className="hover:bg-brand-50/50 transition-colors">
@@ -3971,34 +3974,77 @@ export default function QuoteCalculator({
                               </td>
                               <td className="p-3 space-y-1 print:p-2 print:space-y-0.5">
                                 {r.centerStones && r.centerStones.length > 0 ? (
-                                  r.centerStones.map((cs, csIdx) => cs.carats && (
-                                    <span key={csIdx} className="block text-[11px] print:text-[10px]">
-                                      Center #{csIdx + 1}: {cs.carats}ct {cs.shape} {cs.type} ({cs.origin})
-                                    </span>
-                                  ))
+                                  r.centerStones.map((cs, csIdx) => {
+                                    if (!cs.carats) return null;
+                                    const rate = isWholesale ? (settings.centerStoneRates[cs.type]?.[cs.origin] ?? 1000) : null;
+                                    return (
+                                      <span key={csIdx} className="block text-[11px] print:text-[10px]">
+                                        Center #{csIdx + 1}: {cs.carats}ct {cs.shape} {cs.type} ({cs.origin})
+                                        {rate !== null && <span className="text-emerald-700 font-extrabold ml-1">@ ${rate.toFixed(2)}/ct</span>}
+                                      </span>
+                                    );
+                                  })
                                 ) : (
                                   <>
-                                    {r.centerStone?.carats && (
-                                      <span className="block text-[11px] print:text-[10px]">
-                                        Center: {r.centerStone.carats}ct {r.centerStone.shape} {r.centerStone.type} ({r.centerStone.origin})
+                                    {r.centerStone?.carats && (() => {
+                                      const rate = isWholesale ? (settings.centerStoneRates[r.centerStone.type]?.[r.centerStone.origin] ?? 1000) : null;
+                                      return (
+                                        <span className="block text-[11px] print:text-[10px]">
+                                          Center: {r.centerStone.carats}ct {r.centerStone.shape} {r.centerStone.type} ({r.centerStone.origin})
+                                          {rate !== null && <span className="text-emerald-700 font-extrabold ml-1">@ ${rate.toFixed(2)}/ct</span>}
+                                        </span>
+                                      );
+                                    })()}
+                                    {r.centerStone2?.carats && (() => {
+                                      const rate = isWholesale ? (settings.centerStoneRates[r.centerStone2.type]?.[r.centerStone2.origin] ?? 1000) : null;
+                                      return (
+                                        <span className="block text-[11px] print:text-[10px]">
+                                          Stone 2: {r.centerStone2.carats}ct {r.centerStone2.shape} {r.centerStone2.type} ({r.centerStone2.origin})
+                                          {rate !== null && <span className="text-emerald-700 font-extrabold ml-1">@ ${rate.toFixed(2)}/ct</span>}
+                                        </span>
+                                      );
+                                    })()}
+                                  </>
+                                )}
+                                {!isWholesale ? (
+                                  <>
+                                    {r.melee.some(m => m.qty) && (
+                                      <span className="block text-[10px] text-brand-600 font-mono print:text-[9px]">
+                                        Melee: {r.melee.reduce((acc, m) => acc + (parseInt(m.qty) || 0), 0)} st ({r.melee.reduce((acc, m) => acc + ((parseInt(m.qty) || 0) * (parseFloat(m.carat) || 0)), 0).toFixed(2)}ctw)
                                       </span>
                                     )}
-                                    {r.centerStone2?.carats && (
-                                      <span className="block text-[11px] print:text-[10px]">
-                                        Stone 2: {r.centerStone2.carats}ct {r.centerStone2.shape} {r.centerStone2.type} ({r.centerStone2.origin})
+                                    {r.fancy.some(f => f.qty) && (
+                                      <span className="block text-[10px] text-brand-600 font-mono print:text-[9px]">
+                                        Fancy: {r.fancy.reduce((acc, f) => acc + (parseInt(f.qty) || 0), 0)} st
                                       </span>
                                     )}
                                   </>
-                                )}
-                                {r.melee.some(m => m.qty) && (
-                                  <span className="block text-[10px] text-brand-600 font-mono print:text-[9px]">
-                                    Melee: {r.melee.reduce((acc, m) => acc + (parseInt(m.qty) || 0), 0)} st ({r.melee.reduce((acc, m) => acc + ((parseInt(m.qty) || 0) * (parseFloat(m.carat) || 0)), 0).toFixed(2)}ctw)
-                                  </span>
-                                )}
-                                {r.fancy.some(f => f.qty) && (
-                                  <span className="block text-[10px] text-brand-600 font-mono print:text-[9px]">
-                                    Fancy: {r.fancy.reduce((acc, f) => acc + (parseInt(f.qty) || 0), 0)} st
-                                  </span>
+                                ) : (
+                                  <>
+                                    {r.melee.filter(m => parseInt(m.qty) > 0).map((m, mIdx) => {
+                                      const count = parseInt(m.qty) || 0;
+                                      const totalCarats = count * (parseFloat(m.carat) || 0);
+                                      const rate = w.meleeRates?.[m.size] ?? 400;
+                                      return (
+                                        <span key={`m-inv-${mIdx}`} className="block text-[10px] text-brand-600 font-mono print:text-[9px]">
+                                          Melee {m.size}mm: {count} st ({totalCarats.toFixed(2)}ctw) <span className="text-emerald-700 font-extrabold">@ ${rate.toFixed(2)}/ct</span>
+                                        </span>
+                                      );
+                                    })}
+                                    {r.fancy.filter(f => parseInt(f.qty) > 0).map((f, fIdx) => {
+                                      const count = parseInt(f.qty) || 0;
+                                      const aF = FANCY_SHAPES[f.shape] || [];
+                                      const fd = aF[f.sizeIdx] || { carat: 0, label: '' };
+                                      const totalCarats = count * (fd.carat || 0);
+                                      const key = fd.label ? `${f.shape}-${fd.label}` : '';
+                                      const rate = Number((key && w.fancyRates?.[key]) ?? w.fancyRates?.[f.shape] ?? 500);
+                                      return (
+                                        <span key={`f-inv-${fIdx}`} className="block text-[10px] text-brand-600 font-mono print:text-[9px]">
+                                          Fancy {f.shape} {fd.label}: {count} st ({totalCarats.toFixed(2)}ctw) <span className="text-emerald-700 font-extrabold">@ ${rate.toFixed(2)}/ct</span>
+                                        </span>
+                                      );
+                                    })}
+                                  </>
                                 )}
                               </td>
                               <td className="p-3 space-y-1 print:p-2 print:space-y-0.5">
