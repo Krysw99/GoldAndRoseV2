@@ -104,6 +104,26 @@ export default function SettingsView({
     onNotifyLocalChange?.();
   }, [localSettings, onNotifyLocalChange]);
 
+  // 1.2 Auto-save changes to Firebase with a debounce of 1.5 seconds
+  React.useEffect(() => {
+    if (isFirstRenderRef.current) {
+      return; // Skip first render
+    }
+    
+    // If local settings match prop settings exactly, no need to auto-save!
+    if (JSON.stringify(localSettings) === JSON.stringify(settings)) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const sanitized = sanitizeNumbers(localSettings);
+      console.log("Auto-saving settings changes to Firebase...", sanitized);
+      onSaveSettings(sanitized);
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [localSettings, settings, onSaveSettings]);
+
 
 
   const currentWholesaleSettings = selectedProfileId
