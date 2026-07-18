@@ -30,6 +30,7 @@ interface CubanEstimate {
   totalCostMin: number;
   totalCostMax: number;
   timestamp: string;
+  syncPending?: boolean;
 }
 
 interface CubanBraceletBuilderProps {

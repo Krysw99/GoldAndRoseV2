@@ -165,6 +165,10 @@ export async function saveDocument(collectionName: string, id: string, data: any
     const docRef = doc(db, collectionName, id);
     // Sanitize any undefined properties before uploading to Firestore
     const sanitized = JSON.parse(JSON.stringify(data));
+    // Remove syncPending from the cloud-bound payload
+    if (sanitized && typeof sanitized === 'object') {
+      delete sanitized.syncPending;
+    }
     // Compress heavy base64 image attachments to avoid exceeding Firestore limits
     const compressed = await compressPayload(sanitized);
     await setDoc(docRef, compressed, { merge: true });
@@ -223,6 +227,9 @@ export async function syncLocalToCloud(collectionName: string, localItems: any[]
       if (item && item.id && !cloudIds.has(item.id)) {
         const docRef = doc(db, collectionName, item.id);
         const sanitized = JSON.parse(JSON.stringify(item));
+        if (sanitized && typeof sanitized === 'object') {
+          delete sanitized.syncPending;
+        }
         const compressed = await compressPayload(sanitized);
         batch.set(docRef, compressed);
         count++;

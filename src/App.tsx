@@ -396,10 +396,14 @@ export default function App() {
           const fifteenMinutes = 15 * 60 * 1000;
           for (const localItem of localItems) {
             if (localItem && localItem.id && !cloudIds.has(localItem.id)) {
-              const localTime = localItem.timestamp || (localItem.date ? safeParseDate(localItem.date) : Date.now());
-              const ageMs = Date.now() - localTime;
-              if (ageMs < fifteenMinutes) {
+              if (localItem.syncPending) {
                 merged.push(localItem);
+              } else {
+                const localTime = localItem.timestamp || (localItem.date ? safeParseDate(localItem.date) : Date.now());
+                const ageMs = Date.now() - localTime;
+                if (ageMs < fifteenMinutes) {
+                  merged.push(localItem);
+                }
               }
             }
           }
@@ -428,10 +432,14 @@ export default function App() {
           const fifteenMinutes = 15 * 60 * 1000;
           for (const localItem of localItems) {
             if (localItem && localItem.id && !cloudIds.has(localItem.id)) {
-              const localTime = localItem.timestamp || (localItem.date ? safeParseDate(localItem.date) : Date.now());
-              const ageMs = Date.now() - localTime;
-              if (ageMs < fifteenMinutes) {
+              if (localItem.syncPending) {
                 merged.push(localItem);
+              } else {
+                const localTime = localItem.timestamp || (localItem.date ? safeParseDate(localItem.date) : Date.now());
+                const ageMs = Date.now() - localTime;
+                if (ageMs < fifteenMinutes) {
+                  merged.push(localItem);
+                }
               }
             }
           }
@@ -460,10 +468,14 @@ export default function App() {
           const fifteenMinutes = 15 * 60 * 1000;
           for (const localItem of localItems) {
             if (localItem && localItem.id && !cloudIds.has(localItem.id)) {
-              const localTime = localItem.timestamp || (localItem.date ? safeParseDate(localItem.date) : Date.now());
-              const ageMs = Date.now() - localTime;
-              if (ageMs < fifteenMinutes) {
+              if (localItem.syncPending) {
                 merged.push(localItem);
+              } else {
+                const localTime = localItem.timestamp || (localItem.date ? safeParseDate(localItem.date) : Date.now());
+                const ageMs = Date.now() - localTime;
+                if (ageMs < fifteenMinutes) {
+                  merged.push(localItem);
+                }
               }
             }
           }
@@ -492,10 +504,14 @@ export default function App() {
           const fifteenMinutes = 15 * 60 * 1000;
           for (const localItem of localItems) {
             if (localItem && localItem.id && !cloudIds.has(localItem.id)) {
-              const localTime = localItem.timestamp ? new Date(localItem.timestamp).getTime() : Date.now();
-              const ageMs = Date.now() - localTime;
-              if (ageMs < fifteenMinutes) {
+              if (localItem.syncPending) {
                 merged.push(localItem);
+              } else {
+                const localTime = localItem.timestamp ? new Date(localItem.timestamp).getTime() : Date.now();
+                const ageMs = Date.now() - localTime;
+                if (ageMs < fifteenMinutes) {
+                  merged.push(localItem);
+                }
               }
             }
           }
@@ -714,7 +730,8 @@ setIsCloudSynced(true);
         summary: logStr,
         total: finalTotal,
         image: data.image,
-        signature: data.signature
+        signature: data.signature,
+        syncPending: true
       };
 
       setScrapTransactions(prev => {
@@ -751,7 +768,8 @@ setIsCloudSynced(true);
         summary: logStr,
         total: finalTotal,
         image: data.image,
-        signature: data.signature
+        signature: data.signature,
+        syncPending: true
       };
 
       setScrapTransactions(prev => {
@@ -833,7 +851,8 @@ setIsCloudSynced(true);
       summary: sum,
       total: `$${finalInvoiceAmount.toFixed(2)}`,
       fullData: JSON.parse(JSON.stringify(activeSession)),
-      isWholesale
+      isWholesale,
+      syncPending: true
     };
 
     if (isWholesale) {
@@ -1361,11 +1380,12 @@ setIsCloudSynced(true);
               settings={settings}
               estimates={cubanEstimates}
               onSaveEstimate={async (newEst) => {
-                const updated = [newEst, ...cubanEstimates.filter(e => e.id !== newEst.id)];
+                const estWithSync = { ...newEst, syncPending: true };
+                const updated = [estWithSync, ...cubanEstimates.filter(e => e.id !== newEst.id)];
                 setCubanEstimates(updated);
                 safeSetLocalStorage('gr_cuban_estimates', updated);
                 try {
-                  await saveDocument('cuban_estimates', newEst.id, newEst);
+                  await saveDocument('cuban_estimates', estWithSync.id, estWithSync);
                   playClickSound('success');
                   showToast("Cuban estimate saved and synced to cloud ledger!", "success");
                 } catch (err) {

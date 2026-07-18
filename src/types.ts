@@ -164,6 +164,7 @@ export interface ScrapTransaction {
   total: string;
   image: string | null;
   signature?: string | null;
+  syncPending?: boolean;
 }
 
 export interface QuoteTransaction {
@@ -176,6 +177,7 @@ export interface QuoteTransaction {
   total: string;
   fullData: QuoteSession;
   isWholesale: boolean;
+  syncPending?: boolean;
 }
 
 export interface CenterStoneRates {
