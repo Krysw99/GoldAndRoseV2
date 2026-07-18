@@ -241,7 +241,7 @@ export default function SettingsView({
     }
 
     if (obj === '') {
-      return 0;
+      return undefined;
     }
     if (Array.isArray(obj)) {
       return obj.map(item => sanitizeNumbers(item));
@@ -249,7 +249,10 @@ export default function SettingsView({
     if (obj !== null && typeof obj === 'object') {
       const res: any = {};
       for (const k of Object.keys(obj)) {
-        res[k] = sanitizeNumbers(obj[k], k);
+        const val = sanitizeNumbers(obj[k], k);
+        if (val !== undefined) {
+          res[k] = val;
+        }
       }
       return res;
     }
@@ -258,26 +261,33 @@ export default function SettingsView({
       // Check if string is a valid number representation (integer or decimal)
       if (/^-?\d*\.?\d+$/.test(trimmed)) {
         const parsed = parseFloat(trimmed);
-        return isNaN(parsed) ? 0 : parsed;
+        return isNaN(parsed) ? undefined : parsed;
       }
     }
     return obj;
   };
 
   const handleSaveAll = () => {
-    // Apply manual spot rate updates
-    const g = parseFloat(manualGold) || spotPrices.gold;
-    const s = parseFloat(manualSilver) || spotPrices.silver;
-    const p = parseFloat(manualPlatinum) || spotPrices.platinum;
-    onUpdateSpotPrices({ gold: g, silver: s, platinum: p });
+    try {
+      // Apply manual spot rate updates
+      const g = parseFloat(manualGold) || spotPrices.gold;
+      const s = parseFloat(manualSilver) || spotPrices.silver;
+      const p = parseFloat(manualPlatinum) || spotPrices.platinum;
+      onUpdateSpotPrices({ gold: g, silver: s, platinum: p });
 
-    // Save Gold API Key
-    onSaveApiKey(apiKey);
+      // Save Gold API Key
+      onSaveApiKey(apiKey);
 
-    // Save Master Settings with deep cleaning of temporary empty string values
-    onSaveSettings(sanitizeNumbers(localSettings));
+      // Save Master Settings with deep cleaning of temporary empty string values
+      const sanitized = sanitizeNumbers(localSettings);
+      console.log("Saving Master Settings:", sanitized);
+      onSaveSettings(sanitized);
 
-    alert("Master parameters saved successfully and applied globally!");
+      alert("Master parameters saved successfully and applied globally!");
+    } catch (error) {
+      console.error("Error in handleSaveAll:", error);
+      alert("Failed to save changes. Please try again.");
+    }
   };
 
   const handleTopLevelSetting = (field: keyof AppSettings, valueStr: string) => {

@@ -355,11 +355,12 @@ export default function App() {
             lastCloudSettingsRef.current = cloudSettingsStr;
             
             setSettings(prev => {
+              const cloudProfiles = cleanMasterDoc.wholesaleProfiles || prev.wholesaleProfiles || [];
               const merged = {
                 ...prev,
                 ...cleanMasterDoc,
                 wholesale: { ...prev.wholesale, ...(cleanMasterDoc.wholesale || {}) },
-                wholesaleProfiles: cleanMasterDoc.wholesaleProfiles || [],
+                wholesaleProfiles: cloudProfiles,
                 centerStoneRates: { ...prev.centerStoneRates, ...(cleanMasterDoc.centerStoneRates || {}) },
                 centerStoneRawRates: { ...prev.centerStoneRawRates, ...(cleanMasterDoc.centerStoneRawRates || {}) },
                 cubanMultipliers: cleanMasterDoc.cubanMultipliers || prev.cubanMultipliers,
