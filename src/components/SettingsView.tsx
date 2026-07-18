@@ -239,19 +239,37 @@ export default function SettingsView({
     reader.readAsText(file);
   };
 
-  const sanitizeNumbers = (obj: any): any => {
+  const sanitizeNumbers = (obj: any, key?: string): any => {
+    // If the key is a known string field, don't touch it
+    const stringFields = [
+      'id', 'name', 'storeName', 'storeSubName', 'storeAddress', 'storeContact', 
+      'wixStoreUrl', 'wixCartSlug', 'wixIntegrationMode', 'wixAccessToken', 
+      'wixProductId', 'wixWebhookUrl'
+    ];
+    if (key && stringFields.includes(key)) {
+      return obj;
+    }
+
     if (obj === '') {
       return 0;
     }
     if (Array.isArray(obj)) {
-      return obj.map(sanitizeNumbers);
+      return obj.map(item => sanitizeNumbers(item));
     }
     if (obj !== null && typeof obj === 'object') {
       const res: any = {};
-      for (const key of Object.keys(obj)) {
-        res[key] = sanitizeNumbers(obj[key]);
+      for (const k of Object.keys(obj)) {
+        res[k] = sanitizeNumbers(obj[k], k);
       }
       return res;
+    }
+    if (typeof obj === 'string') {
+      const trimmed = obj.trim();
+      // Check if string is a valid number representation (integer or decimal)
+      if (/^-?\d*\.?\d+$/.test(trimmed)) {
+        const parsed = parseFloat(trimmed);
+        return isNaN(parsed) ? 0 : parsed;
+      }
     }
     return obj;
   };
@@ -273,15 +291,13 @@ export default function SettingsView({
   };
 
   const handleTopLevelSetting = (field: keyof AppSettings, valueStr: string) => {
-    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     setLocalSettings(prev => ({
       ...prev,
-      [field]: value
+      [field]: valueStr
     }));
   };
 
   const handleNestedSetting = (section: keyof AppSettings, field: string, valueStr: any) => {
-    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     setLocalSettings(prev => {
       const target = prev[section];
       if (typeof target === 'object' && target !== null) {
@@ -289,7 +305,7 @@ export default function SettingsView({
           ...prev,
           [section]: {
             ...target,
-            [field]: value
+            [field]: valueStr
           }
         };
       }
@@ -298,7 +314,6 @@ export default function SettingsView({
   };
 
   const handleDoubleNestedSetting = (section: 'centerStoneRates' | 'centerStoneRawRates', stoneType: string, origin: 'Natural' | 'Lab', valueStr: any) => {
-    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     setLocalSettings(prev => {
       const rates = prev[section];
       return {
@@ -307,7 +322,7 @@ export default function SettingsView({
           ...rates,
           [stoneType]: {
             ...rates[stoneType],
-            [origin]: value
+            [origin]: valueStr
           }
         }
       };
@@ -315,13 +330,12 @@ export default function SettingsView({
   };
 
   const handleWholesaleSetting = (field: string, valueStr: any) => {
-    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     if (selectedProfileId) {
       setLocalSettings(prev => ({
         ...prev,
         wholesaleProfiles: (prev.wholesaleProfiles || []).map(p =>
           p.id === selectedProfileId
-            ? { ...p, settings: { ...p.settings, [field]: value } }
+            ? { ...p, settings: { ...p.settings, [field]: valueStr } }
             : p
         )
       }));
@@ -330,17 +344,16 @@ export default function SettingsView({
         ...prev,
         wholesale: {
           ...prev.wholesale,
-          [field]: value
+          [field]: valueStr
         }
       }));
     }
   };
 
   const handleRepairSetting = (field: keyof RepairPricingSettings, valueStr: any) => {
-    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     const updatedPricing = {
       ...currentRepairPricing,
-      [field]: value
+      [field]: valueStr
     };
 
     if (selectedProfileId) {
@@ -370,7 +383,6 @@ export default function SettingsView({
   };
 
   const handleWholesaleMeleeRate = (size: string, valueStr: any) => {
-    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     if (selectedProfileId) {
       setLocalSettings(prev => ({
         ...prev,
@@ -380,7 +392,7 @@ export default function SettingsView({
                 ...p,
                 settings: {
                   ...p.settings,
-                  meleeRates: { ...(p.settings.meleeRates || {}), [size]: value }
+                  meleeRates: { ...(p.settings.meleeRates || {}), [size]: valueStr }
                 }
               }
             : p
@@ -393,7 +405,7 @@ export default function SettingsView({
           ...prev.wholesale,
           meleeRates: {
             ...(prev.wholesale.meleeRates || {}),
-            [size]: value
+            [size]: valueStr
           }
         }
       }));
@@ -401,7 +413,6 @@ export default function SettingsView({
   };
 
   const handleWholesaleFancyRate = (key: string, valueStr: any) => {
-    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     if (selectedProfileId) {
       setLocalSettings(prev => ({
         ...prev,
@@ -411,7 +422,7 @@ export default function SettingsView({
                 ...p,
                 settings: {
                   ...p.settings,
-                  fancyRates: { ...(p.settings.fancyRates || {}), [key]: value }
+                  fancyRates: { ...(p.settings.fancyRates || {}), [key]: valueStr }
                 }
               }
             : p
@@ -424,7 +435,7 @@ export default function SettingsView({
           ...prev.wholesale,
           fancyRates: {
             ...(prev.wholesale.fancyRates || {}),
-            [key]: value
+            [key]: valueStr
           }
         }
       }));
@@ -432,34 +443,31 @@ export default function SettingsView({
   };
 
   const handleRawMeleeRate = (size: string, valueStr: any) => {
-    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     setLocalSettings(prev => ({
       ...prev,
       rawMeleeRates: {
         ...(prev.rawMeleeRates || {}),
-        [size]: value
+        [size]: valueStr
       }
     }));
   };
 
   const handleRawFancyRate = (key: string, valueStr: any) => {
-    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     setLocalSettings(prev => ({
       ...prev,
       rawFancyRates: {
         ...(prev.rawFancyRates || {}),
-        [key]: value
+        [key]: valueStr
       }
     }));
   };
 
   const handleUpdateCubanMultiplier = (index: number, field: 'minWidth' | 'maxWidth' | 'multiplier', valueStr: any) => {
-    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     setLocalSettings(prev => {
       const updated = [...(prev.cubanMultipliers || [])];
       updated[index] = {
         ...updated[index],
-        [field]: value as any
+        [field]: valueStr
       };
       return {
         ...prev,
@@ -490,12 +498,11 @@ export default function SettingsView({
   };
 
   const handleUpdateTennisMultiplier = (index: number, field: 'minWidth' | 'maxWidth' | 'multiplier', valueStr: any) => {
-    const value = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
     setLocalSettings(prev => {
       const updated = [...(prev.tennisMultipliers || [])];
       updated[index] = {
         ...updated[index],
-        [field]: value as any
+        [field]: valueStr
       };
       return {
         ...prev,
