@@ -271,17 +271,18 @@ export default function App() {
     setIsPersistenceLoaded(true);
   }, []);
 
-  // Persist master settings on changes ONLY after loading has successfully finished!
+  // Save settings explicitly to both local state and Firebase
+  const handleSaveSettings = (newSettings: AppSettings) => {
+    setSettings(newSettings);
+    // Sync to cloud Firestore immediately on manual save/profile operations
+    saveDocument('app_settings', 'master', newSettings);
+  };
+
+  // Persist master settings to localStorage on changes
   useEffect(() => {
     if (isLoadedRef.current) {
       const currentStr = JSON.stringify(settings);
       localStorage.setItem('gr_master_settings', currentStr);
-      
-      // Save to Firebase too, but only if it's different from what we last pulled from the cloud
-      if (currentStr !== lastCloudSettingsRef.current) {
-        lastCloudSettingsRef.current = currentStr;
-        saveDocument('app_settings', 'master', settings);
-      }
     }
   }, [settings]);
 
@@ -1201,7 +1202,7 @@ export default function App() {
           {activeTab === 'settings' && (
             <SettingsView
               settings={settings}
-              onSaveSettings={setSettings}
+              onSaveSettings={handleSaveSettings}
               goldApiKey={goldApiKey}
               onSaveApiKey={(key) => { const trimmed = key.trim(); setGoldApiKey(trimmed); localStorage.setItem('gr_gold_api_key', trimmed); }}
               onExportCsv={handleExportCsv}

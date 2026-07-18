@@ -65,31 +65,29 @@ export default function SettingsView({
 
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
 
-  // 1. Sync settings prop into localSettings if they differ (background/cloud updates)
-  const lastSeenSettingsRef = React.useRef(settings);
+  // 1. Sync settings prop into localSettings. To prevent cursor jumping and typing glitching,
+  // we do not overwrite localSettings if the user has unsaved local edits (isDirty),
+  // except to merge changes to the list of client profiles.
   React.useEffect(() => {
-    const parentChanged = JSON.stringify(lastSeenSettingsRef.current) !== JSON.stringify(settings);
-    if (parentChanged) {
-      lastSeenSettingsRef.current = settings;
-      setLocalSettings(prev => ({
-        ...prev,
+    const isDirty = JSON.stringify(localSettings) !== JSON.stringify(settings);
+    if (!isDirty) {
+      setLocalSettings({
         ...settings,
         wholesaleProfiles: settings.wholesaleProfiles || [],
-      }));
+      });
+    } else {
+      const localProfilesStr = JSON.stringify(localSettings.wholesaleProfiles || []);
+      const parentProfilesStr = JSON.stringify(settings.wholesaleProfiles || []);
+      if (localProfilesStr !== parentProfilesStr) {
+        setLocalSettings(prev => ({
+          ...prev,
+          wholesaleProfiles: settings.wholesaleProfiles || [],
+        }));
+      }
     }
-  }, [settings]);
+  }, [settings, localSettings]);
 
-  // 2. Propagate localSettings changes back to onSaveSettings automatically with a debounce
-  React.useEffect(() => {
-    const handler = setTimeout(() => {
-      onSaveSettings(localSettings);
-    }, 400);
 
-    return () => {
-      clearTimeout(handler);
-      onSaveSettings(localSettings);
-    };
-  }, [localSettings, onSaveSettings]);
 
   const currentWholesaleSettings = selectedProfileId
     ? (localSettings.wholesaleProfiles?.find(p => p.id === selectedProfileId)?.settings || localSettings.wholesale)
@@ -134,11 +132,14 @@ export default function SettingsView({
       settings: JSON.parse(JSON.stringify(currentWholesaleSettings))
     };
     
-    setLocalSettings(prev => ({
-      ...prev,
-      wholesaleProfiles: [...(prev.wholesaleProfiles || []), newProfile]
-    }));
+    const updatedSettings: AppSettings = {
+      ...localSettings,
+      wholesaleProfiles: [...(localSettings.wholesaleProfiles || []), newProfile]
+    };
+    
+    setLocalSettings(updatedSettings);
     setSelectedProfileId(newProfile.id);
+    onSaveSettings(updatedSettings);
   };
 
   const handleRenameProfile = () => {
@@ -149,12 +150,15 @@ export default function SettingsView({
     const name = prompt("Enter a new name for this wholesale client profile:", profile.name);
     if (!name || name.trim() === '') return;
     
-    setLocalSettings(prev => ({
-      ...prev,
-      wholesaleProfiles: (prev.wholesaleProfiles || []).map(p =>
+    const updatedSettings: AppSettings = {
+      ...localSettings,
+      wholesaleProfiles: (localSettings.wholesaleProfiles || []).map(p =>
         p.id === selectedProfileId ? { ...p, name: name.trim() } : p
       )
-    }));
+    };
+    
+    setLocalSettings(updatedSettings);
+    onSaveSettings(updatedSettings);
   };
 
   const handleDeleteProfile = () => {
@@ -163,11 +167,14 @@ export default function SettingsView({
     if (!profile) return;
     
     if (confirm(`Are you sure you want to permanently delete the profile "${profile.name}"?`)) {
-      setLocalSettings(prev => ({
-        ...prev,
-        wholesaleProfiles: (prev.wholesaleProfiles || []).filter(p => p.id !== selectedProfileId)
-      }));
+      const updatedSettings: AppSettings = {
+        ...localSettings,
+        wholesaleProfiles: (localSettings.wholesaleProfiles || []).filter(p => p.id !== selectedProfileId)
+      };
+      
+      setLocalSettings(updatedSettings);
       setSelectedProfileId('');
+      onSaveSettings(updatedSettings);
     }
   };
 
