@@ -3134,15 +3134,9 @@ export default function QuoteCalculator({
                 {/* Save/Commit Action */}
                 <button
                   type="button"
-                  onClick={async () => {
-                    if (onSaveQuoteNoReset) {
-                      await onSaveQuoteNoReset();
-                    } else {
-                      onSaveQuote();
-                    }
-                  }}
+                  onClick={onSaveQuote}
                   className="w-full bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 border border-brand-800 mt-6 cursor-pointer"
-                  title="Save this quote to the cloud ledger"
+                  title="Save this quote to the cloud ledger and clear the form"
                 >
                   <Save size={14} className="text-brand-gold shrink-0" />
                   Save to Ledger
@@ -4753,15 +4747,9 @@ export default function QuoteCalculator({
               </button>
               <button
                 type="button"
-                onClick={async () => {
-                  if (onSaveQuoteNoReset) {
-                    await onSaveQuoteNoReset();
-                  } else {
-                    onSaveQuote();
-                  }
-                }}
+                onClick={onSaveQuote}
                 className="bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-4 px-8 rounded-2xl shadow-lg transition-all text-xs uppercase tracking-widest flex items-center gap-2 border border-brand-800 cursor-pointer"
-                title="Save quote to the cloud ledger"
+                title="Save quote to the cloud ledger and clear the form"
               >
                 <Save size={14} className="text-brand-gold" />
                 Save to Ledger

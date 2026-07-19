@@ -15,7 +15,7 @@ import {
   ScrapItem, JewelryItem 
 } from './types';
 import { DEFAULT_SETTINGS, TROY_ONCE_GRAMS, FANCY_SHAPES, ROUND_MELEE } from './constants';
-import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeParseDate } from './utils';
+import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeParseDate, genId } from './utils';
 
 // Modular Components
 import ScrapCalculator from './components/ScrapCalculator';
@@ -171,6 +171,7 @@ export default function App() {
   const pendingCloudSettingsRef = useRef<any>(null);
   const [isPersistenceLoaded, setIsPersistenceLoaded] = useState(true);
   const [isCloudSynced, setIsCloudSynced] = useState(false);
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
 
   // Request persistent storage on load (Safari/Chrome/iOS support to prevent auto-eviction)
   useEffect(() => {
@@ -804,23 +805,27 @@ setIsCloudSynced(true);
     const nameToLog = activeSession.cName || (activeSession.jobNum ? `Job #${activeSession.jobNum}` : 'Wholesale Client');
 
     const list = isWholesale ? wholesaleTransactions : ringQuoteTransactions;
-    const existingTx = list.find(q => q.id === activeSession.id);
+    const safeTxId = (activeSession.id && activeSession.id !== 'undefined') ? activeSession.id : genId();
+    const existingTx = list.find(q => q.id === safeTxId);
+
+    const sanitizedSession = JSON.parse(JSON.stringify(activeSession));
+    sanitizedSession.id = safeTxId;
 
     const newTx: QuoteTransaction = {
-      id: activeSession.id,
+      id: safeTxId,
       date: existingTx ? existingTx.date : new Date().toLocaleString(),
       timestamp: existingTx ? (existingTx.timestamp || Date.now()) : Date.now(),
       name: nameToLog,
       phone: activeSession.cPhone,
       summary: sum,
       total: `$${finalInvoiceAmount.toFixed(2)}`,
-      fullData: JSON.parse(JSON.stringify(activeSession)),
+      fullData: sanitizedSession,
       isWholesale,
       syncPending: true
     };
 
     if (isWholesale) {
-      const idx = wholesaleTransactions.findIndex(q => q.id === activeSession.id);
+      const idx = wholesaleTransactions.findIndex(q => q.id === safeTxId);
       let updated: QuoteTransaction[];
       if (idx >= 0) {
         updated = [...wholesaleTransactions];
@@ -839,16 +844,17 @@ setIsCloudSynced(true);
         }
         playClickSound('success');
         showToast("Wholesale job order successfully saved and synced!", "success");
-      } catch (err) {
+      } catch (err: any) {
         console.error("Cloud sync failed on wholesale save:", err);
         if (resetSessionAfterSave) {
           updateWholesaleSessionLocal(getEmptyQuoteSession(), true);
         }
         playClickSound('success');
-        showToast("Job order saved locally (sync pending/offline)!", "info");
+        const errMsg = err?.message || String(err);
+        showToast(`Saved locally! Cloud sync pending (Error: ${errMsg.substring(0, 60)})`, "info");
       }
     } else {
-      const idx = ringQuoteTransactions.findIndex(q => q.id === activeSession.id);
+      const idx = ringQuoteTransactions.findIndex(q => q.id === safeTxId);
       let updated: QuoteTransaction[];
       if (idx >= 0) {
         updated = [...ringQuoteTransactions];
@@ -867,13 +873,14 @@ setIsCloudSynced(true);
         }
         playClickSound('success');
         showToast("Retail custom quote saved and synced successfully!", "success");
-      } catch (err) {
+      } catch (err: any) {
         console.error("Cloud sync failed on retail save:", err);
         if (resetSessionAfterSave) {
           updateRetailSessionLocal(getEmptyQuoteSession(), true);
         }
         playClickSound('success');
-        showToast("Quote saved locally (sync pending/offline)!", "info");
+        const errMsg = err?.message || String(err);
+        showToast(`Saved locally! Cloud sync pending (Error: ${errMsg.substring(0, 60)})`, "info");
       }
     }
   };
@@ -1062,6 +1069,53 @@ setIsCloudSynced(true);
     });
 
     alert("Success! Added custom wedding set demo quote with Engagement, Band, and Men's Bevel Band to your Retail Ledger.");
+  };
+
+  const handleManualSync = async () => {
+    if (isManualSyncing) return;
+    setIsManualSyncing(true);
+    showToast("Starting cloud synchronization update...", "info");
+    try {
+      const localScrap = (() => {
+        try {
+          const raw = localStorage.getItem('gr_scrap_ledger');
+          return raw ? JSON.parse(raw) : [];
+        } catch { return []; }
+      })();
+      const localRetail = (() => {
+        try {
+          const raw = localStorage.getItem('gr_quote_ledger');
+          return raw ? JSON.parse(raw) : [];
+        } catch { return []; }
+      })();
+      const localWholesale = (() => {
+        try {
+          const raw = localStorage.getItem('gr_wholesale_ledger');
+          return raw ? JSON.parse(raw) : [];
+        } catch { return []; }
+      })();
+      const localCuban = (() => {
+        try {
+          const raw = localStorage.getItem('gr_cuban_estimates');
+          return raw ? JSON.parse(raw) : [];
+        } catch { return []; }
+      })();
+
+      await Promise.all([
+        syncLocalToCloud('scrap_ledger', localScrap),
+        syncLocalToCloud('retail_ledger', localRetail),
+        syncLocalToCloud('wholesale_ledger', localWholesale),
+        syncLocalToCloud('cuban_estimates', localCuban)
+      ]);
+
+      showToast("Cloud database synchronization completed successfully!", "success");
+    } catch (err: any) {
+      console.error("Manual sync failed:", err);
+      const errMsg = err?.message || String(err);
+      showToast(`Sync failed: ${errMsg.substring(0, 60)}`, "error");
+    } finally {
+      setIsManualSyncing(false);
+    }
   };
 
   // Sketchpad trigger handlers
@@ -1426,6 +1480,8 @@ setIsCloudSynced(true);
               onAddDemoTransaction={handleCreateDemoTransaction}
               onTriggerPrint={handleTriggerPrint}
               isIframe={isIframe}
+              onRefreshLedger={handleManualSync}
+              isSyncingLedger={isManualSyncing}
             />
           </div>
 

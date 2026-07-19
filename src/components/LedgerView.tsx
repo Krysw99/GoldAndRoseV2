@@ -7,7 +7,8 @@ import React, { useState } from 'react';
 import { 
   Search, Trash2, Printer, FileText, X, ArrowRight, User, Phone, 
   MapPin, ShieldCheck, Mail, Calendar, Sparkles, AlertCircle,
-  ShoppingBag, Check, ExternalLink, Cpu, Copy, Info, ChevronDown, ChevronUp
+  ShoppingBag, Check, ExternalLink, Cpu, Copy, Info, ChevronDown, ChevronUp,
+  RefreshCw
 } from 'lucide-react';
 import { ScrapTransaction, QuoteTransaction, AppSettings, QuoteSession, JewelryItem } from '../types';
 import { calculateRingCost, calculateScrapTotal } from '../utils';
@@ -27,6 +28,8 @@ interface LedgerViewProps {
   onAddDemoTransaction?: () => void;
   onTriggerPrint?: (printFn: () => void) => void;
   isIframe?: boolean;
+  onRefreshLedger?: () => Promise<void>;
+  isSyncingLedger?: boolean;
 }
 
 function getQuoteTransactionScore(tx: QuoteTransaction, queryWords: string[], fullSearchStr: string): number {
@@ -174,7 +177,9 @@ export default function LedgerView({
   settings,
   onAddDemoTransaction,
   onTriggerPrint,
-  isIframe
+  isIframe,
+  onRefreshLedger,
+  isSyncingLedger
 }: LedgerViewProps) {
   const [activeLedger, setActiveLedger] = useState<'scrap' | 'retail' | 'wholesale'>('retail');
   const [search, setSearch] = useState('');
@@ -530,16 +535,30 @@ export default function LedgerView({
           </button>
         </div>
 
-        {/* Search controls */}
-        <div className="relative mb-4">
-          <input
-            type="text"
-            placeholder="Search by client, job #, or specs..."
-            className="w-full bg-brand-50/50 border border-brand-200 pl-9 pr-4 py-2.5 rounded-xl text-xs font-bold focus:bg-white focus:ring-1 focus:ring-brand-gold outline-none"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <Search size={14} className="absolute left-3 top-3.5 text-brand-400" />
+        {/* Search controls & Sync/Refresh button */}
+        <div className="flex gap-2 mb-4">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              placeholder="Search by client, job #, or specs..."
+              className="w-full bg-brand-50/50 border border-brand-200 pl-9 pr-4 py-2.5 rounded-xl text-xs font-bold focus:bg-white focus:ring-1 focus:ring-brand-gold outline-none"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <Search size={14} className="absolute left-3 top-3.5 text-brand-400" />
+          </div>
+          {onRefreshLedger && (
+            <button
+              type="button"
+              onClick={onRefreshLedger}
+              disabled={isSyncingLedger}
+              className={`px-3.5 py-2 bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 ${isSyncingLedger ? 'animate-pulse' : ''}`}
+              title="Refresh and sync ledger items from Firestore cloud"
+            >
+              <RefreshCw size={13} className={`text-brand-gold ${isSyncingLedger ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">{isSyncingLedger ? 'Syncing...' : 'Sync'}</span>
+            </button>
+          )}
         </div>
 
         {/* Transactions list queue */}

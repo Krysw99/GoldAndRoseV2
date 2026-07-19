@@ -224,7 +224,7 @@ export async function syncLocalToCloud(collectionName: string, localItems: any[]
     let count = 0;
     
     for (const item of localItems) {
-      if (item && item.id && !cloudIds.has(item.id)) {
+      if (item && item.id && item.id !== 'undefined' && !cloudIds.has(item.id)) {
         const docRef = doc(db, collectionName, item.id);
         const sanitized = JSON.parse(JSON.stringify(item));
         if (sanitized && typeof sanitized === 'object') {
