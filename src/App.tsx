@@ -123,60 +123,24 @@ export default function App() {
     }
   });
 
-  // Real-time synchronization refs and helpers for in-progress quote calculators
+  // Real-time synchronization is kept local only for current active sessions to avoid hitting database limits on every keystroke
   const lastRetailLocalChangeTimeRef = useRef<number>(0);
   const lastWholesaleLocalChangeTimeRef = useRef<number>(0);
-  const retailSaveTimeoutRef = useRef<any>(null);
-  const wholesaleSaveTimeoutRef = useRef<any>(null);
 
-  const syncRetailSessionImmediately = (session: QuoteSession) => {
-    if (retailSaveTimeoutRef.current) clearTimeout(retailSaveTimeoutRef.current);
-    saveDocument('app_settings', 'active_retail_session', session);
-  };
-
-  const syncWholesaleSessionImmediately = (session: QuoteSession) => {
-    if (wholesaleSaveTimeoutRef.current) clearTimeout(wholesaleSaveTimeoutRef.current);
-    saveDocument('app_settings', 'active_wholesale_session', session);
-  };
-
-  const saveRetailSessionDebounced = (session: QuoteSession) => {
-    if (retailSaveTimeoutRef.current) clearTimeout(retailSaveTimeoutRef.current);
-    retailSaveTimeoutRef.current = setTimeout(() => {
-      saveDocument('app_settings', 'active_retail_session', session);
-    }, 1500);
-  };
-
-  const saveWholesaleSessionDebounced = (session: QuoteSession) => {
-    if (wholesaleSaveTimeoutRef.current) clearTimeout(wholesaleSaveTimeoutRef.current);
-    wholesaleSaveTimeoutRef.current = setTimeout(() => {
-      saveDocument('app_settings', 'active_wholesale_session', session);
-    }, 1500);
-  };
-
-  const updateRetailSessionLocal = (newSessionOrUpdater: QuoteSession | ((prev: QuoteSession) => QuoteSession), immediate = false) => {
+  const updateRetailSessionLocal = (newSessionOrUpdater: QuoteSession | ((prev: QuoteSession) => QuoteSession), _immediate = false) => {
     lastRetailLocalChangeTimeRef.current = Date.now();
     setRetailSession(prev => {
       const next = typeof newSessionOrUpdater === 'function' ? newSessionOrUpdater(prev) : newSessionOrUpdater;
       safeSetLocalStorage('gr_active_retail_session', next);
-      if (immediate) {
-        syncRetailSessionImmediately(next);
-      } else {
-        saveRetailSessionDebounced(next);
-      }
       return next;
     });
   };
 
-  const updateWholesaleSessionLocal = (newSessionOrUpdater: QuoteSession | ((prev: QuoteSession) => QuoteSession), immediate = false) => {
+  const updateWholesaleSessionLocal = (newSessionOrUpdater: QuoteSession | ((prev: QuoteSession) => QuoteSession), _immediate = false) => {
     lastWholesaleLocalChangeTimeRef.current = Date.now();
     setWholesaleSession(prev => {
       const next = typeof newSessionOrUpdater === 'function' ? newSessionOrUpdater(prev) : newSessionOrUpdater;
       safeSetLocalStorage('gr_active_wholesale_session', next);
-      if (immediate) {
-        syncWholesaleSessionImmediately(next);
-      } else {
-        saveWholesaleSessionDebounced(next);
-      }
       return next;
     });
   };

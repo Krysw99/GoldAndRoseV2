@@ -3132,41 +3132,21 @@ export default function QuoteCalculator({
                 )}
 
                 {/* Save/Commit Action */}
-                {onSaveQuoteNoReset ? (
-                  <div className="mt-6 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (onSaveQuoteNoReset) {
-                          await onSaveQuoteNoReset();
-                        }
-                      }}
-                      className="bg-brand-50 hover:bg-brand-100 text-brand-800 border border-brand-200 font-bold py-3.5 px-3 rounded-2xl text-[10px] uppercase tracking-wider shadow-sm transition-all duration-150 flex items-center justify-center gap-1 cursor-pointer"
-                      title="Save changes to ledger without clearing your screen"
-                    >
-                      <Save size={12} className="text-brand-gold shrink-0" />
-                      Save Draft
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onSaveQuote}
-                      className="bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-3.5 px-3 rounded-2xl shadow-md hover:shadow-lg transition-all duration-150 text-[10px] uppercase tracking-wider flex items-center justify-center gap-1 border border-brand-800 cursor-pointer"
-                      title="Finalize quote and clear the screen for a new customer"
-                    >
-                      <CheckCircle size={12} className="shrink-0" />
-                      Commit & New
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={onSaveQuote}
-                    className="w-full bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 border border-brand-800 mt-6 cursor-pointer"
-                  >
-                    <CheckCircle size={14} />
-                    Commit Quote to Ledger
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (onSaveQuoteNoReset) {
+                      await onSaveQuoteNoReset();
+                    } else {
+                      onSaveQuote();
+                    }
+                  }}
+                  className="w-full bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 border border-brand-800 mt-6 cursor-pointer"
+                  title="Save this quote to the cloud ledger"
+                >
+                  <Save size={14} className="text-brand-gold shrink-0" />
+                  Save to Ledger
+                </button>
               </div>
             </div>
 
@@ -4771,29 +4751,20 @@ export default function QuoteCalculator({
                 <Calculator size={14} className="text-brand-gold" />
                 Link Ledger Scrap Credit
               </button>
-              {onSaveQuoteNoReset && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (onSaveQuoteNoReset) {
-                      await onSaveQuoteNoReset();
-                    }
-                  }}
-                  className="bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-800 font-bold py-3.5 px-6 rounded-2xl text-xs uppercase tracking-wider shadow-sm transition-all flex items-center gap-2 cursor-pointer"
-                  title="Save current work to the cloud without clearing your screen"
-                >
-                  <Save size={14} className="text-brand-gold" />
-                  Save Draft
-                </button>
-              )}
               <button
                 type="button"
-                onClick={onSaveQuote}
+                onClick={async () => {
+                  if (onSaveQuoteNoReset) {
+                    await onSaveQuoteNoReset();
+                  } else {
+                    onSaveQuote();
+                  }
+                }}
                 className="bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-4 px-8 rounded-2xl shadow-lg transition-all text-xs uppercase tracking-widest flex items-center gap-2 border border-brand-800 cursor-pointer"
-                title="Finalize quote and start a fresh new quote"
+                title="Save quote to the cloud ledger"
               >
-                <CheckCircle size={14} />
-                Commit & New
+                <Save size={14} className="text-brand-gold" />
+                Save to Ledger
               </button>
               <button
                 type="button"
