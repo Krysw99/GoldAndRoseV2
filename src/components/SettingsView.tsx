@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { 
   Save, Download, Trash2, Calendar, Settings, ShieldAlert, Key, 
   DollarSign, Wrench, Gem, HardDrive, EyeOff, Upload, FileJson,
-  Building, ShoppingBag, Globe, Plus, Edit, RefreshCw, Check, Cloud
+  Building, ShoppingBag, Globe, Plus, Edit, RefreshCw, Check, Cloud, Coins
 } from 'lucide-react';
 import { AppSettings, RepairPricingSettings, ScrapTransaction, QuoteTransaction } from '../types';
 import { ROUND_MELEE, FANCY_SHAPES } from '../constants';
@@ -57,6 +57,10 @@ export default function SettingsView({
   // App Settings Local Edit State
   const [localSettings, setLocalSettings] = useState<AppSettings>(() => ({
     ...settings,
+    platinumPricePerGram: settings.platinumPricePerGram !== undefined ? settings.platinumPricePerGram : 380,
+    mensBandGoldPricesPerGram: settings.mensBandGoldPricesPerGram || { ...(settings.goldPricesPerGram || { 10: 200, 14: 230, 18: 280, 19: 300, 22: 320, 24: 350 }) },
+    mensBandPlatinumPricePerGram: settings.mensBandPlatinumPricePerGram !== undefined ? settings.mensBandPlatinumPricePerGram : (settings.platinumPricePerGram !== undefined ? settings.platinumPricePerGram : 380),
+    mensBandSilverPricePerGram: settings.mensBandSilverPricePerGram !== undefined ? settings.mensBandSilverPricePerGram : (settings.silverPricePerGram !== undefined ? settings.silverPricePerGram : 100),
     cubanMultipliers: settings.cubanMultipliers || [
       { minWidth: 5, maxWidth: 7.9, multiplier: 1.8 },
       { minWidth: 8, maxWidth: 10.9, multiplier: 1.6 },
@@ -708,82 +712,123 @@ export default function SettingsView({
             </p>
           </div>
         </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-fadeIn">
+      )}      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-fadeIn">
         {/* Settings Navigation Rails */}
-        <div className="md:col-span-1 bg-white p-4 rounded-2xl border border-brand-100 shadow-sm flex flex-col gap-1">
-          <h3 className="text-[10px] font-black text-brand-400 uppercase tracking-widest px-3 mb-2">Master Panels</h3>
+        <div className="md:col-span-1 bg-slate-900 p-4 rounded-2xl border border-slate-800 shadow-xl flex flex-col gap-1.5 text-white">
+          <div className="px-3 py-1 mb-1 border-b border-slate-800/80 pb-3 flex items-center justify-between">
+            <h3 className="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
+              <Settings size={14} className="text-amber-400" />
+              Settings Hub
+            </h3>
+            <span className="text-[9px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/20 px-2 py-0.5 rounded-full">v2.4</span>
+          </div>
+
           <button
             type="button"
             onClick={() => setSubTab('rates')}
-            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${subTab === 'rates' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
+            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between group ${
+              subTab === 'rates'
+                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-lg shadow-amber-500/20 font-black'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+            }`}
           >
-            <DollarSign size={14} className={subTab === 'rates' ? 'text-brand-gold' : 'text-brand-400'} />
-            Spot & API Keys
+            <div className="flex items-center gap-2.5">
+              <DollarSign size={15} className={subTab === 'rates' ? 'text-slate-950' : 'text-amber-400 group-hover:scale-110 transition-transform'} />
+              <span>Spot & Branding</span>
+            </div>
+            {subTab === 'rates' && <span className="w-1.5 h-1.5 rounded-full bg-slate-950"></span>}
           </button>
+
           <button
             type="button"
             onClick={() => setSubTab('retail')}
-            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${subTab === 'retail' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
+            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between group ${
+              subTab === 'retail'
+                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-lg shadow-amber-500/20 font-black'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+            }`}
           >
-            <Wrench size={14} className={subTab === 'retail' ? 'text-brand-gold' : 'text-brand-400'} />
-            Retail Multipliers
+            <div className="flex items-center gap-2.5">
+              <Wrench size={15} className={subTab === 'retail' ? 'text-slate-950' : 'text-amber-400 group-hover:scale-110 transition-transform'} />
+              <span>Retail Pricing</span>
+            </div>
+            {subTab === 'retail' && <span className="w-1.5 h-1.5 rounded-full bg-slate-950"></span>}
           </button>
+
           <button
             type="button"
             onClick={() => setSubTab('wholesale')}
-            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${subTab === 'wholesale' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
+            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between group ${
+              subTab === 'wholesale'
+                ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950 shadow-lg shadow-emerald-500/20 font-black'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+            }`}
           >
-            <Gem size={14} className={subTab === 'wholesale' ? 'text-brand-gold' : 'text-brand-400'} />
-            Wholesale Model
+            <div className="flex items-center gap-2.5">
+              <Gem size={15} className={subTab === 'wholesale' ? 'text-slate-950' : 'text-emerald-400 group-hover:scale-110 transition-transform'} />
+              <span>Wholesale Suite</span>
+            </div>
+            {subTab === 'wholesale' && <span className="w-1.5 h-1.5 rounded-full bg-slate-950"></span>}
           </button>
+
           <button
             type="button"
             onClick={() => setSubTab('rawCosts')}
-            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between gap-2 ${subTab === 'rawCosts' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
+            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between group ${
+              subTab === 'rawCosts'
+                ? 'bg-gradient-to-r from-amber-600 to-rose-600 text-white shadow-lg font-black'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+            }`}
           >
-            <div className="flex items-center gap-2">
-              <EyeOff size={14} className={subTab === 'rawCosts' ? 'text-brand-gold' : 'text-brand-400'} />
+            <div className="flex items-center gap-2.5">
+              <EyeOff size={15} className={subTab === 'rawCosts' ? 'text-white' : 'text-rose-400 group-hover:scale-110 transition-transform'} />
               <span>Internal Mfg Costs</span>
             </div>
-            <span className="text-[7px] bg-amber-500 text-brand-950 font-black px-1.5 py-0.5 rounded-full uppercase scale-90">Eyes Only</span>
+            <span className="text-[8px] bg-amber-400 text-slate-950 font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider">Confidential</span>
           </button>
+
           <button
             type="button"
             onClick={() => setSubTab('database')}
-            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${subTab === 'database' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-50'}`}
+            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between group ${
+              subTab === 'database'
+                ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg font-black'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+            }`}
           >
-            <HardDrive size={14} className={subTab === 'database' ? 'text-brand-gold' : 'text-brand-400'} />
-            Ledger Utilities
+            <div className="flex items-center gap-2.5">
+              <HardDrive size={15} className={subTab === 'database' ? 'text-white' : 'text-sky-400 group-hover:scale-110 transition-transform'} />
+              <span>Ledger & Sync</span>
+            </div>
+            {subTab === 'database' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
           </button>
 
-          <div className="border-t border-brand-100 my-4 pt-4">
+          <div className="border-t border-slate-800 my-3 pt-3">
             <button
               type="button"
               onClick={handleSaveAll}
               disabled={syncStatus === 'syncing'}
-              className={`w-full font-black py-3 rounded-xl shadow-md text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all ${
+              className={`w-full font-black py-3.5 rounded-xl shadow-lg text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer ${
                 syncStatus === 'syncing'
-                  ? 'bg-brand-800 text-brand-400 cursor-not-allowed'
+                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                   : syncStatus === 'success'
-                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                  : 'bg-brand-900 text-brand-gold hover:bg-brand-950'
+                  ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 font-black'
+                  : 'bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 text-slate-950 hover:brightness-110 font-black'
               }`}
             >
               {syncStatus === 'syncing' ? (
                 <>
-                  <RefreshCw size={13} className="animate-spin text-brand-gold" />
+                  <RefreshCw size={14} className="animate-spin text-slate-950" />
                   Syncing...
                 </>
               ) : syncStatus === 'success' ? (
                 <>
-                  <Check size={13} className="text-white animate-pulse" />
-                  Synced!
+                  <Check size={14} className="text-slate-950 animate-bounce" />
+                  Synced to Cloud!
                 </>
               ) : (
                 <>
-                  <Cloud size={13} className="text-brand-gold animate-pulse" />
+                  <Cloud size={14} className="text-slate-950" />
                   Save and Sync
                 </>
               )}
@@ -792,73 +837,89 @@ export default function SettingsView({
         </div>
 
       {/* Settings Panel Content */}
-      <div className="md:col-span-3 bg-white p-6 rounded-2xl border border-brand-100 shadow-sm min-h-[450px]">
+      <div className="md:col-span-3 bg-slate-50/50 p-6 rounded-2xl border border-slate-200 shadow-sm min-h-[500px]">
         {/* SUBTAB 1: Rates & Keys */}
         {subTab === 'rates' && (
           <div className="space-y-6 animate-fadeIn">
-            <div>
-              <h2 className="text-sm font-black text-brand-900 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                <Key size={16} className="text-brand-gold" />
-                Spot Feed Configuration
-              </h2>
-              <p className="text-xs text-brand-500">Manage real-time gold pricing tokens and manual backup overrides.</p>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <Key size={18} className="text-amber-500" />
+                  Spot Feed & Store Branding
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">Manage real-time gold pricing tokens, store invoice details, and online checkout rules.</p>
+              </div>
+              <span className="text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-lg">Spot & System</span>
             </div>
 
             {/* Gold API Key Input */}
-            <div className="bg-brand-50 p-4 rounded-xl border border-brand-100 space-y-2">
-              <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block">GoldAPI.io Access Token</label>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg">
+                  <Key size={15} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">GoldAPI.io Access Token</h4>
+                  <p className="text-[11px] text-slate-500">Live metals feed token used for automatic spot updates.</p>
+                </div>
+              </div>
               <input
                 type="text"
                 placeholder="Enter goldapi-xxx token"
-                className="w-full bg-white border border-brand-200 p-3 rounded-xl text-xs font-mono font-bold"
+                className="w-full bg-slate-50 border border-slate-300 p-3 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
               />
-              <p className="text-[10px] text-brand-400 italic">Leaves blank or enter custom tokens. Spot price updates rely on standard CAD valuations.</p>
+              <p className="text-[11px] text-slate-400 italic">Leave blank to use internal system defaults. All live rates compute in Canadian Dollars (CAD).</p>
             </div>
 
             {/* Store details block */}
-            <div className="space-y-3 bg-brand-50 p-4 rounded-xl border border-brand-100">
-              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2 flex items-center gap-1.5">
-                <Building size={14} className="text-brand-gold" />
-                Store & Invoice Branding Details
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-white p-5 rounded-2xl border border-indigo-100/80 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 border-b border-indigo-100 pb-2.5">
+                <div className="p-1.5 bg-indigo-100 text-indigo-800 rounded-lg">
+                  <Building size={15} />
+                </div>
                 <div>
-                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Store / Business Name</label>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Store & Invoice Branding Details</h4>
+                  <p className="text-[11px] text-slate-500">Appears at the header of printable receipts, customer invoices, and export PDFs.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Store / Business Name</label>
                   <input
                     type="text"
-                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
                     value={localSettings.storeName ?? ""}
                     placeholder="Gold & Rose"
                     onChange={(e) => setLocalSettings(prev => ({ ...prev, storeName: e.target.value }))}
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Store Slogan / Subtitle</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Store Slogan / Subtitle</label>
                   <input
                     type="text"
-                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
                     value={localSettings.storeSubName ?? ""}
                     placeholder="Jewellery Corporation"
                     onChange={(e) => setLocalSettings(prev => ({ ...prev, storeSubName: e.target.value }))}
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Store Address</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Store Address</label>
                   <input
                     type="text"
-                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
                     value={localSettings.storeAddress ?? ""}
                     placeholder="4501 North Rd #209, Burnaby, BC V3N 4J5"
                     onChange={(e) => setLocalSettings(prev => ({ ...prev, storeAddress: e.target.value }))}
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Store Contact Info (Email | Phone | Website)</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Store Contact Info (Email | Phone | Website)</label>
                   <input
                     type="text"
-                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
                     value={localSettings.storeContact ?? ""}
                     placeholder="info@goldandrosejewellery.com | (604) 420-9077"
                     onChange={(e) => setLocalSettings(prev => ({ ...prev, storeContact: e.target.value }))}
@@ -868,58 +929,60 @@ export default function SettingsView({
             </div>
 
             {/* Wix Store checkout integration details */}
-            <div className="space-y-3 bg-brand-50 p-4 rounded-xl border border-brand-100">
-              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2 flex items-center gap-1.5">
-                <ShoppingBag size={14} className="text-brand-gold" />
-                Wix Store Checkout Integration
-              </h4>
-              <p className="text-[10px] text-brand-500 leading-relaxed italic">
-                Configure your Wix Online Store and Velo integration to send bespoke estimates directly to your Wix checkout system.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-white p-5 rounded-2xl border border-sky-100 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 border-b border-sky-100 pb-2.5">
+                <div className="p-1.5 bg-sky-100 text-sky-800 rounded-lg">
+                  <ShoppingBag size={15} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Wix Store Checkout Integration</h4>
+                  <p className="text-[11px] text-slate-500">Deep-link bespoke custom estimates directly into your online Wix cart.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div className="sm:col-span-2">
-                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Wix Store Domain / URL</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Wix Store Domain / URL</label>
                   <input
                     type="text"
-                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 outline-none transition-all"
                     value={localSettings.wixStoreUrl ?? ""}
                     placeholder="https://www.goldandrosejewellery.com"
                     onChange={(e) => setLocalSettings(prev => ({ ...prev, wixStoreUrl: e.target.value }))}
                   />
-                  <span className="text-[9px] text-brand-400">Used as the base domain for deep-linking items to your Wix cart.</span>
+                  <span className="text-[10px] text-slate-400 mt-1 block">Base URL used for constructing direct customer cart links.</span>
                 </div>
                 
                 <div className="sm:col-span-2">
-                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Wix Shopping Cart Page Slug (e.g. /cart-page or /cart)</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Wix Shopping Cart Page Slug</label>
                   <input
                     type="text"
-                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold font-mono"
+                    className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold font-mono text-slate-900 focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 outline-none transition-all"
                     value={localSettings.wixCartSlug ?? ""}
                     placeholder="/cart-page"
                     onChange={(e) => setLocalSettings(prev => ({ ...prev, wixCartSlug: e.target.value }))}
                   />
-                  <span className="text-[9px] text-brand-400">Specify your Wix store's shopping cart URL slug (Wix default is usually `/cart-page`).</span>
+                  <span className="text-[10px] text-slate-400 mt-1 block">Default URL path for Wix stores is usually <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700 font-mono">/cart-page</code>.</span>
                 </div>
                 
-                 <div>
-                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Integration Mode</label>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Integration Mode</label>
                   <select
-                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                    className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 outline-none transition-all"
                     value={localSettings.wixIntegrationMode ?? "deeplink"}
                     onChange={(e) => setLocalSettings(prev => ({ ...prev, wixIntegrationMode: e.target.value as any }))}
                   >
-                    <option value="deeplink">Wix Cart Deep Link (Requires Developer Mode / Velo)</option>
-                    <option value="placeholder_product">Wix Standard Product (Zero-Code / No Developer Mode)</option>
+                    <option value="deeplink">Wix Cart Deep Link (Developer / Velo Mode)</option>
+                    <option value="placeholder_product">Wix Standard Product (Zero-Code Mode)</option>
                     <option value="velo_api">Wix Velo Headless API (Real-time Draft)</option>
                     <option value="webhook">Custom Wix Webhook (External Sync)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Wix Store Access Token / Secret</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Wix Store Access Token / Secret</label>
                   <input
                     type="password"
-                    className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold font-mono"
+                    className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold font-mono text-slate-900 focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 outline-none transition-all"
                     value={localSettings.wixAccessToken ?? ""}
                     placeholder="wix_sec_••••••••••••••••"
                     onChange={(e) => setLocalSettings(prev => ({ ...prev, wixAccessToken: e.target.value }))}
@@ -929,85 +992,82 @@ export default function SettingsView({
                 {localSettings.wixIntegrationMode === "placeholder_product" && (
                   <>
                     <div>
-                      <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Wix Product ID for Custom Order</label>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Wix Product ID for Custom Order</label>
                       <input
                         type="text"
-                        className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold font-mono"
+                        className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold font-mono text-slate-900"
                         value={localSettings.wixProductId ?? ""}
                         placeholder="e39ba1fc-8c54-46c1-a53d-2dc01c379a29"
                         onChange={(e) => setLocalSettings(prev => ({ ...prev, wixProductId: e.target.value }))}
                       />
-                      <span className="text-[9px] text-brand-400 block mt-1">
-                        Create a standard product in your Wix dashboard for $1.00 or $0.01, and paste its Product ID here.
-                      </span>
                     </div>
 
                     <div>
-                      <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">Product Base Unit Price (CAD)</label>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Product Base Unit Price (CAD)</label>
                       <select
-                        className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                        className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900"
                         value={localSettings.wixBaseUnitPrice ?? 1.00}
                         onChange={(e) => setLocalSettings(prev => ({ ...prev, wixBaseUnitPrice: parseFloat(e.target.value) }))}
                       >
-                        <option value={1.00}>$1.00 CAD (Price rounds to nearest dollar, quantity = total dollars)</option>
-                        <option value={0.01}>$0.01 CAD (Supports exact cents, quantity = total cents)</option>
+                        <option value={1.00}>$1.00 CAD (Quantity = Total CAD Dollars)</option>
+                        <option value={0.01}>$0.01 CAD (Quantity = Total CAD Cents)</option>
                       </select>
-                      <span className="text-[9px] text-brand-400 block mt-1">
-                        Matches the actual price of your Wix product. Quantity will scale to match the CAD quote total.
-                      </span>
                     </div>
                   </>
                 )}
 
                 {(localSettings.wixIntegrationMode === "webhook" || localSettings.wixIntegrationMode === "velo_api") && (
                   <div className="sm:col-span-2">
-                    <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">
-                      {localSettings.wixIntegrationMode === "velo_api" ? "Wix Velo Function URL (API Endpoint)" : "Wix Webhook Endpoint URL"}
+                    <label className="text-xs font-bold text-slate-700 block mb-1">
+                      {localSettings.wixIntegrationMode === "velo_api" ? "Wix Velo Function URL Endpoint" : "Wix Webhook Endpoint URL"}
                     </label>
                     <input
                       type="text"
-                      className="w-full bg-white border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                      className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900"
                       value={localSettings.wixWebhookUrl ?? ""}
-                      placeholder={localSettings.wixIntegrationMode === "velo_api" ? "https://www.goldandrosejewellery.com/_functions/syncQuote" : "https://yourdomain.wixsite.com/_functions/syncQuote"}
+                      placeholder="https://www.goldandrosejewellery.com/_functions/syncQuote"
                       onChange={(e) => setLocalSettings(prev => ({ ...prev, wixWebhookUrl: e.target.value }))}
                     />
-                    <span className="text-[9px] text-brand-400 block mt-1">
-                      {localSettings.wixIntegrationMode === "velo_api" 
-                        ? "The Wix Velo backend function URL (e.g., _functions/syncQuote) that will create and return a custom cart redirect session."
-                        : "The URL of your custom webhook listener (e.g., Zapier, Make, or standard endpoint)."}
-                    </span>
                   </div>
                 )}
               </div>
             </div>
 
             {/* Manual Spot Price Overrides */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2">Manual Metal Spot Price Overrides (CAD)</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white p-5 rounded-2xl border border-amber-200/80 shadow-xs space-y-3">
+              <div className="flex items-center gap-2 border-b border-amber-100 pb-2">
+                <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg">
+                  <DollarSign size={15} />
+                </div>
                 <div>
-                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Gold spot / oz</label>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Manual Metal Spot Price Overrides (CAD)</h4>
+                  <p className="text-[11px] text-slate-500">Manually fix CAD spot prices if live API connectivity is unavailable.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-200/60">
+                  <label className="text-xs font-bold text-slate-800 mb-1 block">Gold Spot / oz ($ CAD)</label>
                   <input
                     type="number"
-                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold no-spinner"
+                    className="w-full bg-white border border-slate-300 p-2.5 rounded-xl text-sm font-black text-slate-900 no-spinner focus:border-amber-500 outline-none"
                     value={manualGold}
                     onChange={(e) => setManualGold(e.target.value)}
                   />
                 </div>
-                <div>
-                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Silver spot / oz</label>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <label className="text-xs font-bold text-slate-800 mb-1 block">Silver Spot / oz ($ CAD)</label>
                   <input
                     type="number"
-                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold no-spinner"
+                    className="w-full bg-white border border-slate-300 p-2.5 rounded-xl text-sm font-black text-slate-900 no-spinner focus:border-slate-500 outline-none"
                     value={manualSilver}
                     onChange={(e) => setManualSilver(e.target.value)}
                   />
                 </div>
-                <div>
-                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Platinum spot / oz</label>
+                <div className="bg-slate-100/70 p-3 rounded-xl border border-slate-300/80">
+                  <label className="text-xs font-bold text-slate-800 mb-1 block">Platinum Spot / oz ($ CAD)</label>
                   <input
                     type="number"
-                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold no-spinner"
+                    className="w-full bg-white border border-slate-300 p-2.5 rounded-xl text-sm font-black text-slate-900 no-spinner focus:border-slate-600 outline-none"
                     value={manualPlatinum}
                     onChange={(e) => setManualPlatinum(e.target.value)}
                   />
@@ -1020,115 +1080,277 @@ export default function SettingsView({
         {/* SUBTAB 2: Retail Multipliers */}
         {subTab === 'retail' && (
           <div className="space-y-6 animate-fadeIn">
-            <div>
-              <h2 className="text-sm font-black text-brand-900 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                <Wrench size={16} className="text-brand-gold" />
-                Retail Multipliers & Setting Fees
-              </h2>
-              <p className="text-xs text-brand-500">Configure global retail markup variables and gem setting labor parameters.</p>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <Wrench size={18} className="text-amber-500" />
+                  Retail Pricing & Labor Multipliers
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">Configure global retail markup variables, stone setting labor, and metal rate matrices.</p>
+              </div>
+              <span className="text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-lg">Retail Suite</span>
             </div>
 
-            {/* Basic setting fees */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="text-[10px] font-bold text-brand-500 mb-1 block">Setting Fee (Center / ct)</label>
-                <input
-                  type="number"
-                  className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
-                  value={localSettings.settingFeeCenterPerCt}
-                  onChange={(e) => handleTopLevelSetting('settingFeeCenterPerCt', e.target.value)}
-                />
+            {/* Standard Retail Gold Pricing Matrix */}
+            <div className="bg-gradient-to-br from-amber-50/60 to-amber-100/30 p-5 rounded-2xl border border-amber-200/80 shadow-xs space-y-3">
+              <div className="flex items-center gap-2 border-b border-amber-200/60 pb-2">
+                <div className="p-1.5 bg-amber-200/80 text-amber-950 rounded-lg">
+                  <Coins size={14} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider">Standard Retail Gold Pricing Matrix ($ / gram)</h4>
+                  <p className="text-[11px] text-amber-900/80">Base retail multiplier prices applied per gram across karat purities.</p>
+                </div>
               </div>
-              <div>
-                <label className="text-[10px] font-bold text-brand-500 mb-1 block">Setting Fee (Fancy / stone)</label>
-                <input
-                  type="number"
-                  className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
-                  value={localSettings.settingFeeFancyPerSt !== undefined ? localSettings.settingFeeFancyPerSt : 25}
-                  onChange={(e) => handleTopLevelSetting('settingFeeFancyPerSt', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-brand-500 mb-1 block">Setting Fee (Melee / stone)</label>
-                <input
-                  type="number"
-                  className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
-                  value={localSettings.settingFeeMeleePerSt}
-                  onChange={(e) => handleTopLevelSetting('settingFeeMeleePerSt', e.target.value)}
-                />
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+                {[10, 14, 18, 19, 22, 24].map(karat => (
+                  <div key={karat} className="bg-white p-2.5 rounded-xl border border-amber-200/80 shadow-2xs">
+                    <label className="text-xs font-black text-amber-900 block mb-1">{karat}k / gram</label>
+                    <input
+                      type="number"
+                      className="w-full bg-amber-50/30 border border-slate-300 p-2 rounded-lg text-xs font-mono font-bold text-slate-900 focus:border-amber-500 outline-none"
+                      value={localSettings.goldPricesPerGram[karat] || ''}
+                      onChange={(e) => handleNestedSetting('goldPricesPerGram', karat.toString(), e.target.value)}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Retail Metal Spot Premiums */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2">Retail Metal Spot Premiums (per Oz)</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Gold Spot Premium / oz</label>
+            {/* Retail Men's Bands Gold Pricing Matrix */}
+            <div className="bg-gradient-to-br from-amber-50/60 to-amber-100/30 p-5 rounded-2xl border border-amber-200/80 shadow-xs space-y-3">
+              <div className="flex items-center justify-between border-b border-amber-200/60 pb-2 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-amber-200/80 text-amber-950 rounded-lg">
+                    <Wrench size={14} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                      Retail Men's Bands Pricing Matrix ($ / gram)
+                    </h4>
+                    <p className="text-[11px] text-amber-900/80">Dedicated gram pricing rates for men's band fabrication.</p>
+                  </div>
+                </div>
+                <span className="text-[10px] bg-amber-200/80 text-amber-950 border border-amber-300 px-2.5 py-0.5 rounded-full font-bold">Men's Band Rates</span>
+              </div>
+
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+                {[10, 14, 18, 19, 22, 24].map(karat => (
+                  <div key={karat} className="bg-white p-2.5 rounded-xl border border-amber-200/80 shadow-2xs">
+                    <label className="text-xs font-black text-amber-900 block mb-1">{karat}k / gram</label>
+                    <input
+                      type="number"
+                      className="w-full bg-amber-50/30 border border-slate-300 p-2 rounded-lg text-xs font-mono font-bold text-slate-900 focus:border-amber-500 outline-none"
+                      value={
+                        (localSettings.mensBandGoldPricesPerGram && localSettings.mensBandGoldPricesPerGram[karat] !== undefined)
+                          ? localSettings.mensBandGoldPricesPerGram[karat]
+                          : (localSettings.goldPricesPerGram[karat] || '')
+                      }
+                      onChange={(e) => handleNestedSetting('mensBandGoldPricesPerGram', karat.toString(), e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Men's Bands Platinum & Silver per gram rates */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1 border-t border-amber-200/60">
+                <div className="bg-white p-2.5 rounded-xl border border-amber-200/80 shadow-2xs">
+                  <label className="text-xs font-black text-amber-900 mb-1 block">
+                    Men's Bands Platinum Rate ($ / gram)
+                  </label>
                   <input
                     type="number"
-                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
-                    value={localSettings.retailGoldPremium !== undefined ? localSettings.retailGoldPremium : 100}
-                    onChange={(e) => handleTopLevelSetting('retailGoldPremium', e.target.value)}
+                    className="w-full bg-amber-50/30 border border-slate-300 p-2 rounded-lg text-xs font-mono font-bold text-slate-900 focus:border-amber-500 outline-none"
+                    value={localSettings.mensBandPlatinumPricePerGram !== undefined ? localSettings.mensBandPlatinumPricePerGram : (localSettings.platinumPricePerGram || 380)}
+                    onChange={(e) => handleTopLevelSetting('mensBandPlatinumPricePerGram', e.target.value)}
                   />
                 </div>
-                <div>
-                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Silver Spot Premium / oz</label>
+                <div className="bg-white p-2.5 rounded-xl border border-amber-200/80 shadow-2xs">
+                  <label className="text-xs font-black text-amber-900 mb-1 block">
+                    Men's Bands Silver Rate ($ / gram)
+                  </label>
                   <input
                     type="number"
-                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
-                    value={localSettings.retailSilverPremium !== undefined ? localSettings.retailSilverPremium : 20}
-                    onChange={(e) => handleTopLevelSetting('retailSilverPremium', e.target.value)}
+                    className="w-full bg-amber-50/30 border border-slate-300 p-2 rounded-lg text-xs font-mono font-bold text-slate-900 focus:border-amber-500 outline-none"
+                    value={localSettings.mensBandSilverPricePerGram !== undefined ? localSettings.mensBandSilverPricePerGram : (localSettings.silverPricePerGram || 100)}
+                    onChange={(e) => handleTopLevelSetting('mensBandSilverPricePerGram', e.target.value)}
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Platinum & Silver Retail Pricing Multipliers */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                <div className="p-1.5 bg-slate-100 text-slate-800 rounded-lg">
+                  <Coins size={14} />
+                </div>
                 <div>
-                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Platinum Spot Premium / oz</label>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                    General Retail Platinum & Silver Rates ($ / gram)
+                  </h4>
+                  <p className="text-[11px] text-slate-500">Base retail pricing per gram for non-gold precious metals.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  <label className="text-xs font-bold text-slate-800 mb-1 block">
+                    Platinum Retail Rate ($ / gram)
+                  </label>
                   <input
                     type="number"
-                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
-                    value={localSettings.retailPlatinumPremium !== undefined ? localSettings.retailPlatinumPremium : 100}
-                    onChange={(e) => handleTopLevelSetting('retailPlatinumPremium', e.target.value)}
+                    className="w-full bg-white border border-slate-300 p-2.5 rounded-xl text-xs font-mono font-bold text-slate-900 focus:border-slate-500 outline-none"
+                    value={localSettings.platinumPricePerGram !== undefined ? localSettings.platinumPricePerGram : 380}
+                    onChange={(e) => handleTopLevelSetting('platinumPricePerGram', e.target.value)}
                   />
+                  <span className="text-[10px] text-slate-400 mt-1 block">Default rate ($380/g)</span>
+                </div>
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  <label className="text-xs font-bold text-slate-800 mb-1 block">
+                    Silver Retail Rate ($ / gram)
+                  </label>
+                  <input
+                    type="number"
+                    className="w-full bg-white border border-slate-300 p-2.5 rounded-xl text-xs font-mono font-bold text-slate-900 focus:border-slate-500 outline-none"
+                    value={localSettings.silverPricePerGram !== undefined ? localSettings.silverPricePerGram : 100}
+                    onChange={(e) => handleTopLevelSetting('silverPricePerGram', e.target.value)}
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block">Default rate ($100/g)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Basic setting fees & Metal Spot Premiums */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Setting fees card */}
+              <div className="bg-white p-5 rounded-2xl border border-amber-200/70 shadow-xs space-y-3">
+                <div className="flex items-center gap-2 border-b border-amber-100 pb-2">
+                  <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg">
+                    <Wrench size={14} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Retail Gem Setting Labor ($)</h4>
+                    <p className="text-[11px] text-slate-500">Labor cost applied per stone or carat.</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 mb-1 block">Center Setting / ct</label>
+                    <input
+                      type="number"
+                      className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-amber-500 outline-none"
+                      value={localSettings.settingFeeCenterPerCt}
+                      onChange={(e) => handleTopLevelSetting('settingFeeCenterPerCt', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 mb-1 block">Fancy Setting / st</label>
+                    <input
+                      type="number"
+                      className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-amber-500 outline-none"
+                      value={localSettings.settingFeeFancyPerSt !== undefined ? localSettings.settingFeeFancyPerSt : 25}
+                      onChange={(e) => handleTopLevelSetting('settingFeeFancyPerSt', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 mb-1 block">Melee Setting / st</label>
+                    <input
+                      type="number"
+                      className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-amber-500 outline-none"
+                      value={localSettings.settingFeeMeleePerSt}
+                      onChange={(e) => handleTopLevelSetting('settingFeeMeleePerSt', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Retail Metal Spot Premiums */}
+              <div className="bg-white p-5 rounded-2xl border border-amber-200/70 shadow-xs space-y-3">
+                <div className="flex items-center gap-2 border-b border-amber-100 pb-2">
+                  <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg">
+                    <DollarSign size={14} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Retail Spot Premiums ($ / oz)</h4>
+                    <p className="text-[11px] text-slate-500">Retail premium added on raw metal spot prices.</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 mb-1 block">Gold Premium / oz</label>
+                    <input
+                      type="number"
+                      className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-amber-500 outline-none"
+                      value={localSettings.retailGoldPremium !== undefined ? localSettings.retailGoldPremium : 100}
+                      onChange={(e) => handleTopLevelSetting('retailGoldPremium', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 mb-1 block">Silver Premium / oz</label>
+                    <input
+                      type="number"
+                      className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-amber-500 outline-none"
+                      value={localSettings.retailSilverPremium !== undefined ? localSettings.retailSilverPremium : 20}
+                      onChange={(e) => handleTopLevelSetting('retailSilverPremium', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 mb-1 block">Platinum Premium / oz</label>
+                    <input
+                      type="number"
+                      className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-amber-500 outline-none"
+                      value={localSettings.retailPlatinumPremium !== undefined ? localSettings.retailPlatinumPremium : 100}
+                      onChange={(e) => handleTopLevelSetting('retailPlatinumPremium', e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Standard Melee Stone Retail Supply Rates */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2">Stone Supply Retail Rates (per ct)</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                <div className="p-1.5 bg-blue-100 text-blue-800 rounded-lg">
+                  <Gem size={14} />
+                </div>
                 <div>
-                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Ring Melee / ct</label>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Stone Supply Retail Rates ($ / ct)</h4>
+                  <p className="text-[11px] text-slate-500">Retail supply prices per carat for rings and earrings.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <label className="text-xs font-bold text-slate-800 mb-1 block">Ring Melee / ct</label>
                   <input
                     type="number"
-                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-xl text-xs font-bold text-slate-900"
                     value={localSettings.meleePricePerCt}
                     onChange={(e) => handleTopLevelSetting('meleePricePerCt', e.target.value)}
                   />
                 </div>
-                <div>
-                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Ring Fancy / ct</label>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <label className="text-xs font-bold text-slate-800 mb-1 block">Ring Fancy / ct</label>
                   <input
                     type="number"
-                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-xl text-xs font-bold text-slate-900"
                     value={localSettings.fancyPricePerCt}
                     onChange={(e) => handleTopLevelSetting('fancyPricePerCt', e.target.value)}
                   />
                 </div>
-                <div>
-                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Earrings Melee / ct</label>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <label className="text-xs font-bold text-slate-800 mb-1 block">Earrings Melee / ct</label>
                   <input
                     type="number"
-                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-xl text-xs font-bold text-slate-900"
                     value={localSettings.earringMeleePricePerCt}
                     onChange={(e) => handleTopLevelSetting('earringMeleePricePerCt', e.target.value)}
                   />
                 </div>
-                <div>
-                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Earrings Fancy / ct</label>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <label className="text-xs font-bold text-slate-800 mb-1 block">Earrings Fancy / ct</label>
                   <input
                     type="number"
-                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-xl text-xs font-bold text-slate-900"
                     value={localSettings.earringFancyPricePerCt}
                     onChange={(e) => handleTopLevelSetting('earringFancyPricePerCt', e.target.value)}
                   />
@@ -1137,50 +1359,43 @@ export default function SettingsView({
             </div>
 
             {/* Standard Center stone rates matrix */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2">Center Stone Retail Rates matrix (per ct)</h4>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                <div className="p-1.5 bg-violet-100 text-violet-800 rounded-lg">
+                  <Gem size={14} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Center Stone Retail Rates Matrix ($ / ct)</h4>
+                  <p className="text-[11px] text-slate-500">Retail rates for center gem varieties split by Natural vs Lab-Grown.</p>
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {Object.keys(localSettings.centerStoneRates).map(stone => (
-                  <div key={stone} className="p-3 bg-brand-50 rounded-xl border border-brand-100 space-y-2">
-                    <p className="text-[10px] font-black uppercase text-brand-700 tracking-wider mb-1">{stone}</p>
-                    <div className="grid grid-cols-2 gap-2">
+                  <div key={stone} className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-200/80 space-y-2">
+                    <p className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                      {stone}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2.5">
                       <div>
-                        <label className="text-[9px] font-bold text-brand-500">Natural / ct</label>
+                        <label className="text-[11px] font-bold text-slate-600 block mb-0.5">Natural / ct</label>
                         <input
                           type="number"
-                          className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                          className="w-full bg-white border border-slate-300 p-2 rounded-lg text-xs font-bold text-slate-900"
                           value={localSettings.centerStoneRates[stone].Natural}
                           onChange={(e) => handleDoubleNestedSetting('centerStoneRates', stone, 'Natural', e.target.value)}
                         />
                       </div>
                       <div>
-                        <label className="text-[9px] font-bold text-brand-500">Lab-grown / ct</label>
+                        <label className="text-[11px] font-bold text-slate-600 block mb-0.5">Lab-Grown / ct</label>
                         <input
                           type="number"
-                          className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                          className="w-full bg-white border border-slate-300 p-2 rounded-lg text-xs font-bold text-slate-900"
                           value={localSettings.centerStoneRates[stone].Lab}
                           onChange={(e) => handleDoubleNestedSetting('centerStoneRates', stone, 'Lab', e.target.value)}
                         />
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Standard Retail Gold Pricing Matrix */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2">Retail Gold grams values</h4>
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                {[10, 14, 18, 19, 22, 24].map(karat => (
-                  <div key={karat}>
-                    <label className="text-[9px] font-bold text-brand-500 mb-0.5 block">{karat}k / gram</label>
-                    <input
-                      type="number"
-                      className="w-full bg-brand-50/50 border border-brand-200 p-2 rounded-xl text-xs font-bold"
-                      value={localSettings.goldPricesPerGram[karat] || ''}
-                      onChange={(e) => handleNestedSetting('goldPricesPerGram', karat.toString(), e.target.value)}
-                    />
                   </div>
                 ))}
               </div>
@@ -1541,14 +1756,14 @@ export default function SettingsView({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* CARD 1: Sizing */}
+                {/* CARD 1 */}
                 <div className="bg-white p-4 rounded-xl border border-brand-100 space-y-3 shadow-xs">
                   <h5 className="text-[10px] font-black text-brand-800 uppercase tracking-wider border-b border-brand-50 pb-1.5 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
                     Ring Resizing & Stretching
                   </h5>
                   
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     <div className="p-2 bg-brand-50/30 rounded-lg border border-brand-50 space-y-1.5">
                       <span className="text-[9px] font-bold text-brand-700 uppercase tracking-wider block">Resize Up 14k (Thin/Std)</span>
                       <div className="grid grid-cols-2 gap-2">
@@ -1731,7 +1946,7 @@ export default function SettingsView({
                     Plating, Cleanup & Polish
                   </h5>
 
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     <div className="p-2 bg-brand-50/30 rounded-lg border border-brand-50 space-y-2">
                       <div className="flex justify-between items-center">
                         <span className="text-[9px] font-bold text-brand-700 uppercase tracking-wider block">Replating Base Price ($)</span>
@@ -1892,18 +2107,18 @@ export default function SettingsView({
               </div>
               <p className="text-[10px] text-brand-500">Specify the manual wholesale price per carat for each round melee diameter size. Empty fields fall back to $400/ct.</p>
               
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                 {Object.entries(ROUND_MELEE).map(([size, carat]) => (
-                  <div key={size} className="bg-white p-2 rounded-xl border border-brand-100/85 shadow-xs flex flex-col justify-between gap-1.5 font-sans">
-                    <span className="text-[10px] font-bold text-brand-600 block leading-tight">
-                      {size} mm <span className="font-mono text-[9px] text-brand-400">({carat} ct)</span>
+                  <div key={size} className="bg-white p-2 rounded-xl border border-brand-100 shadow-2xs flex flex-col justify-between gap-1">
+                    <span className="text-[9px] font-bold text-brand-700 block leading-tight">
+                      {size} mm <span className="font-normal text-[8px] text-brand-400">({carat} ct)</span>
                     </span>
                     <div className="relative">
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-brand-400">$</span>
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-400">$</span>
                       <input
                         type="number"
                         placeholder="400"
-                        className="w-full bg-brand-50/20 border border-brand-200 pl-4.5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono"
+                        className="w-full bg-brand-50/30 border border-brand-200 pl-4 pr-1 py-1 rounded text-xs font-bold text-brand-900"
                         value={currentWholesaleSettings.meleeRates?.[size] ?? ""}
                         onChange={(e) => handleWholesaleMeleeRate(size, e.target.value)}
                       />
@@ -1957,19 +2172,19 @@ export default function SettingsView({
                   Set All {activeFancyShapeTab} Rates
                 </button>
               </div>
-              <p className="text-[10px] text-brand-500">Select a fancy cut shape below, then manually adjust the wholesale price per carat for each size specification.</p>
+              <p className="text-[10px] text-brand-500">Select a fancy cut shape below, then manually adjust the wholesale price per carat for each specific size.</p>
               
               {/* Fancy shape selector tabs */}
-              <div className="flex flex-wrap gap-1 border-b border-brand-100/50 pb-2 font-sans">
+              <div className="flex flex-wrap gap-1 border-b border-brand-100 pb-2">
                 {Object.keys(FANCY_SHAPES).map(shape => (
                   <button
                     key={shape}
                     type="button"
                     onClick={() => setActiveFancyShapeTab(shape)}
-                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
                       activeFancyShapeTab === shape
-                        ? 'bg-brand-900 text-brand-gold shadow-xs'
-                        : 'bg-white text-brand-600 border border-brand-100 hover:bg-brand-50'
+                        ? 'bg-brand-800 text-white shadow-xs'
+                        : 'bg-white text-brand-600 hover:bg-brand-50 border border-brand-100'
                     }`}
                   >
                     {shape}
@@ -1978,19 +2193,19 @@ export default function SettingsView({
               </div>
               
               {/* Base Shape Fallback rate input */}
-              <div className="bg-white p-3 rounded-xl border border-brand-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-sans">
+              <div className="bg-white p-3 rounded-xl border border-brand-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
                 <div className="leading-tight">
-                  <span className="text-[11px] font-bold text-brand-800 block">
+                  <span className="text-xs font-bold text-brand-800 block">
                     Base Shape Fallback Rate ({activeFancyShapeTab})
                   </span>
-                  <span className="text-[9px] text-brand-400">Default rate used for this cut if any specific size is left empty.</span>
+                  <span className="text-[9px] text-brand-400">Default rate used for this cut if a specific size field below is left empty.</span>
                 </div>
-                <div className="relative w-full sm:w-44 shrink-0">
+                <div className="relative w-full sm:w-36 shrink-0">
                   <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-400">$</span>
                   <input
                     type="number"
                     placeholder="500"
-                    className="w-full bg-brand-50/20 border border-brand-200 pl-6 pr-2 py-1 rounded-lg text-xs font-bold font-mono"
+                    className="w-full bg-brand-50/30 border border-brand-200 pl-5 pr-1 py-1 rounded text-xs font-bold text-brand-900"
                     value={currentWholesaleSettings.fancyRates?.[activeFancyShapeTab] ?? ""}
                     onChange={(e) => handleWholesaleFancyRate(activeFancyShapeTab, e.target.value)}
                   />
@@ -1998,21 +2213,21 @@ export default function SettingsView({
               </div>
 
               {/* Specific size rate inputs */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                 {(FANCY_SHAPES[activeFancyShapeTab] || []).map((sz) => {
                   const key = `${activeFancyShapeTab}-${sz.label}`;
                   const fallbackRate = currentWholesaleSettings.fancyRates?.[activeFancyShapeTab] ?? 500;
                   return (
-                    <div key={sz.label} className="bg-white p-2 rounded-xl border border-brand-100/85 shadow-xs flex flex-col justify-between gap-1.5 font-sans">
-                      <span className="text-[10px] font-bold text-brand-600 block leading-tight">
-                        {sz.label} <span className="font-mono text-[9px] text-brand-400">({sz.carat} ct)</span>
+                    <div key={sz.label} className="bg-white p-2 rounded-xl border border-brand-100 shadow-2xs flex flex-col justify-between gap-1">
+                      <span className="text-[9px] font-bold text-brand-700 block leading-tight">
+                        {sz.label} <span className="font-normal text-[8px] text-brand-400">({sz.carat} ct)</span>
                       </span>
                       <div className="relative">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-brand-400">$</span>
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-400">$</span>
                         <input
                           type="number"
                           placeholder={String(fallbackRate)}
-                          className="w-full bg-brand-50/20 border border-brand-200 pl-4.5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono"
+                          className="w-full bg-brand-50/30 border border-brand-200 pl-4 pr-1 py-1 rounded text-xs font-bold text-brand-900"
                           value={currentWholesaleSettings.fancyRates?.[key] ?? ""}
                           onChange={(e) => handleWholesaleFancyRate(key, e.target.value)}
                         />
@@ -2028,67 +2243,67 @@ export default function SettingsView({
         {/* SUBTAB 3.5: Internal Manufacturing Raw Costs (FOR EYES ONLY) */}
         {subTab === 'rawCosts' && (
           <div className="space-y-6 animate-fadeIn">
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-start gap-3">
-              <ShieldAlert className="text-amber-600 shrink-0 mt-0.5" size={18} />
+            <div className="bg-amber-500/10 border border-amber-300 p-4 rounded-2xl flex items-start gap-3">
+              <ShieldAlert className="text-amber-600 shrink-0 mt-0.5" size={20} />
               <div className="space-y-1">
                 <h2 className="text-sm font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
                   <EyeOff size={16} className="text-amber-600" />
                   CONFIDENTIAL: Internal Manufacturing & Raw Costs
                 </h2>
-                <p className="text-[11px] text-amber-800 leading-relaxed">
+                <p className="text-xs text-amber-900 leading-relaxed">
                   These rates represent the absolute minimum cost of materials and labor (for internal tracking only).
-                  These configurations are used to compute the <strong>Raw Cost CAD</strong> and must <strong>never</strong> be shown to clients.
+                  These configurations compute the <strong>Raw Cost CAD</strong> and must <strong>never</strong> be shown to clients.
                 </p>
               </div>
             </div>
 
             {/* Toggle showRawCostOnQuoteTab */}
-            <div className="flex items-center justify-between bg-amber-50/50 border border-amber-200 p-3.5 rounded-xl">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-black text-amber-950 uppercase tracking-wider block flex items-center gap-1.5">
-                  <EyeOff size={14} className="text-amber-600" />
+                <span className="text-xs font-black text-slate-900 uppercase tracking-wider block flex items-center gap-1.5">
+                  <EyeOff size={15} className="text-amber-600" />
                   Show Internal Manufacturing Raw Cost Box
                 </span>
-                <span className="text-[9px] text-amber-700 block leading-tight">Display the confidential amber raw cost breakdown box on the active custom quote tab.</span>
+                <span className="text-[11px] text-slate-500 block">Display the confidential amber raw cost breakdown box on the active custom quote tab.</span>
               </div>
               <button
                 type="button"
                 onClick={() => setLocalSettings(prev => ({ ...prev, showRawCostOnQuoteTab: !prev.showRawCostOnQuoteTab }))}
-                className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${localSettings.showRawCostOnQuoteTab ? 'bg-brand-900' : 'bg-brand-200'}`}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${localSettings.showRawCostOnQuoteTab ? 'bg-amber-600' : 'bg-slate-200'}`}
               >
                 <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${localSettings.showRawCostOnQuoteTab ? 'translate-x-5' : 'translate-x-0'}`}
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${localSettings.showRawCostOnQuoteTab ? 'translate-x-5' : 'translate-x-0'}`}
                 />
               </button>
             </div>
 
             {/* Base Fallback Raw Cost Rates */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2">Base Fallback Raw Rates (per ct)</h4>
-              <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+              <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">Base Fallback Raw Rates (per ct)</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div>
-                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Base Melee Raw / ct</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Base Melee Raw / ct ($)</label>
                   <input
                     type="number"
-                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
+                    className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold font-mono text-slate-900 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                     value={localSettings.rawCostRates.melee}
                     onChange={(e) => handleNestedSetting('rawCostRates', 'melee', e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Base Fancy Raw / ct</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Base Fancy Raw / ct ($)</label>
                   <input
                     type="number"
-                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
+                    className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold font-mono text-slate-900 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                     value={localSettings.rawCostRates.fancy}
                     onChange={(e) => handleNestedSetting('rawCostRates', 'fancy', e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-brand-500 mb-1 block">Base Center Raw / ct</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Base Center Raw / ct ($)</label>
                   <input
                     type="number"
-                    className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-sm font-bold"
+                    className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold font-mono text-slate-900 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                     value={localSettings.rawCostRates.center}
                     onChange={(e) => handleNestedSetting('rawCostRates', 'center', e.target.value)}
                   />
@@ -2097,27 +2312,27 @@ export default function SettingsView({
             </div>
 
             {/* Center Stone Raw Rates Matrix */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2">Center Stone Raw Rates Matrix (per ct)</h4>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+              <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">Center Stone Raw Rates Matrix (per ct)</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {Object.keys(localSettings.centerStoneRawRates || {}).map(stone => (
-                  <div key={stone} className="p-3 bg-brand-50 rounded-xl border border-brand-100 space-y-2">
-                    <p className="text-[10px] font-black uppercase text-brand-700 tracking-wider mb-1">{stone}</p>
-                    <div className="grid grid-cols-2 gap-2">
+                  <div key={stone} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <p className="text-xs font-black uppercase text-slate-800 tracking-wider mb-1">{stone}</p>
+                    <div className="grid grid-cols-2 gap-2.5">
                       <div>
-                        <label className="text-[9px] font-bold text-brand-500">Raw Natural / ct</label>
+                        <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Raw Natural / ct ($)</label>
                         <input
                           type="number"
-                          className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                          className="w-full bg-white border border-slate-300 p-2 rounded-lg text-xs font-bold font-mono text-slate-900"
                           value={localSettings.centerStoneRawRates[stone]?.Natural ?? 500}
                           onChange={(e) => handleDoubleNestedSetting('centerStoneRawRates', stone, 'Natural', e.target.value)}
                         />
                       </div>
                       <div>
-                        <label className="text-[9px] font-bold text-brand-500">Raw Lab-grown / ct</label>
+                        <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Raw Lab-grown / ct ($)</label>
                         <input
                           type="number"
-                          className="w-full bg-white border border-brand-200 p-2 rounded-lg text-xs font-bold"
+                          className="w-full bg-white border border-slate-300 p-2 rounded-lg text-xs font-bold font-mono text-slate-900"
                           value={localSettings.centerStoneRawRates[stone]?.Lab ?? 200}
                           onChange={(e) => handleDoubleNestedSetting('centerStoneRawRates', stone, 'Lab', e.target.value)}
                         />
@@ -2129,10 +2344,10 @@ export default function SettingsView({
             </div>
 
             {/* Melee Round Raw Stone Rates by Size */}
-            <div className="bg-brand-50/30 p-4 rounded-2xl border border-brand-100 space-y-3">
-              <div className="flex justify-between items-center border-b border-brand-100 pb-2 flex-wrap gap-2">
-                <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest flex items-center gap-1.5">
-                  <Gem size={13} className="text-brand-gold" />
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-2.5 flex-wrap gap-2">
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Gem size={15} className="text-amber-600" />
                   Raw Melee Round Rates (per Carat)
                 </h4>
                 <button
@@ -2150,25 +2365,25 @@ export default function SettingsView({
                       }));
                     }
                   }}
-                  className="text-[10px] text-brand-600 hover:text-brand-900 font-bold underline cursor-pointer"
+                  className="text-xs font-bold text-amber-600 hover:text-amber-700 underline cursor-pointer"
                 >
                   Set All Raw Melee Rates
                 </button>
               </div>
-              <p className="text-[10px] text-brand-500">Specify the manual raw cost price per carat for each round melee diameter size. Empty fields fall back to ${localSettings.rawCostRates.melee || 300}/ct.</p>
+              <p className="text-[11px] text-slate-500">Specify manual raw cost price per carat per size. Blank fields fall back to ${localSettings.rawCostRates.melee || 300}/ct.</p>
               
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
                 {Object.entries(ROUND_MELEE).map(([size, carat]) => (
-                  <div key={size} className="bg-white p-2 rounded-xl border border-brand-100/85 shadow-xs flex flex-col justify-between gap-1.5">
-                    <span className="text-[10px] font-bold text-brand-600 block leading-tight">
-                      {size} mm <span className="font-mono text-[9px] text-brand-400">({carat} ct)</span>
+                  <div key={size} className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between gap-1.5">
+                    <span className="text-[10px] font-bold text-slate-700 block leading-tight">
+                      {size} mm <span className="font-mono text-[9px] text-slate-400">({carat} ct)</span>
                     </span>
                     <div className="relative">
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-brand-400">$</span>
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">$</span>
                       <input
                         type="number"
                         placeholder={String(localSettings.rawCostRates.melee || 300)}
-                        className="w-full bg-brand-50/20 border border-brand-200 pl-4.5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono"
+                        className="w-full bg-white border border-slate-300 pl-5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono text-slate-900"
                         value={localSettings.rawMeleeRates?.[size] ?? ""}
                         onChange={(e) => handleRawMeleeRate(size, e.target.value)}
                       />
@@ -2179,10 +2394,10 @@ export default function SettingsView({
             </div>
 
             {/* Raw Fancy Stone Rates by Shape & Size */}
-            <div className="bg-brand-50/30 p-4 rounded-2xl border border-brand-100 space-y-3">
-              <div className="flex justify-between items-center border-b border-brand-100 pb-2 flex-wrap gap-2">
-                <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest flex items-center gap-1.5">
-                  <Gem size={13} className="text-brand-gold" />
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-2.5 flex-wrap gap-2">
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Gem size={15} className="text-amber-600" />
                   Raw Fancy Rates by Shape & Size
                 </h4>
                 <button
@@ -2203,24 +2418,24 @@ export default function SettingsView({
                       }));
                     }
                   }}
-                  className="text-[10px] text-brand-600 hover:text-brand-900 font-bold underline cursor-pointer"
+                  className="text-xs font-bold text-amber-600 hover:text-amber-700 underline cursor-pointer"
                 >
                   Set All Raw {activeRawFancyShapeTab} Rates
                 </button>
               </div>
-              <p className="text-[10px] text-brand-500">Select a fancy cut shape below, then manually adjust the raw cost price per carat for each size specification.</p>
+              <p className="text-[11px] text-slate-500">Select a fancy cut shape below, then manually adjust raw cost per carat per size.</p>
               
               {/* Fancy shape selector tabs */}
-              <div className="flex flex-wrap gap-1 border-b border-brand-100/50 pb-2">
+              <div className="flex flex-wrap gap-1.5 border-b border-slate-100 pb-2.5">
                 {Object.keys(FANCY_SHAPES).map(shape => (
                   <button
                     key={shape}
                     type="button"
                     onClick={() => setActiveRawFancyShapeTab(shape)}
-                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                       activeRawFancyShapeTab === shape
-                        ? 'bg-brand-900 text-brand-gold shadow-xs'
-                        : 'bg-white text-brand-600 border border-brand-100 hover:bg-brand-50'
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
                     {shape}
@@ -2229,19 +2444,19 @@ export default function SettingsView({
               </div>
 
               {/* Base Shape Fallback rate input */}
-              <div className="bg-white p-3 rounded-xl border border-brand-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="leading-tight">
-                  <span className="text-[11px] font-bold text-brand-800 block">
+                  <span className="text-xs font-bold text-slate-900 block">
                     Base Shape Raw Fallback Rate ({activeRawFancyShapeTab})
                   </span>
-                  <span className="text-[9px] text-brand-400">Default raw rate used for this cut if any specific size is left empty.</span>
+                  <span className="text-[10px] text-slate-500">Default raw rate used for this cut if any specific size is left empty.</span>
                 </div>
                 <div className="relative w-full sm:w-44 shrink-0">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-400">$</span>
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">$</span>
                   <input
                     type="number"
                     placeholder={String(localSettings.rawCostRates.fancy || 380)}
-                    className="w-full bg-brand-50/20 border border-brand-200 pl-6 pr-2 py-1 rounded-lg text-xs font-bold font-mono"
+                    className="w-full bg-white border border-slate-300 pl-6 pr-2 py-1.5 rounded-lg text-xs font-bold font-mono text-slate-900"
                     value={localSettings.rawFancyRates?.[activeRawFancyShapeTab] ?? ""}
                     onChange={(e) => handleRawFancyRate(activeRawFancyShapeTab, e.target.value)}
                   />
@@ -2254,16 +2469,16 @@ export default function SettingsView({
                   const key = `${activeRawFancyShapeTab}-${sz.label}`;
                   const fallbackRate = localSettings.rawFancyRates?.[activeRawFancyShapeTab] ?? localSettings.rawCostRates.fancy ?? 380;
                   return (
-                    <div key={sz.label} className="bg-white p-2 rounded-xl border border-brand-100/85 shadow-xs flex flex-col justify-between gap-1.5">
-                      <span className="text-[10px] font-bold text-brand-600 block leading-tight">
-                        {sz.label} <span className="font-mono text-[9px] text-brand-400">({sz.carat} ct)</span>
+                    <div key={sz.label} className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between gap-1.5">
+                      <span className="text-[10px] font-bold text-slate-700 block leading-tight">
+                        {sz.label} <span className="font-mono text-[9px] text-slate-400">({sz.carat} ct)</span>
                       </span>
                       <div className="relative">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-brand-400">$</span>
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">$</span>
                         <input
                           type="number"
                           placeholder={String(fallbackRate)}
-                          className="w-full bg-brand-50/20 border border-brand-200 pl-4.5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono"
+                          className="w-full bg-white border border-slate-300 pl-5 pr-1.5 py-1 rounded-lg text-xs font-bold font-mono text-slate-900"
                           value={localSettings.rawFancyRates?.[key] ?? ""}
                           onChange={(e) => handleRawFancyRate(key, e.target.value)}
                         />
@@ -2279,91 +2494,82 @@ export default function SettingsView({
         {/* SUBTAB 4: Database/Ledger Tools */}
         {subTab === 'database' && (
           <div className="space-y-6 animate-fadeIn">
-            <div>
-              <h2 className="text-sm font-black text-brand-900 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                <HardDrive size={16} className="text-brand-gold" />
-                Ledger Data Utilities
-              </h2>
-              <p className="text-xs text-brand-500">Export active database transactions to CSV formats or clear histories.</p>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <HardDrive size={18} className="text-sky-600" />
+                  Ledger Data Utilities & Sync
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">Export active database transactions to CSV, perform cross-device backups, or clear histories.</p>
+              </div>
+              <span className="text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200 px-3 py-1 rounded-lg">Database & Backup</span>
             </div>
 
             {/* CSV Exports */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2">CSV Table Exports</h4>
-              <div className="flex flex-wrap gap-2">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+              <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">CSV Table Exports</h4>
+              <div className="flex flex-wrap gap-2.5">
                 <button
                   type="button"
                   onClick={() => onExportCsv('scrap')}
-                  className="bg-brand-50 hover:bg-brand-100 border border-brand-200 px-4 py-2.5 rounded-xl text-xs font-bold text-brand-700 flex items-center gap-1.5 transition-all shadow-sm"
+                  className="bg-slate-50 hover:bg-slate-100 border border-slate-300 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
                 >
-                  <Download size={13} className="text-green-600" />
+                  <Download size={14} className="text-emerald-600" />
                   Scrap Ledger CSV
                 </button>
                 <button
                   type="button"
                   onClick={() => onExportCsv('retail')}
-                  className="bg-brand-50 hover:bg-brand-100 border border-brand-200 px-4 py-2.5 rounded-xl text-xs font-bold text-brand-700 flex items-center gap-1.5 transition-all shadow-sm"
+                  className="bg-slate-50 hover:bg-slate-100 border border-slate-300 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
                 >
-                  <Download size={13} className="text-brand-gold" />
+                  <Download size={14} className="text-amber-500" />
                   Retail Ledger CSV
                 </button>
                 <button
                   type="button"
                   onClick={() => onExportCsv('wholesale')}
-                  className="bg-brand-50 hover:bg-brand-100 border border-brand-200 px-4 py-2.5 rounded-xl text-xs font-bold text-brand-700 flex items-center gap-1.5 transition-all shadow-sm"
+                  className="bg-slate-50 hover:bg-slate-100 border border-slate-300 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
                 >
-                  <Download size={13} className="text-blue-600" />
+                  <Download size={14} className="text-sky-600" />
                   Wholesale Ledger CSV
                 </button>
               </div>
             </div>
 
             {/* Cross-Device Sync Backup */}
-            <div className="bg-brand-50 p-5 rounded-2xl border border-brand-200/80 space-y-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
               <div>
-                <h4 className="text-xs font-black text-brand-800 uppercase tracking-widest flex items-center gap-1.5 border-b border-brand-100 pb-2">
-                  <FileJson size={14} className="text-brand-gold" />
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                  <FileJson size={15} className="text-sky-600" />
                   Cross-Device Sync & Ledger Backup
                 </h4>
-                <p className="text-[11px] text-brand-600 leading-relaxed mt-1">
-                  Since you opted out of cloud databases, you can synchronize your complete calculator history, custom jewellery designs, and settings between your <strong>computers and iPad</strong> entirely for free.
+                <p className="text-xs text-slate-600 leading-relaxed mt-1.5">
+                  Synchronize your complete calculator history, custom designs, and master parameters between desktop browsers and iPads via local file export/import.
                 </p>
-                <div className="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200/80 text-[11px] text-amber-950 leading-relaxed space-y-1.5 mt-2">
-                  <p className="font-bold flex items-center gap-1.5 text-amber-900 text-xs">
-                    <ShieldAlert size={13} className="text-amber-700 shrink-0" />
-                    How to Avoid Losing History When Updating (Vercel/GitHub)
-                  </p>
-                  <p>
-                    <strong>1. Keep to the Production Domain:</strong> Browser databases (<code className="bg-amber-100/60 px-1 py-0.5 rounded font-mono text-[10px]">localStorage</code>) are securely tied to your exact website URL address. If you update your code and visit Vercel's changing <em>Preview Links</em> (e.g. <code className="bg-amber-100/60 px-1 py-0.5 rounded font-mono text-[10px]">...git-main...vercel.app</code>), the iPad treats it as a brand new website and cannot access the old history. <strong>Always use your main, static production domain link</strong> to ensure your data is always there.
-                  </p>
-                  <p>
-                    <strong>2. Apple Safari Background Eviction:</strong> iOS Safari aggressively clears local storage for sites if you don't visit them for over 7 days or if disk space is low. We have implemented an automatic <strong>iOS Storage Preservation Request</strong> to block iOS from auto-purging this cache. However, we highly recommend clicking the <strong>Download Sync File</strong> button before any updates as an ultimate physical backup!
-                  </p>
-                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Export Section */}
-                <div className="bg-white p-4 rounded-xl border border-brand-100 space-y-2">
-                  <span className="text-[10px] font-black uppercase text-brand-700 tracking-wider block">1. Export Sync File</span>
-                  <p className="text-[10px] text-brand-400">
-                    Download your entire application history as a single file. Send it to your other devices using AirDrop, email, or a flash drive.
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5">
+                  <span className="text-xs font-black uppercase text-slate-900 tracking-wider block">1. Export Sync File</span>
+                  <p className="text-[11px] text-slate-500">
+                    Download complete application state as a single JSON backup file. Transfer to iPad via AirDrop or Files.
                   </p>
                   <button
                     type="button"
                     onClick={handleExportBackupJSON}
-                    className="w-full bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-2.5 rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                    className="w-full bg-slate-900 text-amber-400 hover:bg-black font-black py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
                   >
-                    <Download size={12} />
+                    <Download size={14} />
                     Download Sync File
                   </button>
                 </div>
 
                 {/* Import Section */}
-                <div className="bg-white p-4 rounded-xl border border-brand-100 space-y-2">
-                  <span className="text-[10px] font-black uppercase text-brand-700 tracking-wider block">2. Import Sync File</span>
-                  <p className="text-[10px] text-brand-400">
-                    Choose a sync backup file on your target device (iPad or another computer) to import and merge your full ledger histories instantly.
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5">
+                  <span className="text-xs font-black uppercase text-slate-900 tracking-wider block">2. Import Sync File</span>
+                  <p className="text-[11px] text-slate-500">
+                    Select a sync backup file on your target device to import and merge your full ledger histories instantly.
                   </p>
                   <div className="relative">
                     <input
@@ -2374,9 +2580,9 @@ export default function SettingsView({
                     />
                     <button
                       type="button"
-                      className="w-full bg-brand-50 hover:bg-brand-100 text-brand-800 border border-brand-200 font-black py-2.5 rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all shadow-sm pointer-events-none"
+                      className="w-full bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-black py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-xs pointer-events-none"
                     >
-                      <Upload size={12} className="text-brand-gold" />
+                      <Upload size={14} className="text-amber-500" />
                       Select Sync File
                     </button>
                   </div>
@@ -2385,18 +2591,18 @@ export default function SettingsView({
             </div>
 
             {/* Database Purge */}
-            <div className="bg-red-50/50 p-5 rounded-2xl border border-red-200/80 space-y-4">
-              <h4 className="text-xs font-black text-red-800 uppercase tracking-widest flex items-center gap-1.5 border-b border-red-100 pb-2">
-                <ShieldAlert size={14} className="text-red-600" />
+            <div className="bg-white p-5 rounded-2xl border border-red-200 shadow-xs space-y-4">
+              <h4 className="text-xs font-black text-red-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-red-100 pb-2">
+                <ShieldAlert size={15} className="text-red-600" />
                 Database Purge / Data Removal Suite
               </h4>
-              <p className="text-[11px] text-red-700 leading-relaxed">Ensure complying with local financial records laws. Purging will delete client and payout ledger lines permanently.</p>
+              <p className="text-xs text-slate-600 leading-relaxed">Comply with financial record rules. Purging permanently removes transaction lines from both local and cloud databases.</p>
               
               <div className="flex flex-col sm:flex-row gap-3 items-center">
                 <select
                   value={purgeRange}
                   onChange={(e) => setPurgeRange(e.target.value as any)}
-                  className="bg-white border border-brand-200 px-3 py-2.5 rounded-xl text-xs font-bold w-full sm:w-48 outline-none"
+                  className="bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900 w-full sm:w-52 outline-none"
                 >
                   <option value="365">Older than 365 days</option>
                   <option value="all">Wipe entire ledger history</option>
@@ -2404,17 +2610,17 @@ export default function SettingsView({
                 </select>
 
                 {purgeRange === 'custom' && (
-                  <div className="flex items-center gap-2 w-full sm:w-auto font-bold text-xs text-brand-500">
+                  <div className="flex items-center gap-2 w-full sm:w-auto font-bold text-xs text-slate-700">
                     <input
                       type="date"
-                      className="bg-white border border-brand-200 p-2 rounded-xl text-xs"
+                      className="bg-slate-50 border border-slate-300 p-2 rounded-xl text-xs text-slate-900"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
                     />
                     <span>to</span>
                     <input
                       type="date"
-                      className="bg-white border border-brand-200 p-2 rounded-xl text-xs"
+                      className="bg-slate-50 border border-slate-300 p-2 rounded-xl text-xs text-slate-900"
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
                     />
@@ -2424,9 +2630,9 @@ export default function SettingsView({
                 <button
                   type="button"
                   onClick={handlePurgeHistory}
-                  className="bg-red-600 hover:bg-red-700 text-white font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md w-full sm:w-auto justify-center"
+                  className="bg-red-600 hover:bg-red-700 text-white font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-xs w-full sm:w-auto justify-center cursor-pointer"
                 >
-                  <Trash2 size={13} />
+                  <Trash2 size={14} />
                   Purge Data
                 </button>
               </div>

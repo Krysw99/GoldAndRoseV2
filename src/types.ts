@@ -263,6 +263,9 @@ export interface AppSettings {
   tennisGoldPricesPerGram: { [karat: number]: number };
   tennisPlatinumPricePerGram: number;
   tennisSilverPricePerGram: number;
+  mensBandGoldPricesPerGram?: { [karat: number]: number };
+  mensBandPlatinumPricePerGram?: number;
+  mensBandSilverPricePerGram?: number;
   tennisMeleePricePerCtRaw: number;
   tennisFancyPricePerCtRaw: number;
   showRawCostOnQuoteTab: boolean;

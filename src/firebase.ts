@@ -157,10 +157,53 @@ export async function compressPayload(obj: any): Promise<any> {
 }
 
 /**
+ * Deleted Document Tracker to prevent deleted documents from resurrecting
+ */
+export function markDocumentDeleted(id: string) {
+  if (!id) return;
+  try {
+    const raw = localStorage.getItem('gr_deleted_doc_ids');
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    if (!list.includes(id)) {
+      list.push(id);
+      if (list.length > 2000) list.shift();
+      localStorage.setItem('gr_deleted_doc_ids', JSON.stringify(list));
+    }
+  } catch (e) {
+    console.warn("Failed to mark document as deleted", e);
+  }
+}
+
+export function unmarkDocumentDeleted(id: string) {
+  if (!id) return;
+  try {
+    const raw = localStorage.getItem('gr_deleted_doc_ids');
+    if (!raw) return;
+    const list: string[] = JSON.parse(raw);
+    const updated = list.filter(i => i !== id);
+    localStorage.setItem('gr_deleted_doc_ids', JSON.stringify(updated));
+  } catch (e) {
+    console.warn("Failed to unmark deleted document", e);
+  }
+}
+
+export function isDocumentDeleted(id: string): boolean {
+  if (!id) return false;
+  try {
+    const raw = localStorage.getItem('gr_deleted_doc_ids');
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    return list.includes(id);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Syncs a single document to Firestore.
  */
 export async function saveDocument(collectionName: string, id: string, data: any) {
   const path = `${collectionName}/${id}`;
+  unmarkDocumentDeleted(id);
   try {
     const docRef = doc(db, collectionName, id);
     // Sanitize any undefined properties before uploading to Firestore
@@ -183,6 +226,7 @@ export async function saveDocument(collectionName: string, id: string, data: any
  */
 export async function deleteDocument(collectionName: string, id: string) {
   const path = `${collectionName}/${id}`;
+  markDocumentDeleted(id);
   try {
     const docRef = doc(db, collectionName, id);
     await firestoreDeleteDoc(docRef);
@@ -224,15 +268,21 @@ export async function syncLocalToCloud(collectionName: string, localItems: any[]
     let count = 0;
     
     for (const item of localItems) {
-      if (item && item.id && item.id !== 'undefined' && !cloudIds.has(item.id)) {
-        const docRef = doc(db, collectionName, item.id);
-        const sanitized = JSON.parse(JSON.stringify(item));
-        if (sanitized && typeof sanitized === 'object') {
-          delete sanitized.syncPending;
+      if (item && item.id && item.id !== 'undefined') {
+        // Skip any item that was deleted
+        if (isDocumentDeleted(item.id)) {
+          continue;
         }
-        const compressed = await compressPayload(sanitized);
-        batch.set(docRef, compressed);
-        count++;
+        if (!cloudIds.has(item.id)) {
+          const docRef = doc(db, collectionName, item.id);
+          const sanitized = JSON.parse(JSON.stringify(item));
+          if (sanitized && typeof sanitized === 'object') {
+            delete sanitized.syncPending;
+          }
+          const compressed = await compressPayload(sanitized);
+          batch.set(docRef, compressed);
+          count++;
+        }
       }
     }
     

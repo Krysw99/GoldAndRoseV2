@@ -28,7 +28,7 @@ import CubanBraceletBuilder from './components/CubanBraceletBuilder';
 import WholesaleRepairView from './components/WholesaleRepairView';
 
 // Firebase cloud sync helpers
-import { listenCollection, saveDocument, deleteDocument, syncLocalToCloud } from './firebase';
+import { listenCollection, saveDocument, deleteDocument, syncLocalToCloud, isDocumentDeleted, markDocumentDeleted } from './firebase';
 
 // Tactile Click Audio Feedback Utility
 import { playClickSound } from './utils/audio';
@@ -108,11 +108,9 @@ export default function App() {
   // Active custom quote sessions
   const [retailSession, setRetailSession] = useState<QuoteSession>(() => {
     try {
-      const raw = localStorage.getItem('gr_active_retail_session');
-      return raw ? JSON.parse(raw) : getEmptyQuoteSession();
-    } catch {
-      return getEmptyQuoteSession();
-    }
+      localStorage.removeItem('gr_active_retail_session');
+    } catch {}
+    return getEmptyQuoteSession();
   });
   const [wholesaleSession, setWholesaleSession] = useState<QuoteSession>(() => {
     try {
@@ -349,7 +347,8 @@ export default function App() {
         // 1. Set up real-time listener for Scrap Buyback Ledger
         unsubScrap = listenCollection('scrap_ledger', (docs) => {
           if (!active) return;
-          const cloudIds = new Set(docs.map(d => d.id));
+          const validDocs = docs.filter(d => d && d.id && !isDocumentDeleted(d.id));
+          const cloudIds = new Set(validDocs.map(d => d.id));
           const localItems = (() => {
             try {
               const raw = localStorage.getItem('gr_scrap_ledger');
@@ -357,18 +356,11 @@ export default function App() {
             } catch { return []; }
           })();
           
-          const merged = [...docs];
-          const fifteenMinutes = 15 * 60 * 1000;
+          const merged = [...validDocs];
           for (const localItem of localItems) {
-            if (localItem && localItem.id && !cloudIds.has(localItem.id)) {
+            if (localItem && localItem.id && !cloudIds.has(localItem.id) && !isDocumentDeleted(localItem.id)) {
               if (localItem.syncPending) {
                 merged.push(localItem);
-              } else {
-                const localTime = localItem.timestamp || (localItem.date ? safeParseDate(localItem.date) : Date.now());
-                const ageMs = Date.now() - localTime;
-                if (ageMs < fifteenMinutes) {
-                  merged.push(localItem);
-                }
               }
             }
           }
@@ -385,7 +377,8 @@ export default function App() {
         // 2. Set up real-time listener for Retail Quote Ledger
         unsubRetail = listenCollection('retail_ledger', (docs) => {
           if (!active) return;
-          const cloudIds = new Set(docs.map(d => d.id));
+          const validDocs = docs.filter(d => d && d.id && !isDocumentDeleted(d.id));
+          const cloudIds = new Set(validDocs.map(d => d.id));
           const localItems = (() => {
             try {
               const raw = localStorage.getItem('gr_quote_ledger');
@@ -393,18 +386,11 @@ export default function App() {
             } catch { return []; }
           })();
 
-          const merged = [...docs];
-          const fifteenMinutes = 15 * 60 * 1000;
+          const merged = [...validDocs];
           for (const localItem of localItems) {
-            if (localItem && localItem.id && !cloudIds.has(localItem.id)) {
+            if (localItem && localItem.id && !cloudIds.has(localItem.id) && !isDocumentDeleted(localItem.id)) {
               if (localItem.syncPending) {
                 merged.push(localItem);
-              } else {
-                const localTime = localItem.timestamp || (localItem.date ? safeParseDate(localItem.date) : Date.now());
-                const ageMs = Date.now() - localTime;
-                if (ageMs < fifteenMinutes) {
-                  merged.push(localItem);
-                }
               }
             }
           }
@@ -421,7 +407,8 @@ export default function App() {
         // 3. Set up real-time listener for Wholesale Ledger
         unsubWholesale = listenCollection('wholesale_ledger', (docs) => {
           if (!active) return;
-          const cloudIds = new Set(docs.map(d => d.id));
+          const validDocs = docs.filter(d => d && d.id && !isDocumentDeleted(d.id));
+          const cloudIds = new Set(validDocs.map(d => d.id));
           const localItems = (() => {
             try {
               const raw = localStorage.getItem('gr_wholesale_ledger');
@@ -429,18 +416,11 @@ export default function App() {
             } catch { return []; }
           })();
 
-          const merged = [...docs];
-          const fifteenMinutes = 15 * 60 * 1000;
+          const merged = [...validDocs];
           for (const localItem of localItems) {
-            if (localItem && localItem.id && !cloudIds.has(localItem.id)) {
+            if (localItem && localItem.id && !cloudIds.has(localItem.id) && !isDocumentDeleted(localItem.id)) {
               if (localItem.syncPending) {
                 merged.push(localItem);
-              } else {
-                const localTime = localItem.timestamp || (localItem.date ? safeParseDate(localItem.date) : Date.now());
-                const ageMs = Date.now() - localTime;
-                if (ageMs < fifteenMinutes) {
-                  merged.push(localItem);
-                }
               }
             }
           }
@@ -457,7 +437,8 @@ export default function App() {
         // 4. Set up real-time listener for Cuban Estimates
         unsubCuban = listenCollection('cuban_estimates', (docs) => {
           if (!active) return;
-          const cloudIds = new Set(docs.map(d => d.id));
+          const validDocs = docs.filter(d => d && d.id && !isDocumentDeleted(d.id));
+          const cloudIds = new Set(validDocs.map(d => d.id));
           const localItems = (() => {
             try {
               const raw = localStorage.getItem('gr_cuban_estimates');
@@ -465,18 +446,11 @@ export default function App() {
             } catch { return []; }
           })();
 
-          const merged = [...docs];
-          const fifteenMinutes = 15 * 60 * 1000;
+          const merged = [...validDocs];
           for (const localItem of localItems) {
-            if (localItem && localItem.id && !cloudIds.has(localItem.id)) {
+            if (localItem && localItem.id && !cloudIds.has(localItem.id) && !isDocumentDeleted(localItem.id)) {
               if (localItem.syncPending) {
                 merged.push(localItem);
-              } else {
-                const localTime = localItem.timestamp ? new Date(localItem.timestamp).getTime() : Date.now();
-                const ageMs = Date.now() - localTime;
-                if (ageMs < fifteenMinutes) {
-                  merged.push(localItem);
-                }
               }
             }
           }
@@ -515,7 +489,7 @@ export default function App() {
              setGoldApiKey(apiKeyDoc.key || '');
            }
 
-           const retailDoc = docs.find(d => d.id === 'active_retail_session');
+           const retailDoc = null;
            if (retailDoc) {
              const cleanRetail = { ...retailDoc };
              delete cleanRetail.id;
@@ -962,18 +936,28 @@ setIsCloudSynced(true);
   };
 
   // LEDGER CLEAR HISTORY UTILITY
-  const handleClearHistory = (range: 'all' | '365' | 'custom', startDate?: string, endDate?: string) => {
+  const handleClearHistory = async (range: 'all' | '365' | 'custom', startDate?: string, endDate?: string) => {
     let fS = [...scrapTransactions];
     let fR = [...ringQuoteTransactions];
     let fW = [...wholesaleTransactions];
 
+    let removedS: ScrapTransaction[] = [];
+    let removedR: QuoteTransaction[] = [];
+    let removedW: QuoteTransaction[] = [];
+
     if (range === 'all') {
+      removedS = fS;
+      removedR = fR;
+      removedW = fW;
       fS = [];
       fR = [];
       fW = [];
     } else if (range === '365') {
       const cut = new Date();
       cut.setDate(cut.getDate() - 365);
+      removedS = scrapTransactions.filter(t => new Date(t.date) <= cut);
+      removedR = ringQuoteTransactions.filter(t => new Date(t.date) <= cut);
+      removedW = wholesaleTransactions.filter(t => new Date(t.date) <= cut);
       fS = scrapTransactions.filter(t => new Date(t.date) > cut);
       fR = ringQuoteTransactions.filter(t => new Date(t.date) > cut);
       fW = wholesaleTransactions.filter(t => new Date(t.date) > cut);
@@ -983,49 +967,70 @@ setIsCloudSynced(true);
       const e = new Date(endDate);
       e.setHours(23, 59, 59, 999);
 
-      const filterByDate = (txList: any[]) => txList.filter(tx => {
-        const d = new Date(tx.date);
-        return d < s || d > e;
-      });
+      removedS = scrapTransactions.filter(tx => { const d = new Date(tx.date); return d >= s && d <= e; });
+      removedR = ringQuoteTransactions.filter(tx => { const d = new Date(tx.date); return d >= s && d <= e; });
+      removedW = wholesaleTransactions.filter(tx => { const d = new Date(tx.date); return d >= s && d <= e; });
 
-      fS = filterByDate(scrapTransactions);
-      fR = filterByDate(ringQuoteTransactions);
-      fW = filterByDate(wholesaleTransactions);
+      fS = scrapTransactions.filter(tx => { const d = new Date(tx.date); return d < s || d > e; });
+      fR = ringQuoteTransactions.filter(tx => { const d = new Date(tx.date); return d < s || d > e; });
+      fW = wholesaleTransactions.filter(tx => { const d = new Date(tx.date); return d < s || d > e; });
     }
 
     setScrapTransactions(fS);
     setRingQuoteTransactions(fR);
     setWholesaleTransactions(fW);
 
-    localStorage.setItem('gr_scrap_ledger', JSON.stringify(fS));
-    localStorage.setItem('gr_quote_ledger', JSON.stringify(fR));
-    localStorage.setItem('gr_wholesale_ledger', JSON.stringify(fW));
+    safeSetLocalStorage('gr_scrap_ledger', fS);
+    safeSetLocalStorage('gr_quote_ledger', fR);
+    safeSetLocalStorage('gr_wholesale_ledger', fW);
+
+    // Delete purged items from Firestore cloud
+    for (const item of removedS) {
+      if (item?.id) {
+        markDocumentDeleted(item.id);
+        deleteDocument('scrap_ledger', item.id).catch(() => {});
+      }
+    }
+    for (const item of removedR) {
+      if (item?.id) {
+        markDocumentDeleted(item.id);
+        deleteDocument('retail_ledger', item.id).catch(() => {});
+      }
+    }
+    for (const item of removedW) {
+      if (item?.id) {
+        markDocumentDeleted(item.id);
+        deleteDocument('wholesale_ledger', item.id).catch(() => {});
+      }
+    }
   };
 
-  const handleDeleteLedgerItem = (type: 'scrap' | 'retail' | 'wholesale', id: string) => {
+  const handleDeleteLedgerItem = async (type: 'scrap' | 'retail' | 'wholesale', id: string) => {
     if (!window.confirm("Permanently delete this transaction record?")) return;
+
+    markDocumentDeleted(id);
 
     if (type === 'scrap') {
       setScrapTransactions(prev => {
         const updated = prev.filter(t => t.id !== id);
-        localStorage.setItem('gr_scrap_ledger', JSON.stringify(updated));
+        safeSetLocalStorage('gr_scrap_ledger', updated);
         return updated;
       });
-      deleteDocument('scrap_ledger', id);
+      await deleteDocument('scrap_ledger', id).catch(err => console.error("Scrap cloud delete error:", err));
     } else if (type === 'retail') {
       setRingQuoteTransactions(prev => {
         const updated = prev.filter(t => t.id !== id);
-        localStorage.setItem('gr_quote_ledger', JSON.stringify(updated));
+        safeSetLocalStorage('gr_quote_ledger', updated);
         return updated;
       });
-      deleteDocument('retail_ledger', id);
+      await deleteDocument('retail_ledger', id).catch(err => console.error("Retail cloud delete error:", err));
     } else {
       setWholesaleTransactions(prev => {
         const updated = prev.filter(t => t.id !== id);
-        localStorage.setItem('gr_wholesale_ledger', JSON.stringify(updated));
+        safeSetLocalStorage('gr_wholesale_ledger', updated);
         return updated;
       });
-      deleteDocument('wholesale_ledger', id);
+      await deleteDocument('wholesale_ledger', id).catch(err => console.error("Wholesale cloud delete error:", err));
     }
   };
 
