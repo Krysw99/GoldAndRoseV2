@@ -68,6 +68,34 @@ export default function ScrapCalculator({
     { weight: '', material: 'gold', purity: 14, rate: 85 }
   ]);
 
+  // Local string state for Live Feed Anchors spot price inputs to allow deleting all digits cleanly
+  const [localSpotInputs, setLocalSpotInputs] = useState<{ gold: string; silver: string; platinum: string }>({
+    gold: spotPrices.gold ? String(spotPrices.gold) : '',
+    silver: spotPrices.silver ? String(spotPrices.silver) : '',
+    platinum: spotPrices.platinum ? String(spotPrices.platinum) : '',
+  });
+
+  useEffect(() => {
+    setLocalSpotInputs(prev => {
+      const next = { ...prev };
+      (['gold', 'silver', 'platinum'] as const).forEach(m => {
+        const current = spotPrices[m] || 0;
+        const parsed = parseFloat(prev[m]);
+        if (prev[m] === '' && current === 0) return;
+        if (isNaN(parsed) || parsed !== current) {
+          next[m] = current ? String(current) : '';
+        }
+      });
+      return next;
+    });
+  }, [spotPrices.gold, spotPrices.silver, spotPrices.platinum]);
+
+  const handleSpotInputChange = (m: 'gold' | 'silver' | 'platinum', valStr: string) => {
+    setLocalSpotInputs(prev => ({ ...prev, [m]: valStr }));
+    const valNum = parseFloat(valStr);
+    onUpdateSpotPrices({ ...spotPrices, [m]: isNaN(valNum) ? 0 : valNum });
+  };
+
   useEffect(() => {
     if (editingTransaction) {
       setCustomerName(editingTransaction.name || '');
@@ -370,11 +398,9 @@ export default function ScrapCalculator({
               <input
                 type="number"
                 className="w-full p-2 border rounded-lg font-bold bg-brand-50 text-brand-900 text-sm no-spinner shadow-sm"
-                value={spotPrices[m]}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value) || 0;
-                  onUpdateSpotPrices({ ...spotPrices, [m]: val });
-                }}
+                value={localSpotInputs[m]}
+                onChange={(e) => handleSpotInputChange(m, e.target.value)}
+                placeholder="0"
               />
             </div>
           ))}

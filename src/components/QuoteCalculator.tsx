@@ -1092,6 +1092,44 @@ export default function QuoteCalculator({
   const [isDesignerMode, setIsDesignerMode] = useState(false);
   const [openDiscounts, setOpenDiscounts] = useState<Record<string, boolean>>({});
 
+  // Local string state for JOB METAL SPOT OVERRIDES inputs to allow deleting all digits cleanly
+  const [localOverrideSpot, setLocalOverrideSpot] = useState<{ gold: string; silver: string; platinum: string }>({
+    gold: String(session.overridePrices?.gold ?? spotPrices.gold ?? ''),
+    silver: String(session.overridePrices?.silver ?? spotPrices.silver ?? ''),
+    platinum: String(session.overridePrices?.platinum ?? spotPrices.platinum ?? ''),
+  });
+
+  useEffect(() => {
+    setLocalOverrideSpot(prev => {
+      const next = { ...prev };
+      (['gold', 'silver', 'platinum'] as const).forEach(m => {
+        const current = session.overridePrices?.[m] ?? spotPrices[m] ?? 0;
+        const parsed = parseFloat(prev[m]);
+        if (prev[m] === '' && current === 0) return;
+        if (isNaN(parsed) || parsed !== current) {
+          next[m] = current ? String(current) : '';
+        }
+      });
+      return next;
+    });
+  }, [
+    session.overridePrices?.gold,
+    session.overridePrices?.silver,
+    session.overridePrices?.platinum,
+    spotPrices.gold,
+    spotPrices.silver,
+    spotPrices.platinum
+  ]);
+
+  const handleOverrideInputChange = (m: 'gold' | 'silver' | 'platinum', valStr: string) => {
+    setLocalOverrideSpot(prev => ({ ...prev, [m]: valStr }));
+    const valNum = parseFloat(valStr);
+    onChangeSession(prev => ({
+      ...prev,
+      overridePrices: { ...(prev.overridePrices || {}), [m]: isNaN(valNum) ? 0 : valNum }
+    }));
+  };
+
   // Active ring being edited in the subtab
   const activeRing = session.rings.find(r => r.id === session.activeSubTab);
 
@@ -1698,14 +1736,9 @@ export default function QuoteCalculator({
                 <input
                   type="number"
                   className="p-2 border border-emerald-200 rounded-xl font-bold text-xs bg-white text-emerald-900 w-28 outline-none focus:border-emerald-400"
-                  value={session.overridePrices?.gold ?? spotPrices.gold}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value) || 0;
-                    onChangeSession(prev => ({
-                      ...prev,
-                      overridePrices: { ...(prev.overridePrices || {}), gold: val }
-                    }));
-                  }}
+                  value={localOverrideSpot.gold}
+                  onChange={(e) => handleOverrideInputChange('gold', e.target.value)}
+                  placeholder="0"
                 />
               </div>
               <div>
@@ -1713,14 +1746,9 @@ export default function QuoteCalculator({
                 <input
                   type="number"
                   className="p-2 border border-emerald-200 rounded-xl font-bold text-xs bg-white text-emerald-900 w-28 outline-none focus:border-emerald-400"
-                  value={session.overridePrices?.platinum ?? spotPrices.platinum}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value) || 0;
-                    onChangeSession(prev => ({
-                      ...prev,
-                      overridePrices: { ...(prev.overridePrices || {}), platinum: val }
-                    }));
-                  }}
+                  value={localOverrideSpot.platinum}
+                  onChange={(e) => handleOverrideInputChange('platinum', e.target.value)}
+                  placeholder="0"
                 />
               </div>
               <div>
@@ -1728,14 +1756,9 @@ export default function QuoteCalculator({
                 <input
                   type="number"
                   className="p-2 border border-emerald-200 rounded-xl font-bold text-xs bg-white text-emerald-900 w-28 outline-none focus:border-emerald-400"
-                  value={session.overridePrices?.silver ?? spotPrices.silver}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value) || 0;
-                    onChangeSession(prev => ({
-                      ...prev,
-                      overridePrices: { ...(prev.overridePrices || {}), silver: val }
-                    }));
-                  }}
+                  value={localOverrideSpot.silver}
+                  onChange={(e) => handleOverrideInputChange('silver', e.target.value)}
+                  placeholder="0"
                 />
               </div>
             </div>
