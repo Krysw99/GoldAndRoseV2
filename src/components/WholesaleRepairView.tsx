@@ -452,8 +452,8 @@ export default function WholesaleRepairView({
   
   const postDiscountSubtotal = Math.max(0, subtotalTotal - computedDiscount);
   const scrapCredit = Number(session.scrapCredit) || 0;
-  const netBeforeTax = Math.max(0, postDiscountSubtotal - scrapCredit);
-  const taxAmount = session.applyTax ? netBeforeTax * 0.12 : 0; // 12% standard CAD retail/wholesale taxes
+  const netBeforeTax = postDiscountSubtotal - scrapCredit;
+  const taxAmount = session.applyTax ? Math.max(0, netBeforeTax) * 0.12 : 0; // 12% standard CAD retail/wholesale taxes
   const grandTotal = netBeforeTax + taxAmount;
 
   // Print friendly triggered invoice trigger
@@ -1451,7 +1451,7 @@ export default function WholesaleRepairView({
 
               <div className="flex justify-between text-xs text-gray-900 border-t border-gray-200 pt-2 px-1 font-bold">
                 <span>Net Estimated Total:</span>
-                <span className="font-mono">${netBeforeTax.toFixed(2)}</span>
+                <span className="font-mono">{netBeforeTax < 0 ? `-$${Math.abs(netBeforeTax).toFixed(2)}` : `$${netBeforeTax.toFixed(2)}`}</span>
               </div>
 
               {session.applyTax && (
@@ -1461,9 +1461,13 @@ export default function WholesaleRepairView({
                 </div>
               )}
 
-              <div className="flex justify-between text-sm bg-black text-white p-3.5 rounded-xl font-bold items-center mt-2">
-                <span className="uppercase tracking-widest text-[9px] font-mono">Job Grand Total</span>
-                <span className="font-mono text-base">${grandTotal.toFixed(2)} CAD</span>
+              <div className={`flex justify-between text-sm p-3.5 rounded-xl font-bold items-center mt-2 ${grandTotal < 0 ? 'bg-emerald-900 text-emerald-100' : 'bg-black text-white'}`}>
+                <span className="uppercase tracking-widest text-[9px] font-mono">
+                  {grandTotal < 0 ? 'Client Payout Due' : 'Job Grand Total'}
+                </span>
+                <span className="font-mono text-base">
+                  {grandTotal < 0 ? `-$${Math.abs(grandTotal).toFixed(2)} CAD` : `$${grandTotal.toFixed(2)} CAD`}
+                </span>
               </div>
             </div>
 

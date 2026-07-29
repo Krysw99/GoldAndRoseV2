@@ -393,6 +393,49 @@ export interface TennisEstimateResult {
   caratPerStone: number;
 }
 
+/**
+ * Calculates 7-inch base metal gram weight for Tennis Bracelets/Chains
+ * based on empirical jeweler real-world benchmarks:
+ * - 1.8mm: 3.9g for 6.5"  -> 4.20g for 7.0"
+ * - 2.0mm: 6.5g for 6.5"  -> 7.00g for 7.0"
+ * - 2.2mm: 5.5g for 7.0"  -> 5.50g for 7.0"
+ * - 3.0mm: 7.98g for 6.5" -> 8.5938g for 7.0"
+ * - 4.0mm: 16.0g for 18.5cm (7.2835") -> 15.3774g for 7.0"
+ * - 5.0mm: 20.0g for 7.0" -> 20.00g for 7.0"
+ */
+export function getTennisBaseGrams(smm: number): number {
+  if (smm <= 0) return 0;
+  
+  const anchors = [
+    { smm: 0.0, bg: 0.0 },
+    { smm: 1.8, bg: 4.20 },
+    { smm: 2.0, bg: 7.00 },
+    { smm: 2.2, bg: 5.50 },
+    { smm: 3.0, bg: 8.5938 },
+    { smm: 4.0, bg: 15.3774 },
+    { smm: 5.0, bg: 20.00 },
+  ];
+
+  if (smm <= anchors[0].smm) return 0;
+  if (smm >= anchors[anchors.length - 1].smm) {
+    const last = anchors[anchors.length - 1];
+    const prev = anchors[anchors.length - 2];
+    const slope = (last.bg - prev.bg) / (last.smm - prev.smm);
+    return last.bg + (smm - last.smm) * slope;
+  }
+
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const a1 = anchors[i];
+    const a2 = anchors[i + 1];
+    if (smm >= a1.smm && smm <= a2.smm) {
+      const t = (smm - a1.smm) / (a2.smm - a1.smm);
+      return a1.bg + t * (a2.bg - a1.bg);
+    }
+  }
+
+  return smm * 4;
+}
+
 export function getTennisEstimates(r: JewelryItem): TennisEstimateResult {
   let smm = 0;
   let cps = 0;
@@ -409,9 +452,8 @@ export function getTennisEstimates(r: JewelryItem): TennisEstimateResult {
   
   if (!smm) return { estStones: 0, estGrams: 0, caratPerStone: 0 };
   
-  // formulas based on user's original logic
   const bs = Math.round(177.8 / (smm + 0.4));
-  const bg = (smm * 5) + 1;
+  const bg = getTennisBaseGrams(smm);
   const lm = Number(r.tbLength || 7.0) / 7.0;
   
   let dm = 1.0;

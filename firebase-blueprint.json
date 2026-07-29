@@ -68,6 +68,17 @@
         "id": { "type": "string" }
       },
       "required": ["id"]
+    },
+    "DeletedDoc": {
+      "title": "DeletedDoc",
+      "description": "Tombstone record for deleted documents across all ledgers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "collectionName": { "type": "string" },
+        "deletedAt": { "type": "number" }
+      },
+      "required": ["id", "collectionName", "deletedAt"]
     }
   },
   "firestore": {
@@ -90,6 +101,10 @@
     "/app_settings/{document}": {
       "schema": "AppSettings",
       "description": "Master settings documents."
+    },
+    "/deleted_doc_ids/{document}": {
+      "schema": "DeletedDoc",
+      "description": "Deleted document tombstone records."
     }
   }
 }

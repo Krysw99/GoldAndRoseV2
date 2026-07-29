@@ -852,6 +852,57 @@ export default function SettingsView({
               <span className="text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-lg">Spot & System</span>
             </div>
 
+            {/* Manual Spot Price Overrides (Moved to top & highlighted) */}
+            <div className="bg-gradient-to-br from-amber-500/10 via-amber-50 to-amber-100/40 p-5 rounded-2xl border-2 border-amber-400 shadow-md space-y-4">
+              <div className="flex items-center justify-between border-b border-amber-200/80 pb-2.5 flex-wrap gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-amber-500 text-slate-950 rounded-xl shadow-xs">
+                    <DollarSign size={18} className="stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-amber-950 uppercase tracking-wider">
+                      Manual Metal Spot Price Overrides (CAD)
+                    </h4>
+                    <p className="text-xs font-medium text-amber-900/80">
+                      Manually fix CAD spot prices if live API connectivity is unavailable.
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[11px] font-black bg-amber-200 text-amber-950 border border-amber-400 px-3 py-1 rounded-lg uppercase tracking-wide">
+                  Live Overrides
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div className="bg-white/90 p-3.5 rounded-xl border-2 border-amber-300 shadow-2xs space-y-1">
+                  <label className="text-xs font-black text-amber-950 block">Gold Spot / oz ($ CAD)</label>
+                  <input
+                    type="number"
+                    className="w-full bg-amber-50/50 border border-amber-300 p-2.5 rounded-xl text-base font-black text-amber-950 no-spinner focus:border-amber-600 focus:bg-white outline-none"
+                    value={manualGold}
+                    onChange={(e) => setManualGold(e.target.value)}
+                  />
+                </div>
+                <div className="bg-white/90 p-3.5 rounded-xl border-2 border-slate-300 shadow-2xs space-y-1">
+                  <label className="text-xs font-black text-slate-900 block">Silver Spot / oz ($ CAD)</label>
+                  <input
+                    type="number"
+                    className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-base font-black text-slate-950 no-spinner focus:border-slate-600 focus:bg-white outline-none"
+                    value={manualSilver}
+                    onChange={(e) => setManualSilver(e.target.value)}
+                  />
+                </div>
+                <div className="bg-white/90 p-3.5 rounded-xl border-2 border-slate-300 shadow-2xs space-y-1">
+                  <label className="text-xs font-black text-slate-900 block">Platinum Spot / oz ($ CAD)</label>
+                  <input
+                    type="number"
+                    className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-base font-black text-slate-950 no-spinner focus:border-slate-600 focus:bg-white outline-none"
+                    value={manualPlatinum}
+                    onChange={(e) => setManualPlatinum(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Gold API Key Input */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
@@ -1032,48 +1083,6 @@ export default function SettingsView({
                 )}
               </div>
             </div>
-
-            {/* Manual Spot Price Overrides */}
-            <div className="bg-white p-5 rounded-2xl border border-amber-200/80 shadow-xs space-y-3">
-              <div className="flex items-center gap-2 border-b border-amber-100 pb-2">
-                <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg">
-                  <DollarSign size={15} />
-                </div>
-                <div>
-                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Manual Metal Spot Price Overrides (CAD)</h4>
-                  <p className="text-[11px] text-slate-500">Manually fix CAD spot prices if live API connectivity is unavailable.</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-200/60">
-                  <label className="text-xs font-bold text-slate-800 mb-1 block">Gold Spot / oz ($ CAD)</label>
-                  <input
-                    type="number"
-                    className="w-full bg-white border border-slate-300 p-2.5 rounded-xl text-sm font-black text-slate-900 no-spinner focus:border-amber-500 outline-none"
-                    value={manualGold}
-                    onChange={(e) => setManualGold(e.target.value)}
-                  />
-                </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                  <label className="text-xs font-bold text-slate-800 mb-1 block">Silver Spot / oz ($ CAD)</label>
-                  <input
-                    type="number"
-                    className="w-full bg-white border border-slate-300 p-2.5 rounded-xl text-sm font-black text-slate-900 no-spinner focus:border-slate-500 outline-none"
-                    value={manualSilver}
-                    onChange={(e) => setManualSilver(e.target.value)}
-                  />
-                </div>
-                <div className="bg-slate-100/70 p-3 rounded-xl border border-slate-300/80">
-                  <label className="text-xs font-bold text-slate-800 mb-1 block">Platinum Spot / oz ($ CAD)</label>
-                  <input
-                    type="number"
-                    className="w-full bg-white border border-slate-300 p-2.5 rounded-xl text-sm font-black text-slate-900 no-spinner focus:border-slate-600 outline-none"
-                    value={manualPlatinum}
-                    onChange={(e) => setManualPlatinum(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
@@ -1180,42 +1189,42 @@ export default function SettingsView({
             </div>
 
             {/* Platinum & Silver Retail Pricing Multipliers */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-                <div className="p-1.5 bg-slate-100 text-slate-800 rounded-lg">
+            <div className="bg-gradient-to-br from-amber-50/60 to-amber-100/30 p-5 rounded-2xl border border-amber-200/80 shadow-xs space-y-3">
+              <div className="flex items-center gap-2 border-b border-amber-200/60 pb-2">
+                <div className="p-1.5 bg-amber-200/80 text-amber-950 rounded-lg">
                   <Coins size={14} />
                 </div>
                 <div>
-                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                  <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider">
                     General Retail Platinum & Silver Rates ($ / gram)
                   </h4>
-                  <p className="text-[11px] text-slate-500">Base retail pricing per gram for non-gold precious metals.</p>
+                  <p className="text-[11px] text-amber-900/80">Base retail pricing per gram for non-gold precious metals.</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                  <label className="text-xs font-bold text-slate-800 mb-1 block">
+                <div className="bg-white p-3.5 rounded-xl border border-amber-200/80 shadow-2xs">
+                  <label className="text-xs font-black text-amber-900 mb-1 block">
                     Platinum Retail Rate ($ / gram)
                   </label>
                   <input
                     type="number"
-                    className="w-full bg-white border border-slate-300 p-2.5 rounded-xl text-xs font-mono font-bold text-slate-900 focus:border-slate-500 outline-none"
+                    className="w-full bg-amber-50/30 border border-slate-300 p-2.5 rounded-xl text-xs font-mono font-bold text-slate-900 focus:border-amber-500 outline-none"
                     value={localSettings.platinumPricePerGram !== undefined ? localSettings.platinumPricePerGram : 380}
                     onChange={(e) => handleTopLevelSetting('platinumPricePerGram', e.target.value)}
                   />
-                  <span className="text-[10px] text-slate-400 mt-1 block">Default rate ($380/g)</span>
+                  <span className="text-[10px] text-amber-800/70 mt-1 block">Default rate ($380/g)</span>
                 </div>
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                  <label className="text-xs font-bold text-slate-800 mb-1 block">
+                <div className="bg-white p-3.5 rounded-xl border border-amber-200/80 shadow-2xs">
+                  <label className="text-xs font-black text-amber-900 mb-1 block">
                     Silver Retail Rate ($ / gram)
                   </label>
                   <input
                     type="number"
-                    className="w-full bg-white border border-slate-300 p-2.5 rounded-xl text-xs font-mono font-bold text-slate-900 focus:border-slate-500 outline-none"
+                    className="w-full bg-amber-50/30 border border-slate-300 p-2.5 rounded-xl text-xs font-mono font-bold text-slate-900 focus:border-amber-500 outline-none"
                     value={localSettings.silverPricePerGram !== undefined ? localSettings.silverPricePerGram : 100}
                     onChange={(e) => handleTopLevelSetting('silverPricePerGram', e.target.value)}
                   />
-                  <span className="text-[10px] text-slate-400 mt-1 block">Default rate ($100/g)</span>
+                  <span className="text-[10px] text-amber-800/70 mt-1 block">Default rate ($100/g)</span>
                 </div>
               </div>
             </div>

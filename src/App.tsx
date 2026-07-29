@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Coins, FileCheck, Landmark, Library, Settings, RefreshCw, 
-  HelpCircle, Sparkles, Scale, Info, AlertCircle, ExternalLink, Printer, X 
+  HelpCircle, Sparkles, Scale, Info, AlertCircle, ExternalLink, Printer, X, CircleDot 
 } from 'lucide-react';
 
 // Types & Constants
@@ -15,7 +15,7 @@ import {
   ScrapItem, JewelryItem 
 } from './types';
 import { DEFAULT_SETTINGS, TROY_ONCE_GRAMS, FANCY_SHAPES, ROUND_MELEE } from './constants';
-import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeParseDate, genId } from './utils';
+import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeParseDate, genId, getTennisBaseGrams } from './utils';
 
 // Modular Components
 import ScrapCalculator from './components/ScrapCalculator';
@@ -26,6 +26,7 @@ import Sketchpad from './components/Sketchpad';
 import SpotPriceView from './components/SpotPriceView';
 import CubanBraceletBuilder from './components/CubanBraceletBuilder';
 import WholesaleRepairView from './components/WholesaleRepairView';
+import JumpRingEstimator from './components/JumpRingEstimator';
 
 // Firebase cloud sync helpers
 import { listenCollection, saveDocument, deleteDocument, syncLocalToCloud, isDocumentDeleted, markDocumentDeleted } from './firebase';
@@ -40,7 +41,7 @@ export default function App() {
                 (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   // Navigation State
-  const [activeTab, setActiveTab] = useState<'scrap' | 'quote' | 'wholesale' | 'spot' | 'cuban' | 'ledger' | 'settings'>('scrap');
+  const [activeTab, setActiveTab] = useState<'scrap' | 'quote' | 'wholesale' | 'spot' | 'cuban' | 'jumpring' | 'ledger' | 'settings'>('scrap');
 
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -302,12 +303,33 @@ export default function App() {
     let unsubWholesale: (() => void) | null = null;
     let unsubSettings: (() => void) | null = null;
     let unsubCuban: (() => void) | null = null;
+    let unsubDeletedDocs: (() => void) | null = null;
 
     const runSyncAndListen = async () => {
       try {
         console.log("Starting server synchronization...");
 
         if (!active) return;
+
+        // 0. Set up real-time listener for deleted document tombstones
+        unsubDeletedDocs = listenCollection('deleted_doc_ids', (docs) => {
+          if (!active) return;
+          let changed = false;
+          docs.forEach(d => {
+            if (d && d.id) {
+              if (!isDocumentDeleted(d.id)) {
+                markDocumentDeleted(d.id);
+                changed = true;
+              }
+            }
+          });
+          if (changed) {
+            setScrapTransactions(prev => prev.filter(t => !isDocumentDeleted(t.id)));
+            setRingQuoteTransactions(prev => prev.filter(t => !isDocumentDeleted(t.id)));
+            setWholesaleTransactions(prev => prev.filter(t => !isDocumentDeleted(t.id)));
+            setCubanEstimates(prev => prev.filter(t => !isDocumentDeleted(t.id)));
+          }
+        });
 
         // Sync any offline local items to cloud on boot
         const localScrap = (() => {
@@ -528,6 +550,7 @@ setIsCloudSynced(true);
       if (unsubWholesale) unsubWholesale();
       if (unsubSettings) unsubSettings();
       if (unsubCuban) unsubCuban();
+      if (unsubDeletedDocs) unsubDeletedDocs();
     };
   }, [isPersistenceLoaded]);
 
@@ -773,8 +796,16 @@ setIsCloudSynced(true);
     });
 
     // Subtotal subtraction scrap
-    const sub = Math.max(0, gT - tD - Number(activeSession.scrapCredit));
-    const finalInvoiceAmount = sub + (activeSession.applyTax ? sub * 0.12 : 0);
+    const postDiscountTotal = gT - tD;
+    const scrapCred = Number(activeSession.scrapCredit) || 0;
+    const netBeforeTax = postDiscountTotal - scrapCred;
+    const taxableSubtotal = Math.max(0, netBeforeTax);
+    const tax = activeSession.applyTax ? taxableSubtotal * 0.12 : 0;
+    const finalInvoiceAmount = netBeforeTax + tax;
+
+    const formattedTotal = finalInvoiceAmount < 0 
+      ? `-$${Math.abs(finalInvoiceAmount).toFixed(2)}` 
+      : `$${finalInvoiceAmount.toFixed(2)}`;
 
     const nameToLog = activeSession.cName || (activeSession.jobNum ? `Job #${activeSession.jobNum}` : 'Wholesale Client');
 
@@ -792,7 +823,7 @@ setIsCloudSynced(true);
       name: nameToLog,
       phone: activeSession.cPhone,
       summary: sum,
-      total: `$${finalInvoiceAmount.toFixed(2)}`,
+      total: formattedTotal,
       fullData: sanitizedSession,
       isWholesale,
       syncPending: true
@@ -873,7 +904,7 @@ setIsCloudSynced(true);
       cps = fd.carat || 0.05;
     }
     const bs = Math.round(177.8 / (smm + 0.4));
-    const bg = (smm * 5) + 1;
+    const bg = getTennisBaseGrams(smm);
     const lm = parseFloat(String(r.tbLength || 7.0)) / 7.0;
     return { estStones: Math.round(bs * lm), caratPerStone: cps };
   };
@@ -1051,9 +1082,15 @@ setIsCloudSynced(true);
       const val = parseFloat(r.discount) || 0;
       tD += r.discountType === '%' ? cost * (val / 100) : val;
     });
-    const sub = Math.max(0, gT - tD - Number(demoSession.scrapCredit));
-    const finalInvoiceAmount = sub + (demoSession.applyTax ? sub * 0.12 : 0);
-    const demoTotal = `$${finalInvoiceAmount.toFixed(2)}`;
+    const postDiscount = gT - tD;
+    const scrapCred = Number(demoSession.scrapCredit) || 0;
+    const netBeforeTax = postDiscount - scrapCred;
+    const taxableSubtotal = Math.max(0, netBeforeTax);
+    const tax = demoSession.applyTax ? taxableSubtotal * 0.12 : 0;
+    const finalInvoiceAmount = netBeforeTax + tax;
+    const demoTotal = finalInvoiceAmount < 0 
+      ? `-$${Math.abs(finalInvoiceAmount).toFixed(2)}` 
+      : `$${finalInvoiceAmount.toFixed(2)}`;
 
     const demoTx: QuoteTransaction = {
       id: demoSession.id,
@@ -1364,6 +1401,14 @@ setIsCloudSynced(true);
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('jumpring')}
+            className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm border ${activeTab === 'jumpring' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
+          >
+            <CircleDot size={14} className="text-amber-500 shrink-0" />
+            Jump Ring Estimator
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('ledger')}
             className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm border ${activeTab === 'ledger' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
           >
@@ -1394,6 +1439,16 @@ setIsCloudSynced(true);
               onUpdateSpotPrices={setSpotPrices}
               syncStatus={syncStatus}
               onFetchLivePrices={fetchLivePrices}
+            />
+          </div>
+
+          <div className={activeTab === 'jumpring' ? "" : "hidden"}>
+            <JumpRingEstimator
+              spotPrices={spotPrices}
+              settings={settings}
+              onTriggerPrint={handleTriggerPrint}
+              isIframe={isIframe}
+              showToast={showToast}
             />
           </div>
 

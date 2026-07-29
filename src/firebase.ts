@@ -230,6 +230,15 @@ export async function deleteDocument(collectionName: string, id: string) {
   try {
     const docRef = doc(db, collectionName, id);
     await firestoreDeleteDoc(docRef);
+
+    // Record deletion tombstone in cloud so all devices instantly sync deletion state
+    if (collectionName !== 'deleted_doc_ids') {
+      const tombstoneRef = doc(db, 'deleted_doc_ids', id);
+      await setDoc(tombstoneRef, { id, collectionName, deletedAt: Date.now() }).catch(e => {
+        console.warn("Failed to set tombstone doc:", e);
+      });
+    }
+
     console.log(`Successfully deleted document ${id} from collection ${collectionName}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
@@ -255,7 +264,7 @@ export function listenCollection(collectionName: string, onUpdate: (docs: any[])
 }
 
 /**
- * Uploads local items that are not yet present in Firestore to ensure everything is synced.
+ * Uploads local items that are created/edited offline and marked as pending sync to Firestore.
  */
 export async function syncLocalToCloud(collectionName: string, localItems: any[]) {
   if (!localItems || localItems.length === 0) return;
@@ -269,11 +278,13 @@ export async function syncLocalToCloud(collectionName: string, localItems: any[]
     
     for (const item of localItems) {
       if (item && item.id && item.id !== 'undefined') {
-        // Skip any item that was deleted
+        // Skip any item that was marked deleted locally
         if (isDocumentDeleted(item.id)) {
           continue;
         }
-        if (!cloudIds.has(item.id)) {
+        // CRITICAL FIX: Only upload items if they are missing from cloud AND explicitly marked syncPending (offline creations).
+        // Items without syncPending that are missing from cloud were deleted on another device and MUST NOT be re-uploaded!
+        if (!cloudIds.has(item.id) && item.syncPending === true) {
           const docRef = doc(db, collectionName, item.id);
           const sanitized = JSON.parse(JSON.stringify(item));
           if (sanitized && typeof sanitized === 'object') {

@@ -1382,14 +1382,19 @@ export default function QuoteCalculator({
       totalDiscount += r.discountType === '%' ? cost * (val / 100) : val;
     });
 
-    const subtotal = Math.max(0, grossTotal - totalDiscount - Number(session.scrapCredit));
-    const tax = session.applyTax ? subtotal * 0.12 : 0;
-    const grandTotal = subtotal + tax;
+    const postDiscountTotal = grossTotal - totalDiscount;
+    const scrapCredit = Number(session.scrapCredit) || 0;
+    const netBeforeTax = postDiscountTotal - scrapCredit;
+    const taxableSubtotal = Math.max(0, netBeforeTax);
+    const tax = session.applyTax ? taxableSubtotal * 0.12 : 0;
+    const grandTotal = netBeforeTax + tax;
 
     return {
       grossTotal,
       totalDiscount,
-      subtotal,
+      postDiscountTotal,
+      scrapCredit,
+      subtotal: netBeforeTax,
       tax,
       grandTotal
     };
@@ -1898,11 +1903,15 @@ export default function QuoteCalculator({
 
             {/* Right Side: Estimated Total */}
             <div className="text-center md:text-right space-y-1 pl-0 md:pl-6">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">ESTIMATED TOTAL DUE</p>
-              <h1 className="text-5xl md:text-6xl font-serif italic font-black text-[#f1c40f] tracking-tight">
-                ${totals.grandTotal.toFixed(2)}
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                {totals.grandTotal < 0 ? 'CLIENT PAYOUT DUE (CREDIT)' : 'ESTIMATED TOTAL DUE'}
+              </p>
+              <h1 className={`text-5xl md:text-6xl font-serif italic font-black tracking-tight ${totals.grandTotal < 0 ? 'text-green-400' : 'text-[#f1c40f]'}`}>
+                {totals.grandTotal < 0 ? `-$${Math.abs(totals.grandTotal).toFixed(2)}` : `$${totals.grandTotal.toFixed(2)}`}
               </h1>
-              <p className="text-[9px] text-slate-400 font-mono uppercase tracking-wider">Calculated CAD Valuation</p>
+              <p className="text-[9px] text-slate-400 font-mono uppercase tracking-wider">
+                {totals.grandTotal < 0 ? 'Jeweler owes client CAD' : 'Calculated CAD Valuation'}
+              </p>
             </div>
           </div>
         </div>
@@ -1987,11 +1996,15 @@ export default function QuoteCalculator({
 
             {/* Right Side: Final Balance */}
             <div className="text-center md:text-right space-y-1 pl-0 md:pl-6">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">FINAL BALANCE</p>
-              <h1 className="text-5xl md:text-6xl font-serif italic font-black text-[#f1c40f] tracking-tight">
-                ${totals.grandTotal.toFixed(2)}
+              <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">
+                {totals.grandTotal < 0 ? 'CLIENT PAYOUT DUE' : 'FINAL BALANCE'}
+              </p>
+              <h1 className={`text-5xl md:text-6xl font-serif italic font-black tracking-tight ${totals.grandTotal < 0 ? 'text-green-400' : 'text-[#f1c40f]'}`}>
+                {totals.grandTotal < 0 ? `-$${Math.abs(totals.grandTotal).toFixed(2)}` : `$${totals.grandTotal.toFixed(2)}`}
               </h1>
-              <p className="text-[9px] text-emerald-300/80 font-mono uppercase tracking-wider">Estimated Balance CAD</p>
+              <p className="text-[9px] text-emerald-300/80 font-mono uppercase tracking-wider">
+                {totals.grandTotal < 0 ? 'Credit due to client CAD' : 'Estimated Balance CAD'}
+              </p>
             </div>
           </div>
         </div>
@@ -3107,12 +3120,14 @@ export default function QuoteCalculator({
 
                   {/* Right Side: Total Display */}
                   <div className="text-center space-y-1">
-                    <p className="text-[9px] uppercase font-black tracking-widest text-brand-400">ESTIMATED TOTAL DUE</p>
-                    <h1 className="text-3xl font-serif font-black italic text-brand-950 tracking-tight">
-                      ${totals.grandTotal.toFixed(2)}
+                    <p className="text-[9px] uppercase font-black tracking-widest text-brand-400">
+                      {totals.grandTotal < 0 ? 'CLIENT PAYOUT DUE' : 'ESTIMATED TOTAL DUE'}
+                    </p>
+                    <h1 className={`text-3xl font-serif font-black italic tracking-tight ${totals.grandTotal < 0 ? 'text-green-600' : 'text-brand-950'}`}>
+                      {totals.grandTotal < 0 ? `-$${Math.abs(totals.grandTotal).toFixed(2)}` : `$${totals.grandTotal.toFixed(2)}`}
                     </h1>
-                    <span className={`inline-block text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${isWholesale ? 'bg-green-100 text-green-700' : 'bg-brand-100 text-brand-800'}`}>
-                      {isWholesale ? 'Wholesale' : 'Retail'}
+                    <span className={`inline-block text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${totals.grandTotal < 0 ? 'bg-green-100 text-green-800' : isWholesale ? 'bg-green-100 text-green-700' : 'bg-brand-100 text-brand-800'}`}>
+                      {totals.grandTotal < 0 ? 'Overpaid (Credit)' : isWholesale ? 'Wholesale' : 'Retail'}
                     </span>
                     <p className="text-[8px] text-brand-400 font-mono">Calculated CAD valuation</p>
                   </div>
@@ -4293,12 +4308,17 @@ export default function QuoteCalculator({
                       </div>
                     )}
                     <div className="border-t border-brand-200 my-1 print:my-0.5"></div>
-                    <div className="flex justify-between"><span>Subtotal Value:</span><span>${totals.subtotal.toFixed(2)}</span></div>
+                    <div className="flex justify-between">
+                      <span>Subtotal Value:</span>
+                      <span>{totals.subtotal < 0 ? `-$${Math.abs(totals.subtotal).toFixed(2)}` : `$${totals.subtotal.toFixed(2)}`}</span>
+                    </div>
                     {session.applyTax && <div className="flex justify-between"><span>BC Taxes & GST (12%):</span><span>+${totals.tax.toFixed(2)}</span></div>}
                     <div className="border-t-2 border-brand-900 my-1 print:my-0.5"></div>
                     <div className="flex justify-between font-bold text-sm text-brand-950 font-sans print:text-xs">
-                      <span>FINAL BALANCE DUE:</span>
-                      <span className="text-lg font-black text-brand-900 print:text-sm">${totals.grandTotal.toFixed(2)}</span>
+                      <span>{totals.grandTotal < 0 ? 'CLIENT PAYOUT / CREDIT DUE:' : 'FINAL BALANCE DUE:'}</span>
+                      <span className={`text-lg font-black print:text-sm ${totals.grandTotal < 0 ? 'text-green-700' : 'text-brand-900'}`}>
+                        {totals.grandTotal < 0 ? `-$${Math.abs(totals.grandTotal).toFixed(2)}` : `$${totals.grandTotal.toFixed(2)}`}
+                      </span>
                     </div>
                   </div>
                 </div>
