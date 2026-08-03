@@ -136,6 +136,8 @@ export interface QuoteSession {
   referencePhoto: string | null;
   overridePrices?: { gold?: number; silver?: number; platinum?: number };
   wholesaleProfileId?: string;
+  customGrandTotal?: number | null;
+  customGrandTotalIsInclusive?: boolean;
 }
 
 export interface ScrapItem {

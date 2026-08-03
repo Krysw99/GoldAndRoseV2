@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Trash2, Camera, Compass, Type, Tag, HelpCircle, 
   Signature, CheckCircle, Calculator, Sparkles, AlertCircle, FileText,
-  Gem, UserCheck, User, Lock, Unlock, Save
+  Gem, UserCheck, User, Lock, Unlock, Save, Edit3, Check, X
 } from 'lucide-react';
 import { 
   QuoteSession, JewelryItem, MeleeItem, FancyItem, ClientStoneItem, 
@@ -1130,6 +1130,37 @@ export default function QuoteCalculator({
     }));
   };
 
+  // Price Override Modal State
+  const [showPriceOverrideModal, setShowPriceOverrideModal] = useState(false);
+  const [priceOverrideStr, setPriceOverrideStr] = useState('');
+  const [priceOverrideIsInclusive, setPriceOverrideIsInclusive] = useState(false);
+
+  const handleOpenPriceOverride = () => {
+    if (totals.isOverridden) {
+      setPriceOverrideStr(String(session.customGrandTotal));
+      setPriceOverrideIsInclusive(!!session.customGrandTotalIsInclusive);
+    } else {
+      setPriceOverrideStr(String(totals.calculatedGrandTotal.toFixed(2)));
+      setPriceOverrideIsInclusive(false);
+    }
+    setShowPriceOverrideModal(true);
+  };
+
+  const handleSavePriceOverride = () => {
+    const val = parseFloat(priceOverrideStr);
+    if (isNaN(val) || priceOverrideStr.trim() === '') {
+      onChangeSession(prev => ({ ...prev, customGrandTotal: null, customGrandTotalIsInclusive: false }));
+    } else {
+      onChangeSession(prev => ({ ...prev, customGrandTotal: val, customGrandTotalIsInclusive: priceOverrideIsInclusive }));
+    }
+    setShowPriceOverrideModal(false);
+  };
+
+  const handleClearPriceOverride = () => {
+    onChangeSession(prev => ({ ...prev, customGrandTotal: null, customGrandTotalIsInclusive: false }));
+    setShowPriceOverrideModal(false);
+  };
+
   // Active ring being edited in the subtab
   const activeRing = session.rings.find(r => r.id === session.activeSubTab);
 
@@ -1424,16 +1455,47 @@ export default function QuoteCalculator({
     const scrapCredit = Number(session.scrapCredit) || 0;
     const netBeforeTax = postDiscountTotal - scrapCredit;
     const taxableSubtotal = Math.max(0, netBeforeTax);
-    const tax = session.applyTax ? taxableSubtotal * 0.12 : 0;
-    const grandTotal = netBeforeTax + tax;
+    const calculatedTax = session.applyTax ? taxableSubtotal * 0.12 : 0;
+    const calculatedGrandTotal = netBeforeTax + calculatedTax;
+
+    const isOverridden = typeof session.customGrandTotal === 'number' && !isNaN(session.customGrandTotal) && session.customGrandTotal !== null;
+    
+    let subtotal = netBeforeTax;
+    let tax = 0;
+    let grandTotal = calculatedGrandTotal;
+
+    if (isOverridden) {
+      const customVal = session.customGrandTotal as number;
+      if (session.customGrandTotalIsInclusive) {
+        if (session.applyTax) {
+          grandTotal = customVal;
+          subtotal = customVal / 1.12;
+          tax = customVal - subtotal;
+        } else {
+          grandTotal = customVal;
+          subtotal = customVal;
+          tax = 0;
+        }
+      } else {
+        subtotal = customVal;
+        tax = session.applyTax ? Math.max(0, customVal) * 0.12 : 0;
+        grandTotal = subtotal + tax;
+      }
+    } else {
+      subtotal = netBeforeTax;
+      tax = session.applyTax ? Math.max(0, netBeforeTax) * 0.12 : 0;
+      grandTotal = netBeforeTax + tax;
+    }
 
     return {
       grossTotal,
       totalDiscount,
       postDiscountTotal,
       scrapCredit,
-      subtotal: netBeforeTax,
+      subtotal,
       tax,
+      calculatedGrandTotal,
+      isOverridden,
       grandTotal
     };
   };
@@ -1926,15 +1988,32 @@ export default function QuoteCalculator({
 
             {/* Right Side: Estimated Total */}
             <div className="text-center md:text-right space-y-1 pl-0 md:pl-6">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                {totals.grandTotal < 0 ? 'CLIENT PAYOUT DUE (CREDIT)' : 'ESTIMATED TOTAL DUE'}
-              </p>
-              <h1 className={`text-5xl md:text-6xl font-serif italic font-black tracking-tight ${totals.grandTotal < 0 ? 'text-green-400' : 'text-[#f1c40f]'}`}>
+              <div className="flex items-center justify-center md:justify-end gap-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  {totals.grandTotal < 0 ? 'CLIENT PAYOUT DUE (CREDIT)' : 'ESTIMATED TOTAL DUE'}
+                </p>
+              </div>
+              <h1 className={`text-5xl md:text-6xl font-serif italic font-black tracking-tight ${totals.grandTotal < 0 ? 'text-green-400' : totals.isOverridden ? 'text-amber-300' : 'text-[#f1c40f]'}`}>
                 {totals.grandTotal < 0 ? `-$${Math.abs(totals.grandTotal).toFixed(2)}` : `$${totals.grandTotal.toFixed(2)}`}
               </h1>
-              <p className="text-[9px] text-slate-400 font-mono uppercase tracking-wider">
-                {totals.grandTotal < 0 ? 'Jeweler owes client CAD' : 'Calculated CAD Valuation'}
-              </p>
+              <div className="flex items-center justify-center md:justify-end gap-1.5 pt-0.5">
+                {totals.isOverridden ? (
+                  <span className="text-[9px] bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full font-mono font-bold">
+                    Overridden (Calc: ${totals.calculatedGrandTotal.toFixed(2)})
+                  </span>
+                ) : (
+                  <p className="text-[9px] text-slate-400 font-mono uppercase tracking-wider">
+                    {totals.grandTotal < 0 ? 'Jeweler owes client CAD' : 'Calculated CAD Valuation'}
+                  </p>
+                )}
+                <button
+                  onClick={handleOpenPriceOverride}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-300 hover:text-white bg-white/10 hover:bg-white/20 border border-amber-400/30 px-2 py-0.5 rounded-md transition-all shadow-sm"
+                  title="Override Final Price"
+                >
+                  <Edit3 className="w-3 h-3" /> {totals.isOverridden ? 'Edit' : 'Override'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2022,12 +2101,27 @@ export default function QuoteCalculator({
               <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">
                 {totals.grandTotal < 0 ? 'CLIENT PAYOUT DUE' : 'FINAL BALANCE'}
               </p>
-              <h1 className={`text-5xl md:text-6xl font-serif italic font-black tracking-tight ${totals.grandTotal < 0 ? 'text-green-400' : 'text-[#f1c40f]'}`}>
+              <h1 className={`text-5xl md:text-6xl font-serif italic font-black tracking-tight ${totals.grandTotal < 0 ? 'text-green-400' : totals.isOverridden ? 'text-amber-300' : 'text-[#f1c40f]'}`}>
                 {totals.grandTotal < 0 ? `-$${Math.abs(totals.grandTotal).toFixed(2)}` : `$${totals.grandTotal.toFixed(2)}`}
               </h1>
-              <p className="text-[9px] text-emerald-300/80 font-mono uppercase tracking-wider">
-                {totals.grandTotal < 0 ? 'Credit due to client CAD' : 'Estimated Balance CAD'}
-              </p>
+              <div className="flex items-center justify-center md:justify-end gap-1.5 pt-0.5">
+                {totals.isOverridden ? (
+                  <span className="text-[9px] bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full font-mono font-bold">
+                    Overridden (Calc: ${totals.calculatedGrandTotal.toFixed(2)})
+                  </span>
+                ) : (
+                  <p className="text-[9px] text-emerald-300/80 font-mono uppercase tracking-wider">
+                    {totals.grandTotal < 0 ? 'Credit due to client CAD' : 'Estimated Balance CAD'}
+                  </p>
+                )}
+                <button
+                  onClick={handleOpenPriceOverride}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-300 hover:text-white bg-white/10 hover:bg-white/20 border border-amber-400/30 px-2 py-0.5 rounded-md transition-all shadow-sm"
+                  title="Override Final Price"
+                >
+                  <Edit3 className="w-3 h-3" /> {totals.isOverridden ? 'Edit' : 'Override'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3146,13 +3240,24 @@ export default function QuoteCalculator({
                     <p className="text-[9px] uppercase font-black tracking-widest text-brand-400">
                       {totals.grandTotal < 0 ? 'CLIENT PAYOUT DUE' : 'ESTIMATED TOTAL DUE'}
                     </p>
-                    <h1 className={`text-3xl font-serif font-black italic tracking-tight ${totals.grandTotal < 0 ? 'text-green-600' : 'text-brand-950'}`}>
-                      {totals.grandTotal < 0 ? `-$${Math.abs(totals.grandTotal).toFixed(2)}` : `$${totals.grandTotal.toFixed(2)}`}
-                    </h1>
-                    <span className={`inline-block text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${totals.grandTotal < 0 ? 'bg-green-100 text-green-800' : isWholesale ? 'bg-green-100 text-green-700' : 'bg-brand-100 text-brand-800'}`}>
-                      {totals.grandTotal < 0 ? 'Overpaid (Credit)' : isWholesale ? 'Wholesale' : 'Retail'}
+                    <div className="flex items-center gap-1 justify-center">
+                      <h1 className={`text-3xl font-serif font-black italic tracking-tight ${totals.grandTotal < 0 ? 'text-green-600' : totals.isOverridden ? 'text-amber-600' : 'text-brand-950'}`}>
+                        {totals.grandTotal < 0 ? `-$${Math.abs(totals.grandTotal).toFixed(2)}` : `$${totals.grandTotal.toFixed(2)}`}
+                      </h1>
+                      <button
+                        onClick={handleOpenPriceOverride}
+                        className="p-1 rounded bg-slate-100 hover:bg-amber-100 text-slate-600 hover:text-amber-700 transition-all border border-slate-200"
+                        title="Override Price"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <span className={`inline-block text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${totals.isOverridden ? 'bg-amber-100 text-amber-800 border border-amber-300' : totals.grandTotal < 0 ? 'bg-green-100 text-green-800' : isWholesale ? 'bg-green-100 text-green-700' : 'bg-brand-100 text-brand-800'}`}>
+                      {totals.isOverridden ? 'Price Overridden' : totals.grandTotal < 0 ? 'Overpaid (Credit)' : isWholesale ? 'Wholesale' : 'Retail'}
                     </span>
-                    <p className="text-[8px] text-brand-400 font-mono">Calculated CAD valuation</p>
+                    <p className="text-[8px] text-brand-400 font-mono">
+                      {totals.isOverridden ? `Original: $${totals.calculatedGrandTotal.toFixed(2)}` : 'Calculated CAD valuation'}
+                    </p>
                   </div>
                 </div>
 
@@ -4337,11 +4442,25 @@ export default function QuoteCalculator({
                     </div>
                     {session.applyTax && <div className="flex justify-between"><span>BC Taxes & GST (12%):</span><span>+${totals.tax.toFixed(2)}</span></div>}
                     <div className="border-t-2 border-brand-900 my-1 print:my-0.5"></div>
-                    <div className="flex justify-between font-bold text-sm text-brand-950 font-sans print:text-xs">
+                    <div className="flex justify-between font-bold text-sm text-brand-950 font-sans print:text-xs items-center">
                       <span>{totals.grandTotal < 0 ? 'CLIENT PAYOUT / CREDIT DUE:' : 'FINAL BALANCE DUE:'}</span>
-                      <span className={`text-lg font-black print:text-sm ${totals.grandTotal < 0 ? 'text-green-700' : 'text-brand-900'}`}>
-                        {totals.grandTotal < 0 ? `-$${Math.abs(totals.grandTotal).toFixed(2)}` : `$${totals.grandTotal.toFixed(2)}`}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {totals.isOverridden && (
+                          <span className="text-[9px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded font-mono font-bold print:hidden">
+                            (Overridden)
+                          </span>
+                        )}
+                        <span className={`text-lg font-black print:text-sm ${totals.grandTotal < 0 ? 'text-green-700' : totals.isOverridden ? 'text-amber-700' : 'text-brand-900'}`}>
+                          {totals.grandTotal < 0 ? `-$${Math.abs(totals.grandTotal).toFixed(2)}` : `$${totals.grandTotal.toFixed(2)}`}
+                        </span>
+                        <button
+                          onClick={handleOpenPriceOverride}
+                          className="print:hidden p-1 rounded hover:bg-amber-100 text-slate-500 hover:text-amber-700 transition-all border border-slate-200"
+                          title="Override Price"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -5131,6 +5250,143 @@ export default function QuoteCalculator({
           </div>
         </div>
       )}
+
+      {/* Price Override Modal */}
+      {showPriceOverrideModal && (() => {
+        const modalVal = parseFloat(priceOverrideStr) || 0;
+        const modalTax = session.applyTax
+          ? (priceOverrideIsInclusive ? modalVal - (modalVal / 1.12) : modalVal * 0.12)
+          : 0;
+        const modalSubtotal = priceOverrideIsInclusive ? modalVal - modalTax : modalVal;
+        const modalFinal = priceOverrideIsInclusive ? modalVal : modalVal + modalTax;
+
+        return (
+          <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="bg-white text-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                    <Edit3 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-slate-900">Override Final Quote Price</h3>
+                    <p className="text-xs text-slate-500 font-mono">Set a custom price for this quote session</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowPriceOverrideModal(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs space-y-1">
+                <div className="flex justify-between text-slate-600">
+                  <span>Calculated System Valuation:</span>
+                  <span className="font-bold font-mono">${totals.calculatedGrandTotal.toFixed(2)} CAD</span>
+                </div>
+                {totals.isOverridden && (
+                  <div className="flex justify-between text-amber-700 font-medium">
+                    <span>Currently Overridden To:</span>
+                    <span className="font-bold font-mono">${totals.grandTotal.toFixed(2)} CAD</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Custom Override Price ($ CAD)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="w-full pl-8 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-lg font-bold text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all shadow-sm"
+                      value={priceOverrideStr}
+                      onChange={(e) => setPriceOverrideStr(e.target.value)}
+                      placeholder="0.00"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                {/* Tax Option Radio Selection */}
+                {session.applyTax && (
+                  <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 space-y-2 text-xs">
+                    <span className="block font-bold text-slate-800 text-[11px] uppercase tracking-wider">Tax Mode (12% BC Taxes & GST)</span>
+                    <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700 hover:text-slate-900">
+                      <input
+                        type="radio"
+                        name="taxInclusive"
+                        checked={!priceOverrideIsInclusive}
+                        onChange={() => setPriceOverrideIsInclusive(false)}
+                        className="accent-amber-600 w-3.5 h-3.5"
+                      />
+                      <span><strong>Add 12% Tax on top</strong> of this price (+${(modalVal * 0.12).toFixed(2)})</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700 hover:text-slate-900">
+                      <input
+                        type="radio"
+                        name="taxInclusive"
+                        checked={priceOverrideIsInclusive}
+                        onChange={() => setPriceOverrideIsInclusive(true)}
+                        className="accent-amber-600 w-3.5 h-3.5"
+                      />
+                      <span><strong>This price includes 12% Tax</strong> (Tax = ${(modalVal - (modalVal / 1.12)).toFixed(2)})</span>
+                    </label>
+                  </div>
+                )}
+
+                {/* Live Output Breakdown Preview */}
+                <div className="bg-slate-900 text-white rounded-xl p-3 text-xs space-y-1 font-mono border border-slate-800">
+                  <div className="flex justify-between text-slate-400">
+                    <span>Base Subtotal Valuation:</span>
+                    <span>${modalSubtotal.toFixed(2)} CAD</span>
+                  </div>
+                  {session.applyTax && (
+                    <div className="flex justify-between text-amber-300">
+                      <span>BC Taxes & GST (12%):</span>
+                      <span>+${modalTax.toFixed(2)} CAD</span>
+                    </div>
+                  )}
+                  <div className="border-t border-slate-700 my-1 pt-1 flex justify-between font-bold text-sm text-amber-400">
+                    <span>FINAL BALANCE DUE:</span>
+                    <span>${modalFinal.toFixed(2)} CAD</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-2">
+                {totals.isOverridden ? (
+                  <button
+                    type="button"
+                    onClick={handleClearPriceOverride}
+                    className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold rounded-xl border border-red-200 transition-all cursor-pointer"
+                  >
+                    Reset to Calculated
+                  </button>
+                ) : <div />}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPriceOverrideModal(false)}
+                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSavePriceOverride}
+                    className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" /> Apply Override
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

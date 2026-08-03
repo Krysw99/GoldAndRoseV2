@@ -801,7 +801,20 @@ setIsCloudSynced(true);
     const netBeforeTax = postDiscountTotal - scrapCred;
     const taxableSubtotal = Math.max(0, netBeforeTax);
     const tax = activeSession.applyTax ? taxableSubtotal * 0.12 : 0;
-    const finalInvoiceAmount = netBeforeTax + tax;
+    const calculatedGrandTotal = netBeforeTax + tax;
+
+    const isOverridden = typeof activeSession.customGrandTotal === 'number' && !isNaN(activeSession.customGrandTotal) && activeSession.customGrandTotal !== null;
+    let finalInvoiceAmount = calculatedGrandTotal;
+
+    if (isOverridden) {
+      const customVal = activeSession.customGrandTotal as number;
+      if (activeSession.customGrandTotalIsInclusive) {
+        finalInvoiceAmount = customVal;
+      } else {
+        const taxVal = activeSession.applyTax ? Math.max(0, customVal) * 0.12 : 0;
+        finalInvoiceAmount = customVal + taxVal;
+      }
+    }
 
     const formattedTotal = finalInvoiceAmount < 0 
       ? `-$${Math.abs(finalInvoiceAmount).toFixed(2)}` 
@@ -1087,7 +1100,19 @@ setIsCloudSynced(true);
     const netBeforeTax = postDiscount - scrapCred;
     const taxableSubtotal = Math.max(0, netBeforeTax);
     const tax = demoSession.applyTax ? taxableSubtotal * 0.12 : 0;
-    const finalInvoiceAmount = netBeforeTax + tax;
+    const calculatedGrandTotal = netBeforeTax + tax;
+    const isOverridden = typeof demoSession.customGrandTotal === 'number' && !isNaN(demoSession.customGrandTotal) && demoSession.customGrandTotal !== null;
+    let finalInvoiceAmount = calculatedGrandTotal;
+
+    if (isOverridden) {
+      const customVal = demoSession.customGrandTotal as number;
+      if (demoSession.customGrandTotalIsInclusive) {
+        finalInvoiceAmount = customVal;
+      } else {
+        const taxVal = demoSession.applyTax ? Math.max(0, customVal) * 0.12 : 0;
+        finalInvoiceAmount = customVal + taxVal;
+      }
+    }
     const demoTotal = finalInvoiceAmount < 0 
       ? `-$${Math.abs(finalInvoiceAmount).toFixed(2)}` 
       : `$${finalInvoiceAmount.toFixed(2)}`;

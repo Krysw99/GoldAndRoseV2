@@ -606,6 +606,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
   const [rulerMeasurements, setRulerMeasurements] = useState<Array<{ start: { x: number; y: number }; end: { x: number; y: number } }>>([]);
 
   const lastPosRef = useRef<{ x: number; y: number } | null>(null);
+  const midPosRef = useRef<{ x: number; y: number } | null>(null);
 
   // Stencil states
   const [stencilType, setStencilType] = useState<string>('none');
@@ -947,7 +948,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
   const getCanvasContext = () => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d', { willReadFrequently: true, desynchronized: true });
     if (!ctx) return null;
 
     ctx.lineCap = 'round';
@@ -1246,6 +1247,50 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     }
   };
 
+  // Quadratic Bezier Curve segment drawing helper (Smooths stylus & finger freehand strokes)
+  const drawCurveSegment = (
+    startMidX: number, startMidY: number,
+    controlX: number, controlY: number,
+    endMidX: number, endMidY: number,
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number
+  ) => {
+    // 1. Main stroke quadratic curve
+    ctx.beginPath();
+    ctx.moveTo(startMidX, startMidY);
+    ctx.quadraticCurveTo(controlX, controlY, endMidX, endMidY);
+    ctx.stroke();
+
+    // 2. Symmetric mirror strokes
+    if (symmetryMode === 'vertical') {
+      ctx.beginPath();
+      ctx.moveTo(width - startMidX, startMidY);
+      ctx.quadraticCurveTo(width - controlX, controlY, width - endMidX, endMidY);
+      ctx.stroke();
+    } else if (symmetryMode === 'horizontal') {
+      ctx.beginPath();
+      ctx.moveTo(startMidX, height - startMidY);
+      ctx.quadraticCurveTo(controlX, height - controlY, endMidX, height - endMidY);
+      ctx.stroke();
+    } else if (symmetryMode === 'quad') {
+      ctx.beginPath();
+      ctx.moveTo(width - startMidX, startMidY);
+      ctx.quadraticCurveTo(width - controlX, controlY, width - endMidX, endMidY);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(startMidX, height - startMidY);
+      ctx.quadraticCurveTo(controlX, height - controlY, endMidX, height - endMidY);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(width - startMidX, height - startMidY);
+      ctx.quadraticCurveTo(width - controlX, height - controlY, width - endMidX, height - endMidY);
+      ctx.stroke();
+    }
+  };
+
   // Flatten / Bake the active interactive stamp permanently onto the drawing canvas
   const flattenActiveStamp = (stampToFlatten = activeStamp) => {
     if (!stampToFlatten) return;
@@ -1360,6 +1405,16 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (tool === 'transform') return;
 
+    // Prevent default touch/gesture actions to avoid browser interaction delays
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+
+    // Ignore hovering S-Pen / Apple Pencil / Stylus proximity events when not pressing firmly on glass
+    if (e.buttons === 0 || (e.pointerType === 'pen' && e.pressure === 0)) {
+      return;
+    }
+
     // Track active pointer for multi-touch pinch-to-zoom
     activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -1435,11 +1490,26 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       setIsDrawing(true);
       canvas.setPointerCapture(e.pointerId);
       lastPosRef.current = { x, y };
+      midPosRef.current = { x, y };
       drawSegment(x, y, x, y, ctx, canvas.width, canvas.height);
     }
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // Prevent browser gesture/scroll evaluation delay
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+
+    // Check if pointer is hovering (S Pen / Stylus hovering in mid-air with zero pressure or buttons)
+    const isHovering = e.buttons === 0 || (e.pointerType === 'pen' && e.pressure === 0);
+
+    // If hovering while in an active stroke/drag, terminate drawing cleanly
+    if (isHovering && (isDrawing || isStamping || isMeasuring || isDrawingLine)) {
+      handlePointerUp(e);
+      return;
+    }
+
     // Track pointer movement
     if (activePointersRef.current.has(e.pointerId)) {
       activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -1520,7 +1590,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       return;
     }
 
-    if (!isDrawing) return;
+    if (!isDrawing || isHovering) return;
 
     const ctx = getCanvasContext();
     if (!ctx) return;
@@ -1536,17 +1606,32 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
 
     for (const ev of coalesced) {
       const coords = getCanvasCoords(ev.clientX, ev.clientY);
-      if (lastPosRef.current) {
-        drawSegment(lastPosRef.current.x, lastPosRef.current.y, coords.x, coords.y, ctx, canvas.width, canvas.height);
-      }
-      lastPosRef.current = { x: coords.x, y: coords.y };
+      const last = lastPosRef.current || coords;
+      const startMid = midPosRef.current || last;
+      const endMid = { x: (last.x + coords.x) / 2, y: (last.y + coords.y) / 2 };
+
+      drawCurveSegment(
+        startMid.x, startMid.y,
+        last.x, last.y,
+        endMid.x, endMid.y,
+        ctx,
+        canvas.width,
+        canvas.height
+      );
+
+      lastPosRef.current = coords;
+      midPosRef.current = endMid;
     }
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (canvas) {
-      canvas.releasePointerCapture(e.pointerId);
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch {
+        // Pointer capture may already be released
+      }
     }
 
     activePointersRef.current.delete(e.pointerId);
@@ -1639,14 +1724,24 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
 
     if (!isDrawing) return;
     setIsDrawing(false);
-    lastPosRef.current = null;
 
     const ctx = getCanvasContext();
-    if (ctx && canvas) {
+    if (ctx && canvas && lastPosRef.current && midPosRef.current) {
+      drawCurveSegment(
+        midPosRef.current.x, midPosRef.current.y,
+        lastPosRef.current.x, lastPosRef.current.y,
+        lastPosRef.current.x, lastPosRef.current.y,
+        ctx,
+        canvas.width,
+        canvas.height
+      );
       const cleanState = ctx.getImageData(0, 0, canvas.width, canvas.height);
       setSavedCanvasData(cleanState);
       pushToHistory(canvas.toDataURL());
     }
+
+    lastPosRef.current = null;
+    midPosRef.current = null;
   };
 
   const handlePointerLeave = (e: React.PointerEvent<HTMLCanvasElement>) => {
