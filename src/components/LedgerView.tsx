@@ -16,6 +16,8 @@ import { FANCY_SHAPES, TROY_ONCE_GRAMS } from '../constants';
 import { printElement } from '../utils/printHelper';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import ClientInvoicePrint from './ClientInvoicePrint';
+import WholesaleRepairInvoicePrint from './WholesaleRepairInvoicePrint';
 
 interface LedgerViewProps {
   scrapTransactions: ScrapTransaction[];
@@ -25,6 +27,7 @@ interface LedgerViewProps {
   onLoadIntoEditor: (id: string, isWholesale: boolean) => void;
   onLoadScrapIntoEditor?: (id: string) => void;
   settings: AppSettings;
+  spotPrices?: { gold: number; silver: number; platinum: number };
   onAddDemoTransaction?: () => void;
   onTriggerPrint?: (printFn: () => void) => void;
   isIframe?: boolean;
@@ -175,6 +178,7 @@ export default function LedgerView({
   onLoadIntoEditor,
   onLoadScrapIntoEditor,
   settings,
+  spotPrices,
   onAddDemoTransaction,
   onTriggerPrint,
   isIframe,
@@ -851,225 +855,38 @@ export default function LedgerView({
               )}
 
               {/* LEDGER RENDER 2: Retail / Wholesale Custom Quote Invoice */}
-              {(selectedTx.type === 'retail' || selectedTx.type === 'wholesale') && (
-                <div id="ledger-invoice-box" className="p-8 bg-white border border-brand-200 rounded-2xl text-brand-800 text-left font-sans max-w-2xl mx-auto print:p-0 print:border-none print:shadow-none print:rounded-none print:max-w-none">
-                  {/* Invoice Header */}
-                  <div className="flex justify-between items-start border-b border-brand-900 pb-4 mb-6">
-                    <div>
-                      <h1 className="font-serif text-2xl font-black italic tracking-wide text-brand-900 mb-0.5">Gold And Rose Jewellery Corp</h1>
-                      <p className="text-[10px] text-brand-500 font-bold uppercase tracking-wider">James Lee • 604-250-7414</p>
-                      <p className="text-[8px] text-brand-400 font-mono mt-0.5">GST/HST: 737186213RT0001</p>
-                    </div>
-                    <div className="text-right">
-                      <h2 className="text-sm font-black uppercase tracking-widest text-brand-400">
-                        {selectedTx.type === 'wholesale' ? 'Wholesale order' : 'Retail Estimate'}
-                      </h2>
-                      <p className="text-[10px] font-bold text-brand-800 mt-0.5">{activeTx.date}</p>
-                      <p className="text-[8px] font-mono text-brand-400">ID: #{activeTx.id}</p>
-                    </div>
-                  </div>
+              {(selectedTx.type === 'retail' || selectedTx.type === 'wholesale') && (() => {
+                const fullSession = (activeTx as QuoteTransaction).fullData;
+                if (!fullSession) return null;
 
-                  {/* Client Details Row */}
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-brand-50 p-3 rounded-xl border border-brand-100 text-xs">
-                      <p className="text-[9px] uppercase font-black text-brand-400 tracking-wider mb-1">Billing Details</p>
-                      {activeTx.name && <p className="font-bold text-brand-900">{activeTx.name}</p>}
-                      {activeTx.phone && <p className="text-brand-500 mt-0.5">{activeTx.phone}</p>}
-                      {selectedTx.type === 'wholesale' && (activeTx as QuoteTransaction).fullData?.jobNum && (
-                        <p className="text-green-600 font-mono font-bold mt-1">Job #: {(activeTx as QuoteTransaction).fullData.jobNum}</p>
-                      )}
-                    </div>
-                    <div className="bg-brand-50 p-3 rounded-xl border border-brand-100 text-right flex flex-col justify-center text-xs">
-                      <p className="text-[9px] uppercase font-black text-brand-400 tracking-wider mb-1">Total Pricing</p>
-                      <p className="text-3xl font-black text-brand-950">{activeTx.total}</p>
-                      {(activeTx as QuoteTransaction).fullData?.applyTax && (
-                        <p className="text-[8px] text-brand-400 font-medium">Includes 12% provincial tax and GST</p>
-                      )}
-                    </div>
-                  </div>
+                const isWholesaleRepair = selectedTx.type === 'wholesale' && (
+                  fullSession.rings?.[0]?.category === 'repair' || 
+                  (fullSession.rings?.[0]?.repairs && fullSession.rings[0].repairs.length > 0)
+                );
 
-                  {/* Pieces list details */}
-                  <div className="space-y-4 mb-6 text-xs">
-                    <p className="text-[10px] uppercase font-black text-brand-500 tracking-widest border-b border-brand-100 pb-1 mb-1">Jewelry Specifications</p>
-                    {(activeTx as QuoteTransaction).fullData?.rings?.map((r, ri) => {
-                      if (r.goldGrams === '' && r.category !== 'tennisBracelet' && r.melee.length === 0) return null;
-                      const cost = calculateRingCost(r, settings, { gold: 4000, silver: 45, platinum: 1200 }, selectedTx.type, undefined, selectedTx.type === 'wholesale' ? (activeTx as QuoteTransaction).fullData?.wholesaleProfileId : undefined);
-                      const discountVal = parseFloat(r.discount) || 0;
-                      const discountDeduction = r.discountType === '%' ? cost * (discountVal / 100) : discountVal;
-                      const finalItemPrice = Math.max(0, cost - discountDeduction);
+                if (isWholesaleRepair) {
+                  return (
+                    <WholesaleRepairInvoicePrint
+                      session={fullSession}
+                      settings={settings}
+                      containerId="ledger-invoice-box"
+                      dateStr={activeTx.date}
+                    />
+                  );
+                }
 
-                      return (
-                        <div key={ri} className="p-3 bg-brand-50/50 rounded-xl border border-brand-100 space-y-2">
-                          <div className="flex justify-between items-center font-bold text-brand-900 border-b border-dashed border-brand-200 pb-1.5">
-                            <span className="uppercase tracking-wide text-[10px] font-black text-brand-800">
-                              Piece {ri + 1}: {r.category === 'customRing' ? 'Engagement / Custom' : r.category === 'weddingBand' ? 'Wedding Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings Pair' : 'Tennis Bracelet'}
-                            </span>
-                            <span className="font-black text-brand-800 font-mono">${finalItemPrice.toFixed(2)}</span>
-                          </div>
-
-                          {/* Piece parameters bulleted list */}
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-brand-600 text-[10px]">
-                            <div>Material: <span className="font-bold text-brand-800 uppercase">{r.metalColor} {r.goldKarat ? `${r.goldKarat}k` : ''} {r.material}</span></div>
-                            {r.goldGrams && <div>Weight: <span className="font-bold text-brand-800">{r.goldGrams}g</span></div>}
-                            {r.category === 'mensBand' && r.mbSize && <div>Size: <span className="font-bold text-brand-800">{r.mbSize} (width {r.mbWidth}mm, thickness {r.mbThickness}mm)</span></div>}
-                            {r.category === 'customRing' && r.cRingSize && <div>Size: <span className="font-bold text-brand-800">US {r.cRingSize}</span></div>}
-                            
-                            {/* Center stone info */}
-                            {r.centerStone?.carats && (
-                              <div className="col-span-2 text-brand-700">
-                                Center Stone: <span className="font-bold text-brand-800">{r.centerStone.carats}ct {r.centerStone.shape} {r.centerStone.type} ({r.centerStone.origin} • setting: {r.centerStone.setting})</span>
-                              </div>
-                            )}
-
-                            {/* Melee stones counts */}
-                            {r.melee.some(m=>Number(m.qty)>0) && (
-                              <div className="col-span-2 text-brand-700">
-                                Supplied Melee: {r.melee.filter(m=>Number(m.qty)>0).map((m, x) => (
-                                  <span key={x} className="bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded mr-1">
-                                    {m.qty} st ({m.carat}ct/ea • size {m.size}mm)
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Fancy melee counts */}
-                            {r.fancy.some(f=>Number(f.qty)>0) && (
-                              <div className="col-span-2 text-brand-700">
-                                Supplied Fancy Melee: {r.fancy.filter(f=>Number(f.qty)>0).map((f, x) => (
-                                  <span key={x} className="bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded mr-1">
-                                    {f.qty} st ({f.shape})
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Client owned stones setting */}
-                            {r.clientStones.some(c=>Number(c.qty)>0) && (
-                              <div className="col-span-2 text-brand-700 font-medium italic text-green-700">
-                                Client Owned Stones Setting: {r.clientStones.filter(c=>Number(c.qty)>0).map((c, x) => (
-                                  <span key={x} className="mr-1">
-                                    {c.qty} st ({c.type} • {c.carats}ct)
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Engraving */}
-                            {r.showEngraving && r.engravingText && (
-                              <div className="col-span-2 text-brand-700 border-t border-brand-100 pt-1 mt-1">
-                                Engraving Text: <span className="font-bold text-brand-800 italic" style={{ fontFamily: r.engravingFont }}>"{r.engravingText}"</span>
-                              </div>
-                            )}
-
-                            {/* Notes */}
-                            {r.designNotes.length > 0 && (
-                              <div className="col-span-2 text-brand-400 mt-1 leading-relaxed">
-                                Design Notes: {r.designNotes.map((n, x) => <div key={x}>- {n.text}</div>)}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Visual References: Sketches & Photos rendered directly inside the specific piece's specs sheet */}
-                          {(() => {
-                            const rSketches = Array.isArray(r.referenceSketches) ? r.referenceSketches : (r.referenceSketch ? [r.referenceSketch] : []);
-                            const rPhotos = Array.isArray(r.referencePhotos) ? r.referencePhotos : (r.referencePhoto ? [r.referencePhoto] : []);
-                            if (rSketches.length === 0 && rPhotos.length === 0) return null;
-                            return (
-                              <div className="space-y-3 pt-3 border-t border-brand-100 mt-2 print:space-y-2 print:pt-2">
-                                <span className="text-[9px] font-black text-brand-500 uppercase tracking-wider block pl-1 print:text-[8px]">Visual Mockup References</span>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 print:gap-2">
-                                  {rSketches.map((sk, skIdx) => (
-                                    <div key={`sk-${skIdx}`} className="border border-brand-200 rounded-xl p-2 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
-                                      <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1.5 print:mb-1 print:text-[7px]">Sketch {skIdx + 1}</span>
-                                      <img
-                                        src={sk}
-                                        alt={`Piece ${ri+1} Sketch ${skIdx+1}`}
-                                        className="h-44 w-full object-contain rounded-lg cursor-pointer hover:scale-[1.01] hover:opacity-90 transition-all print:h-64 print:rounded-lg"
-                                        onClick={() => setEnlargeImage(sk)}
-                                        title="Click to enlarge"
-                                      />
-                                    </div>
-                                  ))}
-                                  {rPhotos.map((ph, phIdx) => (
-                                    <div key={`ph-${phIdx}`} className="border border-brand-200 rounded-xl p-2 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
-                                      <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1.5 print:mb-1 print:text-[7px]">Photo {phIdx + 1}</span>
-                                      <img
-                                        src={ph}
-                                        alt={`Piece ${ri+1} Photo ${phIdx+1}`}
-                                        className="h-44 w-full object-contain rounded-lg cursor-pointer hover:scale-[1.01] hover:opacity-90 transition-all print:h-64 print:rounded-lg"
-                                        onClick={() => setEnlargeImage(ph)}
-                                        title="Click to enlarge"
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Dynamic Mockups Thumbnail Anchors side-by-side inside the Invoice */}
-                  {(activeTx as QuoteTransaction).fullData?.rings?.some(r => r.referenceSketch || r.referencePhoto || (Array.isArray(r.referenceSketches) && r.referenceSketches.length > 0) || (Array.isArray(r.referencePhotos) && r.referencePhotos.length > 0)) && (
-                    <div className="border-t border-brand-100 pt-6 space-y-4 mb-6 print:pt-3 print:space-y-2 print:mb-4">
-                      <h4 className="text-[10px] font-black text-brand-800 uppercase tracking-widest text-center print:text-[8px]">Reference Sketches & Photos</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:gap-3">
-                        {(activeTx as QuoteTransaction).fullData?.rings?.map((r, ri) => {
-                          const rSketches = Array.isArray(r.referenceSketches) ? r.referenceSketches : (r.referenceSketch ? [r.referenceSketch] : []);
-                          const rPhotos = Array.isArray(r.referencePhotos) ? r.referencePhotos : (r.referencePhoto ? [r.referencePhoto] : []);
-                          if (rSketches.length === 0 && rPhotos.length === 0) return null;
-                          return (
-                            <div key={r.id} className="border border-brand-100 bg-brand-50/20 rounded-2xl p-3 space-y-3 print:p-2 print:space-y-2 print:rounded-xl">
-                              <p className="text-[10px] font-black uppercase text-brand-600 tracking-wider print:text-[8px]">
-                                Piece {ri + 1}: {r.category === 'customRing' ? 'Custom Ring' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis'}
-                              </p>
-                              <div className="grid grid-cols-2 gap-2">
-                                {rSketches.map((sk, skIdx) => (
-                                  <div key={`sk-${skIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
-                                    <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1 print:mb-1 print:text-[7px]">Sketch {skIdx + 1}</span>
-                                    <img
-                                      src={sk}
-                                      alt={`Piece ${ri+1} Sketch ${skIdx+1}`}
-                                      className="h-28 w-full object-contain rounded cursor-pointer hover:scale-[1.01] hover:opacity-90 transition-all print:h-64 print:rounded-lg"
-                                      onClick={() => setEnlargeImage(sk)}
-                                      title="Click to enlarge"
-                                    />
-                                  </div>
-                                ))}
-                                {rPhotos.map((ph, phIdx) => (
-                                  <div key={`ph-${phIdx}`} className="border border-brand-200 rounded-xl p-1.5 bg-white flex flex-col items-center print:p-2 print:rounded-xl">
-                                    <span className="text-[8px] font-black uppercase text-brand-400 tracking-wider mb-1 print:mb-1 print:text-[7px]">Photo {phIdx + 1}</span>
-                                    <img
-                                      src={ph}
-                                      alt={`Piece ${ri+1} Photo ${phIdx+1}`}
-                                      className="h-28 w-full object-contain rounded cursor-pointer hover:scale-[1.01] hover:opacity-90 transition-all print:h-64 print:rounded-lg"
-                                      onClick={() => setEnlargeImage(ph)}
-                                      title="Click to enlarge"
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Signature graphic rendering */}
-                  {((activeTx as QuoteTransaction).fullData as QuoteSession).signatureImg && (
-                    <div className="mb-6 pt-4 border-t border-brand-100 flex items-center justify-between">
-                      <div className="text-xs text-brand-500 font-medium">
-                        <p className="font-black text-brand-800 uppercase tracking-widest text-[9px] mb-1">Approved Agreement</p>
-                        <p className="text-[10px]">Client signature confirmed online.</p>
-                      </div>
-                      <img src={((activeTx as QuoteTransaction).fullData as QuoteSession).signatureImg!} alt="Client Signature" className="h-14 w-40 border border-brand-200 bg-brand-50 rounded-xl" />
-                    </div>
-                  )}
-                </div>
-              )}
+                return (
+                  <ClientInvoicePrint
+                    session={fullSession}
+                    settings={settings}
+                    spotPrices={spotPrices || { gold: 4000, silver: 45, platinum: 1200 }}
+                    isWholesale={selectedTx.type === 'wholesale'}
+                    containerId="ledger-invoice-box"
+                    dateStr={activeTx.date}
+                    enlargeImage={setEnlargeImage}
+                  />
+                );
+              })()}
             </div>
           </div>
         ) : (

@@ -47,6 +47,11 @@ export default function SignaturePad({ initialSignature, onSave, onClear }: Sign
   }, [initialSignature]);
 
   const startDrawing = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // Ignore hovering S-Pen / Apple Pencil / stylus proximity events when not pressing firmly
+    if (e.buttons === 0 || (e.pointerType === 'pen' && e.pressure === 0)) {
+      return;
+    }
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -60,11 +65,21 @@ export default function SignaturePad({ initialSignature, onSave, onClear }: Sign
     ctx.beginPath();
     ctx.moveTo(x, y);
     setIsDrawing(true);
-    canvas.setPointerCapture(e.pointerId);
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {
+      // Pointer capture fallback
+    }
   };
 
   const draw = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return;
+
+    // Ignore hovering stylus or released pointer
+    if (e.buttons === 0 || (e.pointerType === 'pen' && e.pressure === 0)) {
+      stopDrawing(e);
+      return;
+    }
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -87,7 +102,11 @@ export default function SignaturePad({ initialSignature, onSave, onClear }: Sign
     
     const canvas = canvasRef.current;
     if (canvas) {
-      canvas.releasePointerCapture(e.pointerId);
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch {
+        // Pointer capture fallback
+      }
       // Trigger save on mouse/touch up
       const dataUrl = canvas.toDataURL('image/png');
       onSave(dataUrl);

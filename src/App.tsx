@@ -1562,6 +1562,7 @@ setIsCloudSynced(true);
               onLoadIntoEditor={handleLoadQuote}
               onLoadScrapIntoEditor={handleLoadScrap}
               settings={settings}
+              spotPrices={spotPrices}
               onAddDemoTransaction={handleCreateDemoTransaction}
               onTriggerPrint={handleTriggerPrint}
               isIframe={isIframe}
