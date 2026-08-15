@@ -15,7 +15,7 @@ import {
   ScrapItem, JewelryItem 
 } from './types';
 import { DEFAULT_SETTINGS, TROY_ONCE_GRAMS, FANCY_SHAPES, ROUND_MELEE } from './constants';
-import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeParseDate, genId, getTennisBaseGrams } from './utils';
+import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeParseDate, genId, getTennisBaseGrams, calculateScrapItemValue } from './utils';
 
 // Modular Components
 import ScrapCalculator from './components/ScrapCalculator';
@@ -23,6 +23,7 @@ import QuoteCalculator from './components/QuoteCalculator';
 import LedgerView from './components/LedgerView';
 import SettingsView from './components/SettingsView';
 import Sketchpad from './components/Sketchpad';
+import PhotoEditorModal from './components/PhotoEditorModal';
 import SpotPriceView from './components/SpotPriceView';
 import CubanBraceletBuilder from './components/CubanBraceletBuilder';
 import WholesaleRepairView from './components/WholesaleRepairView';
@@ -664,17 +665,24 @@ setIsCloudSynced(true);
       items: ScrapItem[];
       image: string | null;
       signature: string | null;
+      customTotal?: string;
     },
     existingId?: string
   ): ScrapTransaction => {
-    const logStr = data.items.map(i => `${i.weight}g ${i.material} (${i.purity}${i.material==='gold'?'k':''})`).join(', ');
+    const logStr = data.items.map(i => {
+      const pLabel = i.material === 'gold' 
+        ? (i.purity > 24 ? `${i.purity}%` : `${i.purity}k`)
+        : `${(i.purity > 1 ? i.purity : i.purity * 100).toFixed(1)}%`;
+      return `${i.weight}g ${i.material} (${pLabel})`;
+    }).join(', ');
+
     const totalVal = data.items.reduce((total, item) => {
-      const w = parseFloat(item.weight) || 0;
-      const s = (spotPrices[item.material] || 0) / TROY_ONCE_GRAMS;
-      const pf = item.material === 'gold' ? item.purity / 24 : item.purity;
-      return total + (w * pf * s * (item.rate / 100));
+      return total + calculateScrapItemValue(item, spotPrices);
     }, 0);
-    const finalTotal = Math.max(0, totalVal - (Number(data.stoneRemovalQty || 0) * 5)).toFixed(2);
+    const calculatedTotal = Math.max(0, totalVal - (Number(data.stoneRemovalQty || 0) * 5)).toFixed(2);
+    const finalTotal = (data.customTotal !== undefined && data.customTotal !== '' && !isNaN(parseFloat(data.customTotal))) 
+      ? parseFloat(data.customTotal).toFixed(2) 
+      : calculatedTotal;
 
     if (existingId) {
       const original = scrapTransactions.find(t => t.id === existingId);
@@ -1595,14 +1603,30 @@ setIsCloudSynced(true);
         </div>
       </main>
 
-      {/* 3. INTERACTIVE GEOMETRIC SKETCHPAD OVERLAY */}
+      {/* 3. INTERACTIVE GEOMETRIC SKETCHPAD & PHOTO EDITOR OVERLAY */}
       {isSketching && (
-        <Sketchpad
-          initialImage={getActiveSketchSrc()}
-          onSave={handleSketchSave}
-          onCancel={() => setIsSketching(false)}
-          title={editingImageType === 'sketch' ? "Interactive Design Sketchpad" : "Configure Reference Background Photograph"}
-        />
+        editingImageType === 'photo' ? (
+          <PhotoEditorModal
+            isOpen={true}
+            imageSrc={getActiveSketchSrc()}
+            onSave={handleSketchSave}
+            onClose={() => {
+              setIsSketching(false);
+              setEditingImageIndex(null);
+            }}
+            title="Crop & Draw Reference Photo"
+          />
+        ) : (
+          <Sketchpad
+            initialImage={getActiveSketchSrc()}
+            onSave={handleSketchSave}
+            onCancel={() => {
+              setIsSketching(false);
+              setEditingImageIndex(null);
+            }}
+            title="Interactive Design Sketchpad"
+          />
+        )
       )}
 
       {/* 4. IPAD PRINT OPTIMIZATION MODAL */}

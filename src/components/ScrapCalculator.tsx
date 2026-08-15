@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Camera, Shield, DollarSign, Scale, ArrowRight, Printer } from 'lucide-react';
+import { Plus, Trash2, Camera, Shield, DollarSign, Scale, ArrowRight, Printer, Edit2, RefreshCw, X } from 'lucide-react';
 import { ScrapItem, MaterialType, ScrapTransaction } from '../types';
 import { PURITY_OPTIONS, TROY_ONCE_GRAMS } from '../constants';
 import { calculateScrapItemValue, calculateScrapTotal } from '../utils';
@@ -24,6 +24,7 @@ interface ScrapCalculatorProps {
       items: ScrapItem[];
       image: string | null;
       signature: string | null;
+      customTotal?: string;
     },
     existingId?: string
   ) => ScrapTransaction;
@@ -63,6 +64,12 @@ export default function ScrapCalculator({
   const [dragStart, setDragStart] = useState<{ clientX: number; clientY: number; x: number; y: number; w: number; h: number } | null>(null);
   const [enlargeImage, setEnlargeImage] = useState<string | null>(null);
   const cropContainerRef = React.useRef<HTMLDivElement>(null);
+
+  // Price Override state for Final Cash Offer
+  const [isOfferOverridden, setIsOfferOverridden] = useState<boolean>(false);
+  const [customOffer, setCustomOffer] = useState<string>('');
+  const [isOverrideModalOpen, setIsOverrideModalOpen] = useState<boolean>(false);
+  const [overrideInputValue, setOverrideInputValue] = useState<string>('');
 
   const [items, setItems] = useState<ScrapItem[]>([
     { weight: '', material: 'gold', purity: 14, rate: 85 }
@@ -106,6 +113,20 @@ export default function ScrapCalculator({
       setScrapImage(editingTransaction.image || null);
       setCustomerSignature(editingTransaction.signature || null);
       setItems(editingTransaction.items && editingTransaction.items.length > 0 ? editingTransaction.items : [{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
+      
+      const calcTotal = calculateScrapTotal(
+        editingTransaction.items || [], 
+        editingTransaction.spotPrices || spotPrices, 
+        editingTransaction.stoneRemovalQty || ''
+      );
+      const txTotalNum = parseFloat(editingTransaction.total?.replace(/[^0-9.]/g, '') || '0');
+      if (txTotalNum > 0 && Math.abs(txTotalNum - calcTotal) > 0.02) {
+        setIsOfferOverridden(true);
+        setCustomOffer(String(txTotalNum));
+      } else {
+        setIsOfferOverridden(false);
+        setCustomOffer('');
+      }
     } else {
       setCustomerName('');
       setPhoneNumber('');
@@ -115,6 +136,8 @@ export default function ScrapCalculator({
       setScrapImage(null);
       setCustomerSignature(null);
       setItems([{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
+      setIsOfferOverridden(false);
+      setCustomOffer('');
     }
   }, [editingTransaction]);
 
@@ -286,7 +309,10 @@ export default function ScrapCalculator({
     img.src = cropImageSrc;
   };
 
-  const scrapTotal = calculateScrapTotal(items, spotPrices, stoneRemovalQty);
+  const scrapTotalCalculated = calculateScrapTotal(items, spotPrices, stoneRemovalQty);
+  const finalPayout = isOfferOverridden && customOffer !== '' && !isNaN(parseFloat(customOffer))
+    ? parseFloat(customOffer)
+    : scrapTotalCalculated;
 
   const handleSave = (shouldPrint: boolean = false) => {
     if (!customerName.trim()) {
@@ -307,7 +333,8 @@ export default function ScrapCalculator({
       stoneRemovalQty,
       items: activeItems,
       image: scrapImage,
-      signature: customerSignature
+      signature: customerSignature,
+      customTotal: isOfferOverridden && customOffer !== '' ? customOffer : undefined
     }, editingTransaction?.id);
 
     const resetForm = () => {
@@ -320,6 +347,8 @@ export default function ScrapCalculator({
         setScrapImage(null);
         setCustomerSignature(null);
         setItems([{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
+        setIsOfferOverridden(false);
+        setCustomOffer('');
       }
     };
 
@@ -361,7 +390,7 @@ export default function ScrapCalculator({
       )}
 
       {/* 1. Final Cash Offer Card */}
-      <div className="relative bg-brand-900 rounded-[2rem] py-10 px-6 shadow-2xl text-center border border-brand-800 overflow-hidden">
+      <div className="relative bg-brand-900 rounded-[2rem] py-8 px-6 shadow-2xl text-center border border-brand-800 overflow-hidden">
         <div className="absolute right-5 top-5 flex items-center gap-2">
           {syncStatus && (
             <span className="text-[10px] font-bold text-green-400 uppercase tracking-widest bg-green-900/30 border border-green-800 px-2 py-1.5 rounded-md">
@@ -371,17 +400,62 @@ export default function ScrapCalculator({
           <button
             type="button"
             onClick={onFetchLivePrices}
-            className="text-xs bg-brand-800 text-brand-gold px-4 py-2 rounded-xl font-bold hover:bg-brand-700 shadow-md transition-all border border-brand-700"
+            className="text-xs bg-brand-800 text-brand-gold px-4 py-2 rounded-xl font-bold hover:bg-brand-700 shadow-md transition-all border border-brand-700 cursor-pointer"
           >
             Sync Market Rate
           </button>
         </div>
-        <h3 className="text-brand-400 uppercase tracking-[0.2em] text-[10px] font-bold mt-4">
-          Final Cash Offer (CAD)
-        </h3>
-        <p id="scrap-grand-total" className="text-6xl md:text-7xl font-black text-brand-gold tracking-tighter mt-2 drop-shadow-md">
-          ${scrapTotal.toFixed(2)}
-        </p>
+
+        <div className="flex flex-col items-center justify-center mt-2">
+          <div className="flex items-center gap-2">
+            <h3 className="text-brand-400 uppercase tracking-[0.2em] text-[10px] font-bold">
+              Final Cash Offer (CAD)
+            </h3>
+            {isOfferOverridden && (
+              <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold tracking-wider">
+                OVERRIDDEN
+              </span>
+            )}
+          </div>
+
+          <p id="scrap-grand-total" className="text-6xl md:text-7xl font-black text-brand-gold tracking-tighter mt-2 drop-shadow-md">
+            ${finalPayout.toFixed(2)}
+          </p>
+
+          {isOfferOverridden && (
+            <p className="text-xs text-brand-400 font-mono mt-1">
+              Calculated System Total: ${scrapTotalCalculated.toFixed(2)}
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center justify-center gap-3 mt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setOverrideInputValue(isOfferOverridden ? customOffer : finalPayout.toFixed(2));
+                setIsOverrideModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 text-xs bg-brand-800 hover:bg-brand-700 text-brand-gold px-4 py-2 rounded-xl font-bold transition-all border border-brand-700 shadow-md cursor-pointer"
+            >
+              <Edit2 size={13} />
+              {isOfferOverridden ? 'Edit Cash Override' : 'Override Cash Offer'}
+            </button>
+
+            {isOfferOverridden && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOfferOverridden(false);
+                  setCustomOffer('');
+                }}
+                className="flex items-center gap-1.5 text-xs bg-red-900/40 hover:bg-red-900/70 text-red-300 px-3.5 py-2 rounded-xl font-bold transition-all border border-red-800/60 shadow-sm cursor-pointer"
+              >
+                <RefreshCw size={13} />
+                Reset to Calculated (${scrapTotalCalculated.toFixed(2)})
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* 2. Live Feed Anchors Grid */}
@@ -506,15 +580,40 @@ export default function ScrapCalculator({
 
       {/* 4. Items List Rows */}
       <div className="bg-brand-100/50 p-4 rounded-2xl border border-brand-200 space-y-3">
+        {/* Desktop Header Row */}
+        <div className="hidden md:grid grid-cols-[1fr_1fr_1.8fr_1.2fr_1.2fr_auto] gap-3 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-brand-600 border-b border-brand-200">
+          <div>Mass (g)</div>
+          <div>Metal</div>
+          <div>Gold Percentage</div>
+          <div>Buy Back Percentage</div>
+          <div className="text-right">Total Payout</div>
+          <div></div>
+        </div>
+
         {items.map((item, idx) => {
           const rowValue = calculateScrapItemValue(item, spotPrices);
+          
+          // Calculate percentage representation for input display
+          const currentPurityPercent = item.material === 'gold' 
+            ? (item.purity <= 24 ? parseFloat(((item.purity / 24) * 100).toFixed(2)) : item.purity) 
+            : (item.purity <= 1 ? parseFloat((item.purity * 100).toFixed(1)) : item.purity);
+
+          const presetSelectVal = item.material === 'gold' 
+            ? (item.purity === 10 || Math.abs(currentPurityPercent - 41.67) < 0.2 ? '10' :
+               item.purity === 14 || Math.abs(currentPurityPercent - 58.33) < 0.2 ? '14' :
+               item.purity === 18 || Math.abs(currentPurityPercent - 75.0) < 0.2 ? '18' :
+               item.purity === 19 || Math.abs(currentPurityPercent - 79.17) < 0.2 ? '19' :
+               item.purity === 22 || Math.abs(currentPurityPercent - 91.67) < 0.2 ? '22' :
+               item.purity === 24 || Math.abs(currentPurityPercent - 100) < 0.2 ? '24' : 'custom')
+            : 'custom';
+
           return (
             <div
               key={idx}
-              className="grid grid-cols-1 md:grid-cols-[1.5fr_1.5fr_1.5fr_1fr_auto_auto] gap-3 items-center bg-white p-3 rounded-xl border shadow-sm"
+              className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1.8fr_1.2fr_1.2fr_auto] gap-3 items-center bg-white p-3 rounded-xl border border-brand-200/80 shadow-sm"
             >
               <div className="flex flex-col">
-                <label className="text-[8px] font-bold text-brand-400 uppercase md:hidden mb-0.5">Mass (g)</label>
+                <label className="text-[9px] font-bold text-brand-500 uppercase md:hidden mb-0.5">Mass (g)</label>
                 <input
                   type="number"
                   placeholder="Mass (g)"
@@ -524,9 +623,9 @@ export default function ScrapCalculator({
                 />
               </div>
               <div className="flex flex-col">
-                <label className="text-[8px] font-bold text-brand-400 uppercase md:hidden mb-0.5">Metal</label>
+                <label className="text-[9px] font-bold text-brand-500 uppercase md:hidden mb-0.5">Metal</label>
                 <select
-                  className="border p-2.5 rounded-lg text-sm font-bold bg-brand-50"
+                  className="border p-2.5 rounded-lg text-sm font-bold bg-brand-50 cursor-pointer"
                   value={item.material}
                   onChange={(e) => updateItem(idx, 'material', e.target.value as MaterialType)}
                 >
@@ -536,29 +635,75 @@ export default function ScrapCalculator({
                 </select>
               </div>
               <div className="flex flex-col">
-                <label className="text-[8px] font-bold text-brand-400 uppercase md:hidden mb-0.5">Purity</label>
-                <select
-                  className="border p-2.5 rounded-lg text-sm font-bold bg-brand-50"
-                  value={item.purity}
-                  onChange={(e) => updateItem(idx, 'purity', parseFloat(e.target.value))}
-                >
-                  {PURITY_OPTIONS[item.material].map((p) => (
-                    <option key={p} value={p}>
-                      {item.material === 'gold' ? `${p}k` : `${(p * 100).toFixed(1)}%`}
-                    </option>
-                  ))}
-                </select>
+                <label className="text-[9px] font-bold text-brand-500 uppercase md:hidden mb-0.5">Gold Percentage</label>
+                <div className="flex items-center gap-1.5">
+                  <div className="relative flex-1">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      placeholder="e.g. 55.9"
+                      className="w-full border p-2.5 pr-6 rounded-lg text-sm font-bold bg-white focus:ring-2 focus:ring-brand-500 shadow-sm no-spinner"
+                      value={currentPurityPercent || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        updateItem(idx, 'purity', val === '' ? 0 : parseFloat(val));
+                      }}
+                    />
+                    <span className="absolute right-2 top-2.5 text-xs font-bold text-brand-400 pointer-events-none">%</span>
+                  </div>
+                  <select
+                    className="border p-2.5 rounded-lg text-xs font-bold bg-brand-50 text-brand-800 cursor-pointer max-w-[95px]"
+                    value={presetSelectVal}
+                    onChange={(e) => {
+                      const sel = e.target.value;
+                      if (sel === 'custom') return;
+                      const k = parseFloat(sel);
+                      if (item.material === 'gold') {
+                        const pctMap: Record<number, number> = { 10: 41.67, 14: 58.33, 18: 75.0, 19: 79.17, 22: 91.67, 24: 100.0 };
+                        updateItem(idx, 'purity', pctMap[k] || k);
+                      } else {
+                        updateItem(idx, 'purity', k);
+                      }
+                    }}
+                  >
+                    <option value="custom">Custom</option>
+                    {item.material === 'gold' ? (
+                      <>
+                        <option value="10">10K (41.7%)</option>
+                        <option value="14">14K (58.3%)</option>
+                        <option value="18">18K (75.0%)</option>
+                        <option value="19">19K (79.2%)</option>
+                        <option value="22">22K (91.7%)</option>
+                        <option value="24">24K (100%)</option>
+                      </>
+                    ) : item.material === 'silver' ? (
+                      <>
+                        <option value="92.5">Sterling (92.5%)</option>
+                        <option value="99.9">Fine (99.9%)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="95">Pt950 (95.0%)</option>
+                        <option value="90">Pt900 (90.0%)</option>
+                      </>
+                    )}
+                  </select>
+                </div>
               </div>
               <div className="flex flex-col">
-                <label className="text-[8px] font-bold text-brand-400 uppercase md:hidden mb-0.5">Rate %</label>
-                <div className="flex items-center gap-1">
+                <label className="text-[9px] font-bold text-brand-500 uppercase md:hidden mb-0.5">Buy Back Percentage</label>
+                <div className="relative">
                   <input
                     type="number"
-                    className="border p-2.5 rounded-lg text-sm font-bold w-full text-center"
+                    min="0"
+                    max="100"
+                    className="border p-2.5 pr-6 rounded-lg text-sm font-bold w-full text-center bg-white shadow-sm no-spinner"
                     value={item.rate}
                     onChange={(e) => updateItem(idx, 'rate', parseFloat(e.target.value) || 0)}
                   />
-                  <span className="text-xs font-bold text-brand-400">%</span>
+                  <span className="absolute right-2 top-2.5 text-xs font-bold text-brand-400 pointer-events-none">%</span>
                 </div>
               </div>
               <div className="text-sm font-black text-brand-900 pr-2 text-right flex items-center justify-end">
@@ -568,7 +713,7 @@ export default function ScrapCalculator({
               <button
                 type="button"
                 onClick={() => removeRow(idx)}
-                className="text-red-400 font-bold px-2 hover:text-red-600 text-lg hover:bg-red-50 rounded"
+                className="text-red-400 font-bold px-2 hover:text-red-600 text-lg hover:bg-red-50 rounded cursor-pointer"
               >
                 &times;
               </button>
@@ -578,7 +723,7 @@ export default function ScrapCalculator({
         <button
           type="button"
           onClick={addRow}
-          className="w-full border-2 border-dashed border-brand-300 py-3 rounded-xl text-brand-600 font-bold text-sm bg-white hover:bg-brand-50 transition-colors"
+          className="w-full border-2 border-dashed border-brand-300 py-3 rounded-xl text-brand-600 font-bold text-sm bg-white hover:bg-brand-50 transition-colors cursor-pointer"
         >
           + Add Entry
         </button>
@@ -689,7 +834,10 @@ export default function ScrapCalculator({
           </div>
           <div className="bg-green-50/50 p-3 rounded-xl border border-green-100 text-right flex flex-col justify-center">
             <p className="text-[9px] uppercase font-black text-green-700 tracking-wider mb-1">Total Payout Paid (CAD)</p>
-            <p className="text-2xl font-black text-green-600">${scrapTotal.toFixed(2)}</p>
+            <p className="text-2xl font-black text-green-600">${finalPayout.toFixed(2)}</p>
+            {isOfferOverridden && (
+              <p className="text-[8px] font-mono text-amber-700 font-bold">(Manual Offer Override)</p>
+            )}
           </div>
         </div>
 
@@ -700,10 +848,13 @@ export default function ScrapCalculator({
             <div className="bg-brand-50/50 p-3 rounded-xl border border-brand-100/50 text-xs text-brand-700 space-y-1.5 leading-relaxed">
               {items.filter(i => Number(i.weight) > 0).map((it, idx) => {
                 const val = calculateScrapItemValue(it, spotPrices);
+                const pStr = it.material === 'gold' 
+                  ? (it.purity > 24 ? `${it.purity}%` : `${it.purity}k (${((it.purity/24)*100).toFixed(1)}%)`)
+                  : `${(it.purity > 1 ? it.purity : it.purity * 100).toFixed(1)}%`;
                 return (
                   <div key={idx} className="flex justify-between items-center border-b border-dashed border-brand-100 pb-1.5 last:border-none last:pb-0">
                     <span>
-                      {it.weight}g {it.material} ({it.purity}{it.material === 'gold' ? 'k' : ''}) @ {it.rate}% payout rate
+                      {it.weight}g {it.material} ({pStr}) @ {it.rate}% buyback rate
                     </span>
                     <span className="font-bold text-brand-900 font-mono">${val.toFixed(2)}</span>
                   </div>
@@ -977,6 +1128,84 @@ export default function ScrapCalculator({
           />
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/75 px-4 py-2 rounded-full border border-white/10 text-[10px] font-bold text-brand-200 shadow tracking-wider uppercase">
             Enlarged Compliance Document View
+          </div>
+        </div>
+      </div>
+    )}
+    {/* Price Override Modal */}
+    {isOverrideModalOpen && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 animate-fadeIn font-sans">
+        <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-brand-100 space-y-4">
+          <div className="flex justify-between items-center border-b border-brand-100 pb-3">
+            <div className="flex items-center gap-2">
+              <DollarSign className="text-brand-gold" size={20} />
+              <h3 className="text-base font-black uppercase text-brand-900 tracking-wider">
+                Price Override Options
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsOverrideModalOpen(false)}
+              className="text-brand-400 hover:text-brand-600 font-bold text-lg cursor-pointer"
+            >
+              &times;
+            </button>
+          </div>
+
+          <p className="text-xs text-brand-600 leading-relaxed">
+            Specify a custom cash offer amount for this buyback transaction. This will override the calculated system total.
+          </p>
+
+          <div className="bg-brand-50 p-4 rounded-2xl border border-brand-200 text-xs space-y-2">
+            <div className="flex justify-between text-brand-700">
+              <span>Calculated System Total:</span>
+              <span className="font-mono font-bold">${scrapTotalCalculated.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-brand-500 uppercase tracking-wider block">
+              Override Final Cash Offer ($ CAD)
+            </label>
+            <div className="relative">
+              <span className="absolute left-3.5 top-3 text-base font-black text-brand-500">$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                className="w-full border-2 border-brand-300 focus:border-brand-gold p-3 pl-8 rounded-xl text-lg font-black text-brand-900 bg-white no-spinner shadow-inner"
+                value={overrideInputValue}
+                onChange={(e) => setOverrideInputValue(e.target.value)}
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsOverrideModalOpen(false)}
+              className="flex-1 py-3 border border-brand-200 text-brand-800 text-xs font-bold rounded-xl hover:bg-brand-50 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const num = parseFloat(overrideInputValue);
+                if (isNaN(num) || num < 0) {
+                  alert("Please enter a valid cash offer amount.");
+                  return;
+                }
+                setIsOfferOverridden(true);
+                setCustomOffer(num.toFixed(2));
+                setIsOverrideModalOpen(false);
+              }}
+              className="flex-1 py-3 bg-brand-gold text-brand-950 font-black text-xs uppercase tracking-wider rounded-xl hover:bg-yellow-500 shadow-md cursor-pointer"
+            >
+              Apply Override
+            </button>
           </div>
         </div>
       </div>

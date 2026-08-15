@@ -7,7 +7,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Trash2, Camera, Compass, Type, Tag, HelpCircle, 
   Signature, CheckCircle, Calculator, Sparkles, AlertCircle, FileText,
-  Gem, UserCheck, User, Lock, Unlock, Save, Edit3, Check, X
+  Gem, UserCheck, User, Lock, Unlock, Save, Edit3, Check, X,
+  Crop, PenTool
 } from 'lucide-react';
 import { 
   QuoteSession, JewelryItem, MeleeItem, FancyItem, ClientStoneItem, 
@@ -25,6 +26,7 @@ import { printElement } from '../utils/printHelper';
 import SignaturePad from './SignaturePad';
 import WholesaleRepairView from './WholesaleRepairView';
 import ClientInvoicePrint from './ClientInvoicePrint';
+import PhotoEditorModal from './PhotoEditorModal';
 
 const PROFILE_SHAPES = [
   { id: 'Flat', name: 'Flat / Pipe', factor: '1.00', desc: 'Flat top & flat inside', path: 'M 10 45 L 70 45 L 70 25 L 10 25 Z' },
@@ -1160,6 +1162,22 @@ export default function QuoteCalculator({
   const handleClearPriceOverride = () => {
     onChangeSession(prev => ({ ...prev, customGrandTotal: null, customGrandTotalIsInclusive: false }));
     setShowPriceOverrideModal(false);
+  };
+
+  // Photo Crop & Annotate Editor State
+  const [photoEditorSrc, setPhotoEditorSrc] = useState<string | null>(null);
+  const [photoEditorIdx, setPhotoEditorIdx] = useState<number | null>(null);
+
+  const handleSavePhotoEditor = (editedDataUrl: string) => {
+    if (photoEditorIdx !== null && photoEditorIdx >= 0 && photoEditorIdx < photos.length) {
+      const updated = [...photos];
+      updated[photoEditorIdx] = editedDataUrl;
+      updatePhotos(updated);
+    } else {
+      updatePhotos([...photos, editedDataUrl]);
+    }
+    setPhotoEditorSrc(null);
+    setPhotoEditorIdx(null);
   };
 
   // Active ring being edited in the subtab
@@ -3154,19 +3172,25 @@ export default function QuoteCalculator({
                             <div key={pIdx} className="flex flex-col items-center gap-1">
                               <div
                                 onClick={() => setEnlargeImage(photoUrl)}
-                                className="border border-brand-150 bg-white rounded-xl p-0.5 w-16 h-16 flex items-center justify-center shadow-sm cursor-pointer overflow-hidden transition-all hover:scale-105"
+                                className="border border-brand-150 bg-white rounded-xl p-0.5 w-16 h-16 flex items-center justify-center shadow-sm cursor-pointer overflow-hidden transition-all hover:scale-105 relative group"
                                 title="Click to enlarge"
                               >
                                 <img src={photoUrl} alt={`Photo ${pIdx + 1}`} className="w-full h-full object-cover rounded-lg" />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
+                                  <Crop size={14} className="text-white" />
+                                </div>
                               </div>
                               <div className="flex items-center gap-1">
                                 <button
                                   type="button"
-                                  onClick={() => onLaunchSketch('photo', pIdx)}
-                                  className="p-1 bg-white border border-brand-200 text-brand-900 rounded-md hover:bg-brand-50 transition-colors shadow-sm cursor-pointer"
-                                  title="Edit Photo"
+                                  onClick={() => {
+                                    setPhotoEditorSrc(photoUrl);
+                                    setPhotoEditorIdx(pIdx);
+                                  }}
+                                  className="p-1 bg-white border border-brand-200 text-brand-900 rounded-md hover:bg-brand-50 transition-colors shadow-sm cursor-pointer flex items-center gap-0.5"
+                                  title="Crop or Draw on Photo"
                                 >
-                                  <Camera size={10} className="text-brand-gold" />
+                                  <Crop size={10} className="text-brand-gold" />
                                 </button>
                                 <button
                                   type="button"
@@ -3192,12 +3216,13 @@ export default function QuoteCalculator({
                           const file = e.target.files?.[0];
                           if (!file) return;
                           const reader = new FileReader();
-                          reader.onload = async (ev) => {
+                          reader.onload = (ev) => {
                             const result = ev.target?.result as string;
-                            const compressed = await compressImage(result, 600, 0.6);
-                            updatePhotos([...photos, compressed]);
+                            setPhotoEditorSrc(result);
+                            setPhotoEditorIdx(null); // new photo
                           };
                           reader.readAsDataURL(file);
+                          e.target.value = '';
                         }}
                       />
 
@@ -3206,7 +3231,7 @@ export default function QuoteCalculator({
                         className="w-full py-1.5 px-2 bg-brand-50 hover:bg-brand-100 text-brand-900 hover:text-brand-950 rounded-xl border border-brand-200 hover:border-brand-300 font-bold text-[10px] tracking-wide shadow-sm transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
                       >
                         <Plus size={10} className="text-brand-gold" />
-                        + Photo
+                        + Photo (Crop / Draw)
                       </label>
                     </div>
                   </div>
@@ -4783,6 +4808,23 @@ export default function QuoteCalculator({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
+                if (enlargeImage) {
+                  const foundIdx = photos.indexOf(enlargeImage);
+                  setPhotoEditorSrc(enlargeImage);
+                  setPhotoEditorIdx(foundIdx >= 0 ? foundIdx : null);
+                  setEnlargeImage(null);
+                }
+              }}
+              className="bg-brand-gold hover:bg-amber-400 text-brand-950 font-black text-xs uppercase px-4 py-2 rounded-xl transition-all cursor-pointer shadow flex items-center gap-1.5"
+              title="Crop or Draw on this photo"
+            >
+              <Crop size={13} />
+              Crop & Draw
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
                 const win = window.open('');
                 if (win) {
                   win.document.write(`<img src="${enlargeImage}" style="max-width:100%; max-height:100vh; display:block; margin:auto; object-fit:contain;" />`);
@@ -4827,6 +4869,20 @@ export default function QuoteCalculator({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Photo Crop & Drawing Editor Modal */}
+      {photoEditorSrc && (
+        <PhotoEditorModal
+          isOpen={!!photoEditorSrc}
+          imageSrc={photoEditorSrc}
+          onSave={handleSavePhotoEditor}
+          onClose={() => {
+            setPhotoEditorSrc(null);
+            setPhotoEditorIdx(null);
+          }}
+          title={photoEditorIdx !== null ? `Edit Reference Photo #${photoEditorIdx + 1}` : "Crop & Draw on New Reference Photo"}
+        />
       )}
 
       {/* Price Override Modal */}

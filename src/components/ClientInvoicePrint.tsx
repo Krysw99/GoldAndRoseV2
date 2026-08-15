@@ -446,17 +446,17 @@ export default function ClientInvoicePrint({
       </div>
 
       {/* Items Table */}
-      <div className="space-y-4 print:space-y-2">
-        <h3 className="text-[10px] font-black text-brand-500 uppercase tracking-widest pl-1 print:text-[8px]">Jewelry Specifications Breakdown</h3>
+      <div className="space-y-3 print:space-y-1.5">
+        <h3 className="text-[9.5px] font-black text-brand-500 uppercase tracking-widest pl-1 print:text-[7.5px]">Jewelry Specifications Breakdown</h3>
         <div className="border border-brand-200 rounded-2xl overflow-hidden shadow-sm print:rounded-xl">
-          <table className="w-full text-left border-collapse text-xs print:text-[11px]">
+          <table className="w-full text-left border-collapse text-[11px] print:text-[9.5px]">
             <thead>
-              <tr className="bg-brand-900 text-brand-gold border-b border-brand-800 uppercase text-[9px] tracking-wider font-black">
-                <th className="p-3 pl-4 print:p-2 print:pl-3">Piece</th>
-                <th className="p-3 print:p-2">Metal / Material</th>
-                <th className="p-3 print:p-2">Gems & Stones</th>
-                <th className="p-3 print:p-2">Special Addons / Notes</th>
-                <th className="p-3 pr-4 text-right print:p-2 print:pr-3">Price</th>
+              <tr className="bg-brand-900 text-brand-gold border-b border-brand-800 uppercase text-[8.5px] tracking-wider font-black print:text-[7px]">
+                <th className="p-2.5 pl-3.5 print:p-1.5 print:pl-2.5">Piece</th>
+                <th className="p-2.5 print:p-1.5">Metal / Material</th>
+                <th className="p-2.5 print:p-1.5">Gems & Stones</th>
+                <th className="p-2.5 print:p-1.5">Special Addons / Notes</th>
+                <th className="p-2.5 pr-3.5 text-right print:p-1.5 print:pr-2.5">Price</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-100">
@@ -476,20 +476,20 @@ export default function ClientInvoicePrint({
 
                 return (
                   <tr key={r.id || ri} className="hover:bg-brand-50/50 transition-colors">
-                    <td className="p-3 pl-4 font-bold text-brand-900 print:p-2 print:pl-3">
+                    <td className="p-2.5 pl-3.5 font-bold text-brand-900 text-[11px] print:p-1.5 print:pl-2.5 print:text-[9px]">
                       #{ri + 1} {r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : r.category === 'repair' ? 'Repair' : 'Tennis'}
                     </td>
-                    <td className="p-3 print:p-2">
-                      <span className="font-semibold block print:text-[11px]">{r.goldKarat ? `${r.goldKarat}K` : ''} {r.metalColor} {r.material}</span>
-                      <span className="text-[10px] text-brand-500 font-mono print:text-[9px]">{r.goldGrams || '0.0'}g</span>
+                    <td className="p-2.5 print:p-1.5">
+                      <span className="font-semibold block text-[11px] print:text-[9px]">{r.goldKarat ? `${r.goldKarat}K` : ''} {r.metalColor} {r.material}</span>
+                      <span className="text-[9.5px] text-brand-500 font-mono print:text-[8px]">{r.goldGrams || '0.0'}g</span>
                     </td>
-                    <td className="p-3 space-y-1 print:p-2 print:space-y-0.5">
+                    <td className="p-2.5 space-y-0.5 print:p-1.5 print:space-y-0.5">
                       {r.centerStones && r.centerStones.length > 0 ? (
                         r.centerStones.map((cs, csIdx) => {
                           if (!cs.carats) return null;
                           const rate = isWholesale ? (settings.centerStoneRates?.[cs.type]?.[cs.origin] ?? 1000) : null;
                           return (
-                            <span key={csIdx} className="block text-[11px] print:text-[10px]">
+                            <span key={csIdx} className="block text-[10px] print:text-[8.5px]">
                               Center #{csIdx + 1}: {cs.carats}ct {cs.shape} {cs.type} ({cs.origin})
                               {rate !== null && <span className="text-emerald-700 font-extrabold ml-1">@ ${rate.toFixed(2)}/ct</span>}
                             </span>
@@ -500,7 +500,7 @@ export default function ClientInvoicePrint({
                           {r.centerStone?.carats && (() => {
                             const rate = isWholesale ? (settings.centerStoneRates?.[r.centerStone.type]?.[r.centerStone.origin] ?? 1000) : null;
                             return (
-                              <span className="block text-[11px] print:text-[10px]">
+                              <span className="block text-[10px] print:text-[8.5px]">
                                 Center: {r.centerStone.carats}ct {r.centerStone.shape} {r.centerStone.type} ({r.centerStone.origin})
                                 {rate !== null && <span className="text-emerald-700 font-extrabold ml-1">@ ${rate.toFixed(2)}/ct</span>}
                               </span>
@@ -509,7 +509,7 @@ export default function ClientInvoicePrint({
                           {r.centerStone2?.carats && (() => {
                             const rate = isWholesale ? (settings.centerStoneRates?.[r.centerStone2.type]?.[r.centerStone2.origin] ?? 1000) : null;
                             return (
-                              <span className="block text-[11px] print:text-[10px]">
+                              <span className="block text-[10px] print:text-[8.5px]">
                                 Stone 2: {r.centerStone2.carats}ct {r.centerStone2.shape} {r.centerStone2.type} ({r.centerStone2.origin})
                                 {rate !== null && <span className="text-emerald-700 font-extrabold ml-1">@ ${rate.toFixed(2)}/ct</span>}
                               </span>
@@ -520,12 +520,12 @@ export default function ClientInvoicePrint({
                       {!isWholesale ? (
                         <>
                           {r.melee && r.melee.some(m => m.qty) && (
-                            <span className="block text-[10px] text-brand-600 font-mono print:text-[9px]">
+                            <span className="block text-[9.5px] text-brand-600 font-mono print:text-[8px]">
                               Melee: {r.melee.reduce((acc, m) => acc + (parseInt(m.qty) || 0), 0)} st ({r.melee.reduce((acc, m) => acc + ((parseInt(m.qty) || 0) * (parseFloat(m.carat) || 0)), 0).toFixed(2)}ctw)
                             </span>
                           )}
                           {r.fancy && r.fancy.some(f => f.qty) && (
-                            <span className="block text-[10px] text-brand-600 font-mono print:text-[9px]">
+                            <span className="block text-[9.5px] text-brand-600 font-mono print:text-[8px]">
                               Fancy: {r.fancy.reduce((acc, f) => acc + (parseInt(f.qty) || 0), 0)} st
                             </span>
                           )}
@@ -537,7 +537,7 @@ export default function ClientInvoicePrint({
                             const totalCarats = count * (parseFloat(m.carat) || 0);
                             const rate = w.meleeRates?.[m.size] ?? 400;
                             return (
-                              <span key={`m-inv-${mIdx}`} className="block text-[10px] text-brand-600 font-mono print:text-[9px]">
+                              <span key={`m-inv-${mIdx}`} className="block text-[9.5px] text-brand-600 font-mono print:text-[8px]">
                                 Melee {m.size}mm: {count} st ({totalCarats.toFixed(2)}ctw) <span className="text-emerald-700 font-extrabold">@ ${rate.toFixed(2)}/ct</span>
                               </span>
                             );
@@ -550,7 +550,7 @@ export default function ClientInvoicePrint({
                             const key = fd.label ? `${f.shape}-${fd.label}` : '';
                             const rate = Number((key && w.fancyRates?.[key]) ?? w.fancyRates?.[f.shape] ?? 500);
                             return (
-                              <span key={`f-inv-${fIdx}`} className="block text-[10px] text-brand-600 font-mono print:text-[9px]">
+                              <span key={`f-inv-${fIdx}`} className="block text-[9.5px] text-brand-600 font-mono print:text-[8px]">
                                 Fancy {f.shape} {fd.label}: {count} st ({totalCarats.toFixed(2)}ctw) <span className="text-emerald-700 font-extrabold">@ ${rate.toFixed(2)}/ct</span>
                               </span>
                             );
@@ -558,17 +558,17 @@ export default function ClientInvoicePrint({
                         </>
                       )}
                     </td>
-                    <td className="p-3 space-y-1 print:p-2 print:space-y-0.5">
-                      {r.engravingText && <span className="block text-xs font-semibold italic print:text-[10px]" style={{ fontFamily: r.engravingFont }}>"Engraved: {r.engravingText}"</span>}
-                      {r.designNotes && r.designNotes.map((n, ni) => <span key={ni} className="block text-[10px] text-brand-500 leading-tight print:text-[9px]">• {n.text}</span>)}
+                    <td className="p-2.5 space-y-0.5 print:p-1.5 print:space-y-0.5">
+                      {r.engravingText && <span className="block text-[10.5px] font-semibold italic print:text-[8.5px]" style={{ fontFamily: r.engravingFont }}>"Engraved: {r.engravingText}"</span>}
+                      {r.designNotes && r.designNotes.map((n, ni) => <span key={ni} className="block text-[9px] text-brand-500 leading-tight print:text-[7.5px]">• {n.text}</span>)}
                     </td>
-                    <td className="p-3 pr-4 text-right font-mono font-bold text-brand-950 print:p-2 print:pr-3 print:text-[11px]">
+                    <td className="p-2.5 pr-3.5 text-right font-mono font-bold text-brand-950 text-xs print:p-1.5 print:pr-2.5 print:text-[9.5px]">
                       {discVal > 0 ? (
                         <div className="flex flex-col items-end">
-                          <span className="text-[10px] text-slate-400/90 line-through font-normal">
+                          <span className="text-[9.5px] text-slate-400/90 line-through font-normal print:text-[7.5px]">
                             ${cost.toFixed(2)}
                           </span>
-                          <span className="text-[9px] text-red-600 font-extrabold font-sans">
+                          <span className="text-[8.5px] text-red-600 font-extrabold font-sans print:text-[7px]">
                             -{r.discountType === '%' ? `${discVal}%` : `$${discVal.toFixed(2)}`}
                           </span>
                           <span className="text-brand-950 font-bold">${finalPieceCost.toFixed(2)}</span>
@@ -587,48 +587,48 @@ export default function ClientInvoicePrint({
 
       {/* Consolidated Stones Manifest */}
       {consolidatedStones.length > 0 && (
-        <div className="space-y-4 print:space-y-2 border-t border-brand-100 pt-6 print:pt-3">
-          <h3 className="text-xs font-black text-brand-900 uppercase tracking-widest pl-1 flex items-center gap-2 print:text-[9px]">
+        <div className="space-y-3 print:space-y-1.5 border-t border-brand-100 pt-5 print:pt-2.5">
+          <h3 className="text-[11px] font-black text-brand-900 uppercase tracking-widest pl-1 flex items-center gap-2 print:text-[8px]">
             <span>💎 Consolidated Manufacturing Stones & Procurement Manifest</span>
-            <span className="text-[9px] font-black uppercase text-brand-500 font-mono tracking-normal print:text-[7.5px]">
+            <span className="text-[8.5px] font-black uppercase text-brand-500 font-mono tracking-normal print:text-[7px]">
               ({consolidatedStones.reduce((acc, s) => acc + s.qty, 0)} stones total)
             </span>
           </h3>
           <div className="border border-brand-200 rounded-2xl overflow-hidden shadow-sm print:rounded-xl">
-            <table className="w-full text-left border-collapse text-xs print:text-[10px]">
+            <table className="w-full text-left border-collapse text-[10.5px] print:text-[8.5px]">
               <thead>
-                <tr className="bg-brand-900 text-brand-gold border-b border-brand-800 uppercase text-[9px] tracking-wider font-black">
-                  <th className="p-2.5 pl-4 print:p-1.5 print:pl-3">Procurement Source</th>
-                  <th className="p-2.5 print:p-1.5">Stone Type</th>
-                  <th className="p-2.5 print:p-1.5">Shape/Cut</th>
-                  <th className="p-2.5 print:p-1.5">Size/Dimension</th>
-                  <th className="p-2.5 print:p-1.5 text-center">Qty</th>
-                  <th className="p-2.5 print:p-1.5">Total Weight</th>
-                  <th className="p-2.5 pr-4 text-right print:p-1.5 print:pr-3">Used in Pieces</th>
+                <tr className="bg-brand-900 text-brand-gold border-b border-brand-800 uppercase text-[8px] tracking-wider font-black print:text-[7px]">
+                  <th className="p-2 pl-3 print:p-1 print:pl-2">Procurement Source</th>
+                  <th className="p-2 print:p-1">Stone Type</th>
+                  <th className="p-2 print:p-1">Shape/Cut</th>
+                  <th className="p-2 print:p-1">Size/Dimension</th>
+                  <th className="p-2 print:p-1 text-center">Qty</th>
+                  <th className="p-2 print:p-1">Total Weight</th>
+                  <th className="p-2 pr-3 text-right print:p-1 print:pr-2">Used in Pieces</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-brand-100">
                 {consolidatedStones.map((stone, sIdx) => (
                   <tr key={sIdx} className={`${stone.source === 'customer' ? 'bg-amber-50/20' : 'hover:bg-brand-50/30'} transition-colors`}>
-                    <td className="p-2.5 pl-4 print:p-1.5 print:pl-3 font-medium">
+                    <td className="p-2 pl-3 print:p-1 print:pl-2 font-medium">
                       {stone.source === 'customer' ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full print:text-[8px] print:px-1.5">
+                        <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full print:text-[7px] print:px-1 print:py-0">
                           ⚠️ Client Supplied
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full print:text-[8px] print:px-1.5">
+                        <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full print:text-[7px] print:px-1 print:py-0">
                           🏢 Stock Supplied
                         </span>
                       )}
                     </td>
-                    <td className="p-2.5 print:p-1.5 font-bold text-brand-900">{stone.category}</td>
-                    <td className="p-2.5 print:p-1.5 font-semibold text-brand-800">{stone.shape}</td>
-                    <td className="p-2.5 print:p-1.5 font-mono text-brand-600">{stone.sizeLabel}</td>
-                    <td className="p-2.5 print:p-1.5 text-center font-bold font-mono text-brand-950">{stone.qty} pcs</td>
-                    <td className="p-2.5 print:p-1.5 font-bold font-mono text-brand-900">
+                    <td className="p-2 print:p-1 font-bold text-brand-900">{stone.category}</td>
+                    <td className="p-2 print:p-1 font-semibold text-brand-800">{stone.shape}</td>
+                    <td className="p-2 print:p-1 font-mono text-brand-600">{stone.sizeLabel}</td>
+                    <td className="p-2 print:p-1 text-center font-bold font-mono text-brand-950">{stone.qty} pcs</td>
+                    <td className="p-2 print:p-1 font-bold font-mono text-brand-900">
                       {stone.totalCarats > 0 ? `${stone.totalCarats.toFixed(2)} ctw` : '--'}
                     </td>
-                    <td className="p-2.5 pr-4 text-right font-bold text-brand-600 print:p-1.5 print:pr-3">
+                    <td className="p-2 pr-3 text-right font-bold text-brand-600 print:p-1 print:pr-2">
                       {stone.pieces.map(p => `#${p}`).join(', ')}
                     </td>
                   </tr>
@@ -641,12 +641,12 @@ export default function ClientInvoicePrint({
 
       {/* Wholesale Session Cost Breakdown */}
       {isWholesale && (
-        <div className="space-y-4 print:space-y-2 border-t border-brand-100 pt-6 print:pt-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-brand-100/50 pb-3 print:pb-1.5">
-            <h3 className="text-xs font-black text-brand-900 uppercase tracking-widest pl-1 flex items-center gap-2 print:text-[9px]">
+        <div className="space-y-3 print:space-y-1.5 border-t border-brand-100 pt-5 print:pt-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-brand-100/50 pb-2.5 print:pb-1">
+            <h3 className="text-[11px] font-black text-brand-900 uppercase tracking-widest pl-1 flex items-center gap-2 print:text-[8px]">
               <span>🛠️ Wholesale Manufacturing Session Cost Breakdown</span>
             </h3>
-            <div className="flex flex-wrap gap-4 text-[10px] font-bold text-slate-500 font-mono pl-1 sm:pl-0 print:text-[8px] print:gap-3">
+            <div className="flex flex-wrap gap-3.5 text-[9.5px] font-bold text-slate-500 font-mono pl-1 sm:pl-0 print:text-[7px] print:gap-2.5">
               <div>
                 <span className="text-slate-400">GOLD:</span>{' '}
                 <span className="text-brand-950">${(session.overridePrices?.gold ?? spotPrices.gold).toFixed(2)}/oz</span>
@@ -707,24 +707,24 @@ export default function ClientInvoicePrint({
             ];
 
             return (
-              <div className="space-y-3.5 print:space-y-2">
+              <div className="space-y-2.5 print:space-y-1.5">
                 {categories.map((cat, cidx) => (
-                  <div key={cidx} className={`p-4 rounded-2xl border ${cat.bgColor} ${cat.borderColor} print:p-3 print:rounded-xl`}>
-                    <div className="flex justify-between items-center border-b border-brand-100/30 pb-2 mb-2 print:pb-1.5 print:mb-1.5">
-                      <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider print:text-[8.5px]">{cat.title}</span>
-                      <span className={`font-mono font-black text-base ${cat.textColor} print:text-xs`}>
+                  <div key={cidx} className={`p-3 rounded-xl border ${cat.bgColor} ${cat.borderColor} print:p-2 print:rounded-lg`}>
+                    <div className="flex justify-between items-center border-b border-brand-100/30 pb-1.5 mb-1.5 print:pb-1 print:mb-1">
+                      <span className="text-[9.5px] font-black uppercase text-slate-500 tracking-wider print:text-[7.5px]">{cat.title}</span>
+                      <span className={`font-mono font-black text-sm ${cat.textColor} print:text-[10px]`}>
                         ${cat.cost.toFixed(2)}
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 print:grid-cols-2 print:gap-x-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-1 print:grid-cols-2 print:gap-x-3">
                       {cat.details.map((det, detIdx) => (
-                        <p key={detIdx} className="text-[10.5px] text-slate-600 leading-normal font-medium print:text-[8.5px] print:leading-tight flex items-start gap-1">
-                          <span className="text-emerald-500 mt-0.5">•</span>
+                        <p key={detIdx} className="text-[9.5px] text-slate-600 leading-normal font-medium print:text-[7.5px] print:leading-snug flex items-start gap-1">
+                          <span className="text-emerald-500 mt-0.5 text-[7px]">•</span>
                           <span>{det}</span>
                         </p>
                       ))}
                       {cat.details.length === 0 && (
-                        <p className="text-[10px] text-slate-400 italic font-medium print:text-[8px]">No charges recorded</p>
+                        <p className="text-[9px] text-slate-400 italic font-medium print:text-[7px]">No charges recorded</p>
                       )}
                     </div>
                   </div>

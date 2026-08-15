@@ -6,7 +6,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Trash2, Camera, Check, Printer, Coins, FileText, Sparkles, 
-  X, Edit2, Save, Undo, Image as ImageIcon, PenTool, Lock, Unlock, HelpCircle, CheckCircle, AlertCircle
+  X, Edit2, Save, Undo, Image as ImageIcon, PenTool, Lock, Unlock, HelpCircle, CheckCircle, AlertCircle,
+  Crop
 } from 'lucide-react';
 import { 
   QuoteSession, JewelryItem, RepairSelection, AddonItem, 
@@ -17,6 +18,7 @@ import { calculateRingCost, genId } from '../utils';
 import SignaturePad from './SignaturePad';
 import { printElement } from '../utils/printHelper';
 import WholesaleRepairInvoicePrint from './WholesaleRepairInvoicePrint';
+import PhotoEditorModal from './PhotoEditorModal';
 
 interface WholesaleRepairViewProps {
   session: QuoteSession;
@@ -85,6 +87,22 @@ export default function WholesaleRepairView({
   const [unlockedPriceIds, setUnlockedPriceIds] = useState<Record<string, boolean>>({});
   const [heavyPolishPrice, setHeavyPolishPrice] = useState<number>(0);
   const [selectedPlatingColors, setSelectedPlatingColors] = useState<Record<string, boolean>>({});
+
+  // Photo Crop & Draw Editor State
+  const [photoEditorSrc, setPhotoEditorSrc] = useState<string | null>(null);
+  const [photoEditorIdx, setPhotoEditorIdx] = useState<number | null>(null);
+
+  const handleSavePhotoEditor = (editedDataUrl: string) => {
+    const existingPhotos = Array.isArray(activeItem.referencePhotos) ? [...activeItem.referencePhotos] : [];
+    if (photoEditorIdx !== null && photoEditorIdx >= 0 && photoEditorIdx < existingPhotos.length) {
+      existingPhotos[photoEditorIdx] = editedDataUrl;
+      updateItemFields({ referencePhotos: existingPhotos });
+    } else {
+      updateItemFields({ referencePhotos: [...existingPhotos, editedDataUrl] });
+    }
+    setPhotoEditorSrc(null);
+    setPhotoEditorIdx(null);
+  };
 
   // Fetch the current repair pricing object based on selected profile or master settings
   const getActiveRepairPricing = (): RepairPricingSettings => {
@@ -1115,43 +1133,95 @@ export default function WholesaleRepairView({
                 <Camera size={11} className="text-brand-gold" />
                 Intake Photos
               </h4>
-              <button
-                type="button"
-                onClick={handleAddMockPhoto}
-                className="text-[9px] text-brand-gold hover:text-brand-900 font-bold underline font-sans cursor-pointer"
-              >
-                + Snap Photo
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Hidden File Picker */}
+                <input
+                  type="file"
+                  id={`wholesale-photo-picker-${activeItem.id}`}
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const result = ev.target?.result as string;
+                      setPhotoEditorSrc(result);
+                      setPhotoEditorIdx(null);
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.value = '';
+                  }}
+                />
+                <label
+                  htmlFor={`wholesale-photo-picker-${activeItem.id}`}
+                  className="text-[9px] text-brand-gold hover:text-brand-900 font-bold underline font-sans cursor-pointer flex items-center gap-1"
+                >
+                  <Plus size={10} /> + Snap / Upload
+                </label>
+                <button
+                  type="button"
+                  onClick={handleAddMockPhoto}
+                  className="text-[8px] text-brand-400 hover:text-brand-600 font-bold font-sans cursor-pointer"
+                  title="Insert sample photo"
+                >
+                  (Sample)
+                </button>
+              </div>
             </div>
 
             {(!activeItem.referencePhotos || activeItem.referencePhotos.length === 0) ? (
-              <div 
-                onClick={handleAddMockPhoto}
-                className="p-6 border border-dashed border-brand-100 rounded-2xl text-center bg-brand-50/5 hover:bg-brand-50/15 transition-all cursor-pointer group"
+              <label 
+                htmlFor={`wholesale-photo-picker-${activeItem.id}`}
+                className="p-6 border border-dashed border-brand-100 rounded-2xl text-center bg-brand-50/5 hover:bg-brand-50/15 transition-all cursor-pointer group block"
               >
                 <Camera size={18} className="text-brand-300 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                <span className="text-[9px] text-brand-400 font-bold uppercase tracking-wider">Snap Intake Photo</span>
-              </div>
+                <span className="text-[9px] text-brand-400 font-bold uppercase tracking-wider block">Snap / Upload Intake Photo</span>
+                <span className="text-[8px] text-brand-300 italic block mt-0.5">Includes instant cropping & bench markup drawing</span>
+              </label>
             ) : (
               <div className="grid grid-cols-3 gap-2.5">
                 {(activeItem.referencePhotos || []).map((ph, pIdx) => (
                   <div key={pIdx} className="flex flex-col gap-1.5 items-center">
-                    <div className="w-full aspect-square bg-slate-50 rounded-xl border border-brand-150 overflow-hidden shadow-inner flex items-center justify-center">
-                      <img src={ph} alt={`Intake ${pIdx+1}`} className="w-full h-full object-cover pointer-events-none" referrerPolicy="no-referrer" />
-                    </div>
-                    <button
-                      type="button"
+                    <div 
                       onClick={() => {
-                        playClickSound('delete');
-                        const updated = (activeItem.referencePhotos || []).filter((_, idx) => idx !== pIdx);
-                        updateItemFields({ referencePhotos: updated });
+                        setPhotoEditorSrc(ph);
+                        setPhotoEditorIdx(pIdx);
                       }}
-                      className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 p-1 rounded-md cursor-pointer flex items-center justify-center shadow-sm w-full h-8"
-                      title="Delete photo"
+                      className="w-full aspect-square bg-slate-50 rounded-xl border border-brand-150 overflow-hidden shadow-inner flex items-center justify-center cursor-pointer relative group"
+                      title="Click to Crop or Draw"
                     >
-                      <Trash2 size={12} className="mr-1" />
-                      <span className="text-[10px] font-bold uppercase">Delete</span>
-                    </button>
+                      <img src={ph} alt={`Intake ${pIdx+1}`} className="w-full h-full object-cover pointer-events-none" referrerPolicy="no-referrer" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <Crop size={14} className="text-white" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 w-full">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhotoEditorSrc(ph);
+                          setPhotoEditorIdx(pIdx);
+                        }}
+                        className="bg-white hover:bg-brand-50 border border-brand-200 text-brand-800 p-1 rounded-md cursor-pointer flex items-center justify-center shadow-sm flex-1 h-7"
+                        title="Crop or Draw on photo"
+                      >
+                        <Crop size={11} className="text-brand-gold mr-1" />
+                        <span className="text-[9px] font-bold">Edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playClickSound('delete');
+                          const updated = (activeItem.referencePhotos || []).filter((_, idx) => idx !== pIdx);
+                          updateItemFields({ referencePhotos: updated });
+                        }}
+                        className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 p-1 rounded-md cursor-pointer flex items-center justify-center shadow-sm w-7 h-7"
+                        title="Delete photo"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1481,6 +1551,20 @@ export default function WholesaleRepairView({
           </div>
         );
       })()}
+
+      {/* Photo Crop & Drawing Editor Modal */}
+      {photoEditorSrc && (
+        <PhotoEditorModal
+          isOpen={!!photoEditorSrc}
+          imageSrc={photoEditorSrc}
+          onSave={handleSavePhotoEditor}
+          onClose={() => {
+            setPhotoEditorSrc(null);
+            setPhotoEditorIdx(null);
+          }}
+          title={photoEditorIdx !== null ? `Edit Intake Photo #${photoEditorIdx + 1}` : "Crop & Draw on Intake Photo"}
+        />
+      )}
 
     </div>
   );
