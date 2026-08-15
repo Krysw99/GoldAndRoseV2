@@ -517,56 +517,107 @@ export default function ScrapCalculator({
 
       {/* 3. Client Intake Block */}
       <div className="bg-brand-50 p-5 rounded-2xl border border-brand-200 space-y-4">
-        <div className="flex justify-between items-center border-b border-brand-200 pb-2">
+        <div className="flex justify-between items-center border-b border-brand-200 pb-2 flex-wrap gap-2">
           <h3 className="text-xs font-bold text-brand-600 uppercase tracking-widest">
             Client Intake
           </h3>
-          <div className="flex items-center gap-4">
-            <label className="cursor-pointer text-xs bg-brand-800 text-white px-4 py-2 rounded-xl font-bold hover:bg-brand-900 transition-colors flex items-center gap-1.5 shadow-sm">
-              <Camera size={14} className="text-brand-gold" />
-              {scrapImage ? 'Retake ID' : 'Scan ID'}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageUpload}
-              />
-            </label>
-            {scrapImage && (
-              <div className="relative border border-brand-200 rounded-xl overflow-hidden shadow-md group cursor-pointer flex items-center">
-                <img 
-                  src={scrapImage} 
-                  alt="ID attachment" 
-                  className="h-10 w-20 object-cover transition-transform hover:scale-105" 
-                  onClick={() => setEnlargeImage(scrapImage)}
-                  title="Click to enlarge"
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Scan ID Button */}
+            <div className="flex items-center gap-2">
+              <label className="cursor-pointer text-xs bg-brand-800 text-white px-4 py-2 rounded-xl font-bold hover:bg-brand-900 transition-colors flex items-center gap-1.5 shadow-sm">
+                <Camera size={14} className="text-brand-gold" />
+                {scrapImage ? 'Retake ID' : 'Scan ID'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
                 />
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setScrapImage(null);
-                  }}
-                  className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full p-0.5 hover:bg-red-700 shadow-lg text-[8px] leading-none w-3.5 h-3.5 flex items-center justify-center font-bold z-10"
-                  title="Remove attachment"
-                >
-                  &times;
-                </button>
-                {cropImageSrc && (
+              </label>
+              {scrapImage && (
+                <div className="relative border border-brand-200 rounded-xl overflow-hidden shadow-md group cursor-pointer flex items-center">
+                  <img 
+                    src={scrapImage} 
+                    alt="ID attachment" 
+                    className="h-9 w-16 object-cover transition-transform hover:scale-105" 
+                    onClick={() => setEnlargeImage(scrapImage)}
+                    title="Click to enlarge"
+                  />
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setIsCropModalOpen(true);
+                      setScrapImage(null);
                     }}
-                    className="absolute bottom-0.5 left-0.5 right-0.5 bg-brand-gold/90 text-brand-950 font-bold rounded text-[8px] hover:bg-brand-gold py-0.5 text-center shadow border border-brand-200"
-                    title="Recrop photograph"
+                    className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full p-0.5 hover:bg-red-700 shadow-lg text-[8px] leading-none w-3.5 h-3.5 flex items-center justify-center font-bold z-10"
+                    title="Remove attachment"
                   >
-                    CROP
+                    &times;
                   </button>
-                )}
-              </div>
-            )}
+                  {cropImageSrc && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsCropModalOpen(true);
+                      }}
+                      className="absolute bottom-0.5 left-0.5 right-0.5 bg-brand-gold/90 text-brand-950 font-bold rounded text-[8px] hover:bg-brand-gold py-0.5 text-center shadow border border-brand-200"
+                      title="Recrop photograph"
+                    >
+                      CROP
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Scan Gold Button */}
+            <div className="flex items-center gap-2">
+              <label className="cursor-pointer text-xs bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-brand-950 px-4 py-2 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm">
+                <Camera size={14} className="text-brand-950" />
+                {goldImage ? 'Retake Gold' : 'Scan Gold'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleGoldImageUpload}
+                />
+              </label>
+              {goldImage && (
+                <div className="relative border border-amber-300 rounded-xl overflow-hidden shadow-md group cursor-pointer flex items-center">
+                  <img 
+                    src={goldImage} 
+                    alt="Gold attachment" 
+                    className="h-9 w-16 object-cover transition-transform hover:scale-105" 
+                    onClick={() => setEnlargeImage(goldImage)}
+                    title="Click to enlarge"
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setGoldImage(null);
+                    }}
+                    className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full p-0.5 hover:bg-red-700 shadow-lg text-[8px] leading-none w-3.5 h-3.5 flex items-center justify-center font-bold z-10"
+                    title="Remove gold attachment"
+                  >
+                    &times;
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setGoldEditorSrc(goldImage);
+                      setIsGoldEditorOpen(true);
+                    }}
+                    className="absolute bottom-0.5 left-0.5 right-0.5 bg-amber-400 text-brand-950 font-bold rounded text-[8px] hover:bg-amber-300 py-0.5 text-center shadow border border-amber-300"
+                    title="Edit / Crop gold photo"
+                  >
+                    EDIT
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -722,83 +773,17 @@ export default function ScrapCalculator({
           );
         })}
         
-        {/* Actions Bar: Add Entry & Scan Gold */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-          <button
-            type="button"
-            onClick={addRow}
-            className="w-full py-3.5 px-6 rounded-2xl bg-brand-900 hover:bg-brand-850 active:bg-brand-950 text-brand-gold font-black text-sm tracking-wider uppercase shadow-md hover:shadow-lg transition-all border border-brand-700/80 flex items-center justify-center gap-2 cursor-pointer group"
-          >
-            <div className="bg-brand-800 text-brand-gold p-1 rounded-lg group-hover:scale-110 transition-transform">
-              <Plus size={16} className="stroke-[3]" />
-            </div>
-            <span>Add Entry</span>
-          </button>
-
-          <label className="w-full py-3.5 px-6 rounded-2xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-brand-950 font-black text-sm tracking-wider uppercase shadow-md hover:shadow-lg transition-all border border-amber-400 flex items-center justify-center gap-2 cursor-pointer group">
-            <div className="bg-amber-400 text-brand-950 p-1 rounded-lg group-hover:scale-110 transition-transform">
-              <Camera size={16} className="stroke-[2.5]" />
-            </div>
-            <span>{goldImage ? 'Retake Gold Photo' : 'Scan Gold'}</span>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleGoldImageUpload}
-            />
-          </label>
-        </div>
-
-        {/* Scanned Gold Photo Preview Badge */}
-        {goldImage && (
-          <div className="mt-3 bg-amber-50/90 p-3.5 rounded-2xl border border-amber-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn">
-            <div className="flex items-center gap-3">
-              <div 
-                className="relative h-14 w-20 shrink-0 rounded-xl overflow-hidden border border-amber-300 shadow-sm cursor-pointer group bg-white"
-                onClick={() => setEnlargeImage(goldImage)}
-                title="Click to enlarge"
-              >
-                <img 
-                  src={goldImage} 
-                  alt="Scanned gold photo" 
-                  className="h-full w-full object-cover group-hover:scale-105 transition-transform" 
-                />
-                <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors flex items-center justify-center">
-                  <ImageIcon size={14} className="text-white/80 drop-shadow group-hover:scale-110 transition-transform" />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] uppercase font-black tracking-widest text-amber-900 bg-amber-200/70 px-2 py-0.5 rounded-md">
-                    Proof On Record
-                  </span>
-                </div>
-                <p className="text-xs font-bold text-brand-950 mt-0.5">Scanned Metal / Gold Photo</p>
-                <p className="text-[10px] text-brand-600">Saved to permanent record & printable buyout log</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 self-end sm:self-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setGoldEditorSrc(goldImage);
-                  setIsGoldEditorOpen(true);
-                }}
-                className="text-xs font-bold bg-white hover:bg-brand-50 text-brand-850 border border-brand-200 px-3 py-1.5 rounded-xl shadow-sm transition-colors cursor-pointer"
-              >
-                Crop / Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => setGoldImage(null)}
-                className="text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
-                title="Remove gold photo"
-              >
-                Remove
-              </button>
-            </div>
+        {/* Single Bolder Prominent Add Entry Button */}
+        <button
+          type="button"
+          onClick={addRow}
+          className="w-full py-3.5 px-6 rounded-2xl bg-brand-900 hover:bg-brand-850 active:bg-brand-950 text-brand-gold font-black text-sm tracking-wider uppercase shadow-md hover:shadow-lg transition-all border border-brand-700/80 flex items-center justify-center gap-2 cursor-pointer group mt-2"
+        >
+          <div className="bg-brand-800 text-brand-gold p-1 rounded-lg group-hover:scale-110 transition-transform">
+            <Plus size={16} className="stroke-[3]" />
           </div>
-        )}
+          <span>Add Entry</span>
+        </button>
       </div>
 
       {/* 5. Customer Signature */}
