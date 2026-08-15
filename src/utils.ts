@@ -922,12 +922,8 @@ export function calculateScrapItemValue(item: ScrapItem, spotPrices: { gold: num
   const r = Number(item.rate) || 0;
   if (!w) return 0;
   const s = (spotPrices[item.material] || 0) / TROY_ONCE_GRAMS;
-  let pf = 0;
-  if (item.material === 'gold') {
-    pf = item.purity > 24 ? item.purity / 100 : item.purity / 24;
-  } else {
-    pf = item.purity > 1 ? item.purity / 100 : item.purity;
-  }
+  const purityNum = Number(item.purity) || 0;
+  const pf = purityNum / 100;
   return w * pf * s * (r / 100);
 }
 

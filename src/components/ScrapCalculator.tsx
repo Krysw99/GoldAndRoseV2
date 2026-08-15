@@ -4,12 +4,13 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Camera, Shield, DollarSign, Scale, ArrowRight, Printer, Edit2, RefreshCw, X } from 'lucide-react';
+import { Plus, Trash2, Camera, Shield, DollarSign, Scale, ArrowRight, Printer, Edit2, RefreshCw, X, Image as ImageIcon } from 'lucide-react';
 import { ScrapItem, MaterialType, ScrapTransaction } from '../types';
 import { PURITY_OPTIONS, TROY_ONCE_GRAMS } from '../constants';
 import { calculateScrapItemValue, calculateScrapTotal } from '../utils';
 import { printElement } from '../utils/printHelper';
 import SignaturePad from './SignaturePad';
+import PhotoEditorModal from './PhotoEditorModal';
 
 interface ScrapCalculatorProps {
   spotPrices: { gold: number; silver: number; platinum: number };
@@ -23,6 +24,7 @@ interface ScrapCalculatorProps {
       stoneRemovalQty: string;
       items: ScrapItem[];
       image: string | null;
+      goldImage?: string | null;
       signature: string | null;
       customTotal?: string;
     },
@@ -54,6 +56,9 @@ export default function ScrapCalculator({
   const [driversLicense, setDriversLicense] = useState('');
   const [stoneRemovalQty, setStoneRemovalQty] = useState('');
   const [scrapImage, setScrapImage] = useState<string | null>(null);
+  const [goldImage, setGoldImage] = useState<string | null>(null);
+  const [goldEditorSrc, setGoldEditorSrc] = useState<string | null>(null);
+  const [isGoldEditorOpen, setIsGoldEditorOpen] = useState(false);
   const [customerSignature, setCustomerSignature] = useState<string | null>(null);
   
   // Crop & Lightbox States
@@ -72,7 +77,7 @@ export default function ScrapCalculator({
   const [overrideInputValue, setOverrideInputValue] = useState<string>('');
 
   const [items, setItems] = useState<ScrapItem[]>([
-    { weight: '', material: 'gold', purity: 14, rate: 85 }
+    { weight: '', material: 'gold', purity: 58.33, rate: 85 }
   ]);
 
   // Local string state for Live Feed Anchors spot price inputs to allow deleting all digits cleanly
@@ -111,8 +116,19 @@ export default function ScrapCalculator({
       setDriversLicense(editingTransaction.driversLicense || '');
       setStoneRemovalQty(editingTransaction.stoneRemovalQty || '');
       setScrapImage(editingTransaction.image || null);
+      setGoldImage(editingTransaction.goldImage || null);
       setCustomerSignature(editingTransaction.signature || null);
-      setItems(editingTransaction.items && editingTransaction.items.length > 0 ? editingTransaction.items : [{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
+      
+      const normalizedItems = (editingTransaction.items && editingTransaction.items.length > 0 ? editingTransaction.items : []).map(it => {
+        let p = it.purity;
+        if (typeof p === 'number' && p <= 24 && it.material === 'gold') {
+          p = parseFloat(((p / 24) * 100).toFixed(2));
+        } else if (typeof p === 'number' && p <= 1 && it.material !== 'gold') {
+          p = parseFloat((p * 100).toFixed(1));
+        }
+        return { ...it, purity: p };
+      });
+      setItems(normalizedItems.length > 0 ? normalizedItems : [{ weight: '', material: 'gold', purity: 58.33, rate: 85 }]);
       
       const calcTotal = calculateScrapTotal(
         editingTransaction.items || [], 
@@ -134,8 +150,9 @@ export default function ScrapCalculator({
       setDriversLicense('');
       setStoneRemovalQty('');
       setScrapImage(null);
+      setGoldImage(null);
       setCustomerSignature(null);
-      setItems([{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
+      setItems([{ weight: '', material: 'gold', purity: 58.33, rate: 85 }]);
       setIsOfferOverridden(false);
       setCustomOffer('');
     }
@@ -191,12 +208,12 @@ export default function ScrapCalculator({
 
   // Handle adding rows
   const addRow = () => {
-    setItems(prev => [...prev, { weight: '', material: 'gold', purity: 14, rate: 85 }]);
+    setItems(prev => [...prev, { weight: '', material: 'gold', purity: 58.33, rate: 85 }]);
   };
 
   const removeRow = (idx: number) => {
     if (items.length <= 1) {
-      setItems([{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
+      setItems([{ weight: '', material: 'gold', purity: 58.33, rate: 85 }]);
     } else {
       setItems(prev => prev.filter((_, i) => i !== idx));
     }
@@ -208,10 +225,10 @@ export default function ScrapCalculator({
       
       const updated = { ...item, [field]: value };
       
-      // If material changes, set sensible default purity
+      // If material changes, set sensible default purity percentage
       if (field === 'material') {
         const mat = value as MaterialType;
-        updated.purity = mat === 'gold' ? 14 : (mat === 'silver' ? 0.925 : 0.950);
+        updated.purity = mat === 'gold' ? 58.33 : (mat === 'silver' ? 92.5 : 95.0);
       }
       
       return updated;
@@ -247,6 +264,21 @@ export default function ScrapCalculator({
       setCropState({ x: 10, y: 15, w: 80, h: 70 });
       setIsCropModalOpen(true);
       // Reset input value so same file can be uploaded again if needed
+      e.target.value = '';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Scanned Gold Image Upload - Open Photo Editor / Annotator
+  const handleGoldImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      setGoldEditorSrc(src);
+      setIsGoldEditorOpen(true);
       e.target.value = '';
     };
     reader.readAsDataURL(file);
@@ -333,6 +365,7 @@ export default function ScrapCalculator({
       stoneRemovalQty,
       items: activeItems,
       image: scrapImage,
+      goldImage: goldImage,
       signature: customerSignature,
       customTotal: isOfferOverridden && customOffer !== '' ? customOffer : undefined
     }, editingTransaction?.id);
@@ -345,8 +378,9 @@ export default function ScrapCalculator({
         setDriversLicense('');
         setStoneRemovalQty('');
         setScrapImage(null);
+        setGoldImage(null);
         setCustomerSignature(null);
-        setItems([{ weight: '', material: 'gold', purity: 14, rate: 85 }]);
+        setItems([{ weight: '', material: 'gold', purity: 58.33, rate: 85 }]);
         setIsOfferOverridden(false);
         setCustomOffer('');
       }
@@ -581,51 +615,45 @@ export default function ScrapCalculator({
       {/* 4. Items List Rows */}
       <div className="bg-brand-100/50 p-4 rounded-2xl border border-brand-200 space-y-3">
         {/* Desktop Header Row */}
-        <div className="hidden md:grid grid-cols-[1fr_1fr_1.8fr_1.2fr_1.2fr_auto] gap-3 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-brand-600 border-b border-brand-200">
-          <div>Mass (g)</div>
-          <div>Metal</div>
-          <div>Gold Percentage</div>
-          <div>Buy Back Percentage</div>
-          <div className="text-right">Total Payout</div>
+        <div className="hidden md:grid grid-cols-[1fr_1.1fr_1.1fr_1.1fr_1.2fr_36px] gap-3 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-brand-600 border-b border-brand-200 items-center">
+          <div className="text-center">Mass (g)</div>
+          <div className="text-center">Metal</div>
+          <div className="text-center">Metal Percentage</div>
+          <div className="text-center">Buy Back Percentage</div>
+          <div className="text-right pr-2">Total Payout</div>
           <div></div>
         </div>
 
         {items.map((item, idx) => {
           const rowValue = calculateScrapItemValue(item, spotPrices);
-          
-          // Calculate percentage representation for input display
-          const currentPurityPercent = item.material === 'gold' 
-            ? (item.purity <= 24 ? parseFloat(((item.purity / 24) * 100).toFixed(2)) : item.purity) 
-            : (item.purity <= 1 ? parseFloat((item.purity * 100).toFixed(1)) : item.purity);
-
-          const presetSelectVal = item.material === 'gold' 
-            ? (item.purity === 10 || Math.abs(currentPurityPercent - 41.67) < 0.2 ? '10' :
-               item.purity === 14 || Math.abs(currentPurityPercent - 58.33) < 0.2 ? '14' :
-               item.purity === 18 || Math.abs(currentPurityPercent - 75.0) < 0.2 ? '18' :
-               item.purity === 19 || Math.abs(currentPurityPercent - 79.17) < 0.2 ? '19' :
-               item.purity === 22 || Math.abs(currentPurityPercent - 91.67) < 0.2 ? '22' :
-               item.purity === 24 || Math.abs(currentPurityPercent - 100) < 0.2 ? '24' : 'custom')
-            : 'custom';
 
           return (
             <div
               key={idx}
-              className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1.8fr_1.2fr_1.2fr_auto] gap-3 items-center bg-white p-3 rounded-xl border border-brand-200/80 shadow-sm"
+              className="grid grid-cols-1 md:grid-cols-[1fr_1.1fr_1.1fr_1.1fr_1.2fr_36px] gap-3 items-center bg-white p-3 rounded-xl border border-brand-200/80 shadow-sm hover:border-brand-300 transition-colors"
             >
+              {/* Mass (g) */}
               <div className="flex flex-col">
                 <label className="text-[9px] font-bold text-brand-500 uppercase md:hidden mb-0.5">Mass (g)</label>
-                <input
-                  type="number"
-                  placeholder="Mass (g)"
-                  className="border p-2.5 rounded-lg text-sm font-bold no-spinner"
-                  value={item.weight}
-                  onChange={(e) => updateItem(idx, 'weight', e.target.value)}
-                />
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="0.00"
+                    className="w-full border border-brand-200 p-2.5 pr-6 rounded-xl text-sm font-bold font-mono text-center bg-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-sm no-spinner transition-all"
+                    value={item.weight !== undefined && item.weight !== null ? item.weight : ''}
+                    onChange={(e) => updateItem(idx, 'weight', e.target.value)}
+                  />
+                  <span className="absolute right-2.5 top-2.5 text-xs font-bold text-brand-400 pointer-events-none">g</span>
+                </div>
               </div>
+
+              {/* Metal */}
               <div className="flex flex-col">
                 <label className="text-[9px] font-bold text-brand-500 uppercase md:hidden mb-0.5">Metal</label>
                 <select
-                  className="border p-2.5 rounded-lg text-sm font-bold bg-brand-50 cursor-pointer"
+                  className="w-full border border-brand-200 p-2.5 rounded-xl text-sm font-bold bg-brand-50/70 text-brand-900 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-sm cursor-pointer transition-all text-center"
                   value={item.material}
                   onChange={(e) => updateItem(idx, 'material', e.target.value as MaterialType)}
                 >
@@ -634,99 +662,143 @@ export default function ScrapCalculator({
                   <option value="platinum">Platinum</option>
                 </select>
               </div>
+
+              {/* Metal Percentage */}
               <div className="flex flex-col">
-                <label className="text-[9px] font-bold text-brand-500 uppercase md:hidden mb-0.5">Gold Percentage</label>
-                <div className="flex items-center gap-1.5">
-                  <div className="relative flex-1">
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="100"
-                      placeholder="e.g. 55.9"
-                      className="w-full border p-2.5 pr-6 rounded-lg text-sm font-bold bg-white focus:ring-2 focus:ring-brand-500 shadow-sm no-spinner"
-                      value={currentPurityPercent || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        updateItem(idx, 'purity', val === '' ? 0 : parseFloat(val));
-                      }}
-                    />
-                    <span className="absolute right-2 top-2.5 text-xs font-bold text-brand-400 pointer-events-none">%</span>
-                  </div>
-                  <select
-                    className="border p-2.5 rounded-lg text-xs font-bold bg-brand-50 text-brand-800 cursor-pointer max-w-[95px]"
-                    value={presetSelectVal}
+                <label className="text-[9px] font-bold text-brand-500 uppercase md:hidden mb-0.5">Metal Percentage</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    max="100"
+                    placeholder="e.g. 55.9"
+                    className="w-full border border-brand-200 p-2.5 pr-7 rounded-xl text-sm font-bold font-mono text-center bg-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-sm no-spinner transition-all"
+                    value={item.purity !== undefined && item.purity !== null ? item.purity : ''}
                     onChange={(e) => {
-                      const sel = e.target.value;
-                      if (sel === 'custom') return;
-                      const k = parseFloat(sel);
-                      if (item.material === 'gold') {
-                        const pctMap: Record<number, number> = { 10: 41.67, 14: 58.33, 18: 75.0, 19: 79.17, 22: 91.67, 24: 100.0 };
-                        updateItem(idx, 'purity', pctMap[k] || k);
-                      } else {
-                        updateItem(idx, 'purity', k);
-                      }
+                      updateItem(idx, 'purity', e.target.value);
                     }}
-                  >
-                    <option value="custom">Custom</option>
-                    {item.material === 'gold' ? (
-                      <>
-                        <option value="10">10K (41.7%)</option>
-                        <option value="14">14K (58.3%)</option>
-                        <option value="18">18K (75.0%)</option>
-                        <option value="19">19K (79.2%)</option>
-                        <option value="22">22K (91.7%)</option>
-                        <option value="24">24K (100%)</option>
-                      </>
-                    ) : item.material === 'silver' ? (
-                      <>
-                        <option value="92.5">Sterling (92.5%)</option>
-                        <option value="99.9">Fine (99.9%)</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="95">Pt950 (95.0%)</option>
-                        <option value="90">Pt900 (90.0%)</option>
-                      </>
-                    )}
-                  </select>
+                  />
+                  <span className="absolute right-2.5 top-2.5 text-xs font-bold text-brand-400 pointer-events-none">%</span>
                 </div>
               </div>
+
+              {/* Buy Back Percentage */}
               <div className="flex flex-col">
                 <label className="text-[9px] font-bold text-brand-500 uppercase md:hidden mb-0.5">Buy Back Percentage</label>
                 <div className="relative">
                   <input
                     type="number"
+                    step="any"
                     min="0"
                     max="100"
-                    className="border p-2.5 pr-6 rounded-lg text-sm font-bold w-full text-center bg-white shadow-sm no-spinner"
-                    value={item.rate}
-                    onChange={(e) => updateItem(idx, 'rate', parseFloat(e.target.value) || 0)}
+                    placeholder="e.g. 85"
+                    className="w-full border border-brand-200 p-2.5 pr-7 rounded-xl text-sm font-bold font-mono text-center bg-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-sm no-spinner transition-all"
+                    value={item.rate !== undefined && item.rate !== null ? item.rate : ''}
+                    onChange={(e) => updateItem(idx, 'rate', e.target.value)}
                   />
-                  <span className="absolute right-2 top-2.5 text-xs font-bold text-brand-400 pointer-events-none">%</span>
+                  <span className="absolute right-2.5 top-2.5 text-xs font-bold text-brand-400 pointer-events-none">%</span>
                 </div>
               </div>
-              <div className="text-sm font-black text-brand-900 pr-2 text-right flex items-center justify-end">
+
+              {/* Total Payout */}
+              <div className="text-sm font-black text-brand-950 font-mono pr-2 text-right flex items-center justify-end">
                 <span className="md:hidden text-[8px] text-brand-400 uppercase mr-1">Sum:</span>
                 ${rowValue.toFixed(2)}
               </div>
-              <button
-                type="button"
-                onClick={() => removeRow(idx)}
-                className="text-red-400 font-bold px-2 hover:text-red-600 text-lg hover:bg-red-50 rounded cursor-pointer"
-              >
-                &times;
-              </button>
+
+              {/* Remove Row Button */}
+              <div className="flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => removeRow(idx)}
+                  className="w-8 h-8 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer text-lg font-bold"
+                  title="Remove item"
+                >
+                  &times;
+                </button>
+              </div>
             </div>
           );
         })}
-        <button
-          type="button"
-          onClick={addRow}
-          className="w-full border-2 border-dashed border-brand-300 py-3 rounded-xl text-brand-600 font-bold text-sm bg-white hover:bg-brand-50 transition-colors cursor-pointer"
-        >
-          + Add Entry
-        </button>
+        
+        {/* Actions Bar: Add Entry & Scan Gold */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+          <button
+            type="button"
+            onClick={addRow}
+            className="w-full py-3.5 px-6 rounded-2xl bg-brand-900 hover:bg-brand-850 active:bg-brand-950 text-brand-gold font-black text-sm tracking-wider uppercase shadow-md hover:shadow-lg transition-all border border-brand-700/80 flex items-center justify-center gap-2 cursor-pointer group"
+          >
+            <div className="bg-brand-800 text-brand-gold p-1 rounded-lg group-hover:scale-110 transition-transform">
+              <Plus size={16} className="stroke-[3]" />
+            </div>
+            <span>Add Entry</span>
+          </button>
+
+          <label className="w-full py-3.5 px-6 rounded-2xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-brand-950 font-black text-sm tracking-wider uppercase shadow-md hover:shadow-lg transition-all border border-amber-400 flex items-center justify-center gap-2 cursor-pointer group">
+            <div className="bg-amber-400 text-brand-950 p-1 rounded-lg group-hover:scale-110 transition-transform">
+              <Camera size={16} className="stroke-[2.5]" />
+            </div>
+            <span>{goldImage ? 'Retake Gold Photo' : 'Scan Gold'}</span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleGoldImageUpload}
+            />
+          </label>
+        </div>
+
+        {/* Scanned Gold Photo Preview Badge */}
+        {goldImage && (
+          <div className="mt-3 bg-amber-50/90 p-3.5 rounded-2xl border border-amber-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn">
+            <div className="flex items-center gap-3">
+              <div 
+                className="relative h-14 w-20 shrink-0 rounded-xl overflow-hidden border border-amber-300 shadow-sm cursor-pointer group bg-white"
+                onClick={() => setEnlargeImage(goldImage)}
+                title="Click to enlarge"
+              >
+                <img 
+                  src={goldImage} 
+                  alt="Scanned gold photo" 
+                  className="h-full w-full object-cover group-hover:scale-105 transition-transform" 
+                />
+                <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors flex items-center justify-center">
+                  <ImageIcon size={14} className="text-white/80 drop-shadow group-hover:scale-110 transition-transform" />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] uppercase font-black tracking-widest text-amber-900 bg-amber-200/70 px-2 py-0.5 rounded-md">
+                    Proof On Record
+                  </span>
+                </div>
+                <p className="text-xs font-bold text-brand-950 mt-0.5">Scanned Metal / Gold Photo</p>
+                <p className="text-[10px] text-brand-600">Saved to permanent record & printable buyout log</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setGoldEditorSrc(goldImage);
+                  setIsGoldEditorOpen(true);
+                }}
+                className="text-xs font-bold bg-white hover:bg-brand-50 text-brand-850 border border-brand-200 px-3 py-1.5 rounded-xl shadow-sm transition-colors cursor-pointer"
+              >
+                Crop / Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => setGoldImage(null)}
+                className="text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+                title="Remove gold photo"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 5. Customer Signature */}
@@ -848,13 +920,11 @@ export default function ScrapCalculator({
             <div className="bg-brand-50/50 p-3 rounded-xl border border-brand-100/50 text-xs text-brand-700 space-y-1.5 leading-relaxed">
               {items.filter(i => Number(i.weight) > 0).map((it, idx) => {
                 const val = calculateScrapItemValue(it, spotPrices);
-                const pStr = it.material === 'gold' 
-                  ? (it.purity > 24 ? `${it.purity}%` : `${it.purity}k (${((it.purity/24)*100).toFixed(1)}%)`)
-                  : `${(it.purity > 1 ? it.purity : it.purity * 100).toFixed(1)}%`;
+                const pStr = `${it.purity}%`;
                 return (
                   <div key={idx} className="flex justify-between items-center border-b border-dashed border-brand-100 pb-1.5 last:border-none last:pb-0">
                     <span>
-                      {it.weight}g {it.material} ({pStr}) @ {it.rate}% buyback rate
+                      {it.weight}g {it.material} ({pStr} purity) @ {it.rate}% buyback rate
                     </span>
                     <span className="font-bold text-brand-900 font-mono">${val.toFixed(2)}</span>
                   </div>
@@ -871,16 +941,32 @@ export default function ScrapCalculator({
         </div>
 
         {/* Snapshot of Driver's license / items if available */}
-        {scrapImage && (
-          <div className="mb-6 print:mb-8 break-inside-avoid">
-            <p className="text-[10px] uppercase font-black text-brand-400 tracking-wider mb-2 print:text-[8px] print:text-brand-500">Verified ID Photograph</p>
-            <img 
-              src={scrapImage} 
-              alt="Compliance photo" 
-              className="h-28 w-44 object-contain rounded-xl border border-brand-200 shadow-sm cursor-pointer hover:opacity-90 hover:scale-[1.02] transition-all print:h-80 print:w-auto print:max-w-xl print:rounded-lg print:border print:border-brand-150 print:shadow-none" 
-              onClick={() => setEnlargeImage(scrapImage)}
-              title="Click to enlarge"
-            />
+        {(scrapImage || goldImage) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 print:mb-8 break-inside-avoid">
+            {scrapImage && (
+              <div>
+                <p className="text-[10px] uppercase font-black text-brand-400 tracking-wider mb-2 print:text-[8px] print:text-brand-500">Verified ID Photograph</p>
+                <img 
+                  src={scrapImage} 
+                  alt="Compliance photo" 
+                  className="h-28 w-full object-contain rounded-xl border border-brand-200 shadow-sm cursor-pointer hover:opacity-90 hover:scale-[1.01] transition-all print:h-64 print:w-auto print:max-w-xs print:rounded-lg print:border print:border-brand-150 print:shadow-none" 
+                  onClick={() => setEnlargeImage(scrapImage)}
+                  title="Click to enlarge"
+                />
+              </div>
+            )}
+            {goldImage && (
+              <div>
+                <p className="text-[10px] uppercase font-black text-amber-700 tracking-wider mb-2 print:text-[8px] print:text-amber-800">Scanned Metal / Gold Photo (Proof On Record)</p>
+                <img 
+                  src={goldImage} 
+                  alt="Scanned gold photo" 
+                  className="h-28 w-full object-contain rounded-xl border border-amber-300 shadow-sm cursor-pointer hover:opacity-90 hover:scale-[1.01] transition-all print:h-64 print:w-auto print:max-w-xs print:rounded-lg print:border print:border-amber-200 print:shadow-none" 
+                  onClick={() => setEnlargeImage(goldImage)}
+                  title="Click to enlarge"
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -1209,6 +1295,24 @@ export default function ScrapCalculator({
           </div>
         </div>
       </div>
+    )}
+    {/* Photo Editor & Annotator for Scanned Gold */}
+    {isGoldEditorOpen && goldEditorSrc && (
+      <PhotoEditorModal
+        isOpen={isGoldEditorOpen}
+        imageSrc={goldEditorSrc}
+        title="Scan & Mark Gold Items on Record"
+        onSave={(editedUrl) => {
+          setGoldImage(editedUrl);
+          setIsGoldEditorOpen(false);
+        }}
+        onClose={() => {
+          if (!goldImage && goldEditorSrc) {
+            setGoldImage(goldEditorSrc);
+          }
+          setIsGoldEditorOpen(false);
+        }}
+      />
     )}
   </>
   );

@@ -664,15 +664,14 @@ setIsCloudSynced(true);
       stoneRemovalQty: string;
       items: ScrapItem[];
       image: string | null;
+      goldImage?: string | null;
       signature: string | null;
       customTotal?: string;
     },
     existingId?: string
   ): ScrapTransaction => {
     const logStr = data.items.map(i => {
-      const pLabel = i.material === 'gold' 
-        ? (i.purity > 24 ? `${i.purity}%` : `${i.purity}k`)
-        : `${(i.purity > 1 ? i.purity : i.purity * 100).toFixed(1)}%`;
+      const pLabel = `${i.purity}%`;
       return `${i.weight}g ${i.material} (${pLabel})`;
     }).join(', ');
 
@@ -700,6 +699,7 @@ setIsCloudSynced(true);
         summary: logStr,
         total: finalTotal,
         image: data.image,
+        goldImage: data.goldImage !== undefined ? data.goldImage : (original?.goldImage || null),
         signature: data.signature,
         syncPending: true
       };
@@ -738,6 +738,7 @@ setIsCloudSynced(true);
         summary: logStr,
         total: finalTotal,
         image: data.image,
+        goldImage: data.goldImage || null,
         signature: data.signature,
         syncPending: true
       };

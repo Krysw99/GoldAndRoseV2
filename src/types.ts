@@ -141,10 +141,10 @@ export interface QuoteSession {
 }
 
 export interface ScrapItem {
-  weight: string;
+  weight: string | number;
   material: MaterialType;
-  purity: number; // karat for gold (10, 14, 18, 19, 22, 24), or decimal purity for others
-  rate: number; // rate percentage, e.g. 85 for 85%
+  purity: number | string; // direct percentage (e.g. 58.33 for 58.33%, 55.9 for 55.9%)
+  rate: number | string; // rate percentage, e.g. 85 for 85%
 }
 
 export interface ScrapTransaction {
@@ -164,7 +164,8 @@ export interface ScrapTransaction {
   items: ScrapItem[];
   summary: string;
   total: string;
-  image: string | null;
+  image: string | null; // ID Image
+  goldImage?: string | null; // Photo of scanned gold / items on record
   signature?: string | null;
   syncPending?: boolean;
 }

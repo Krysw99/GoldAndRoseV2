@@ -11,7 +11,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { ScrapTransaction, QuoteTransaction, AppSettings, QuoteSession, JewelryItem } from '../types';
-import { calculateRingCost, calculateScrapTotal } from '../utils';
+import { calculateRingCost, calculateScrapTotal, calculateScrapItemValue } from '../utils';
 import { FANCY_SHAPES, TROY_ONCE_GRAMS } from '../constants';
 import { printElement } from '../utils/printHelper';
 import jsPDF from 'jspdf';
@@ -796,11 +796,13 @@ export default function LedgerView({
                       <p className="text-[10px] uppercase font-black text-brand-500 tracking-widest border-b border-brand-100 pb-1 mb-2">Verified Items Received</p>
                       <div className="bg-brand-50/50 p-3 rounded-xl border border-brand-100/50 text-xs text-brand-700 space-y-1.5 leading-relaxed">
                         {(activeTx as ScrapTransaction).items?.map((it, idx) => {
-                          const val = it.weight ? (parseFloat(it.weight) * (it.material === 'gold' ? it.purity / 24 : it.purity) * ((activeTx as ScrapTransaction).spotPrices?.[it.material] / TROY_ONCE_GRAMS) * (it.rate / 100)) : 0;
+                          const txSpotPrices = (activeTx as ScrapTransaction).spotPrices || spotPrices || { gold: 4000, silver: 45, platinum: 1200 };
+                          const val = calculateScrapItemValue(it, txSpotPrices);
+                          const pStr = `${it.purity}%`;
                           return (
                             <div key={idx} className="flex justify-between items-center border-b border-dashed border-brand-100 pb-1.5 last:border-none last:pb-0">
                               <span>
-                                {it.weight}g {it.material} ({it.purity}{it.material === 'gold' ? 'k' : ''}) @ {it.rate}% payout rate
+                                {it.weight}g {it.material} ({pStr} purity) @ {it.rate}% payout rate
                               </span>
                               <span className="font-bold text-brand-900 font-mono">${val.toFixed(2)}</span>
                             </div>
@@ -816,17 +818,33 @@ export default function LedgerView({
                     </div>
                   </div>
 
-                  {/* Snapshot of Driver's license / items if available */}
-                  {(activeTx as ScrapTransaction).image && (
-                    <div className="mb-6 print:mb-8 break-inside-avoid">
-                      <p className="text-[10px] uppercase font-black text-brand-400 tracking-wider mb-2 print:text-[8px] print:text-brand-500">Verified ID Photograph</p>
-                      <img 
-                        src={(activeTx as ScrapTransaction).image!} 
-                        alt="Compliance photo" 
-                        className="h-28 w-44 object-contain rounded-xl border border-brand-200 shadow-sm cursor-pointer hover:opacity-90 hover:scale-[1.02] transition-all print:h-80 print:w-auto print:max-w-xl print:rounded-lg print:border print:border-brand-150 print:shadow-none" 
-                        onClick={() => setEnlargeImage((activeTx as ScrapTransaction).image!)}
-                        title="Click to enlarge"
-                      />
+                  {/* Snapshot of Driver's license / gold items if available */}
+                  {((activeTx as ScrapTransaction).image || (activeTx as ScrapTransaction).goldImage) && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 print:mb-8 break-inside-avoid">
+                      {(activeTx as ScrapTransaction).image && (
+                        <div>
+                          <p className="text-[10px] uppercase font-black text-brand-400 tracking-wider mb-2 print:text-[8px] print:text-brand-500">Verified ID Photograph</p>
+                          <img 
+                            src={(activeTx as ScrapTransaction).image!} 
+                            alt="Compliance photo" 
+                            className="h-28 w-full object-contain rounded-xl border border-brand-200 shadow-sm cursor-pointer hover:opacity-90 hover:scale-[1.01] transition-all print:h-64 print:w-auto print:max-w-xs print:rounded-lg print:border print:border-brand-150 print:shadow-none" 
+                            onClick={() => setEnlargeImage((activeTx as ScrapTransaction).image!)}
+                            title="Click to enlarge"
+                          />
+                        </div>
+                      )}
+                      {(activeTx as ScrapTransaction).goldImage && (
+                        <div>
+                          <p className="text-[10px] uppercase font-black text-amber-700 tracking-wider mb-2 print:text-[8px] print:text-amber-800">Scanned Metal / Gold Photo (Proof On Record)</p>
+                          <img 
+                            src={(activeTx as ScrapTransaction).goldImage!} 
+                            alt="Scanned gold photo" 
+                            className="h-28 w-full object-contain rounded-xl border border-amber-300 shadow-sm cursor-pointer hover:opacity-90 hover:scale-[1.01] transition-all print:h-64 print:w-auto print:max-w-xs print:rounded-lg print:border print:border-amber-200 print:shadow-none" 
+                            onClick={() => setEnlargeImage((activeTx as ScrapTransaction).goldImage!)}
+                            title="Click to enlarge"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 
