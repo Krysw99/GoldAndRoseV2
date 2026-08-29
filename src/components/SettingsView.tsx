@@ -229,21 +229,32 @@ export default function SettingsView({
   // Cross-Device Synchronization Backup/Restore Utilities
   const handleExportBackupJSON = () => {
     const backupData = {
-      scrapLedger: JSON.stringify(scrapTransactions),
-      quoteLedger: JSON.stringify(ringQuoteTransactions),
-      wholesaleLedger: JSON.stringify(wholesaleTransactions),
-      masterSettings: JSON.stringify(settings),
-      cubanEstimates: JSON.stringify(cubanEstimates),
-      goldApiKey: goldApiKey,
-      exportDate: new Date().toISOString(),
-      appVersion: '1.0.0'
+      metadata: {
+        exportDate: new Date().toISOString(),
+        appVersion: '1.0.0',
+        system: 'Gold & Rose Executive Suite',
+        recordCounts: {
+          scrapLedger: scrapTransactions.length,
+          retailLedger: ringQuoteTransactions.length,
+          wholesaleLedger: wholesaleTransactions.length,
+          cubanEstimates: cubanEstimates.length
+        }
+      },
+      // Direct structured arrays
+      scrapLedger: scrapTransactions,
+      retailLedger: ringQuoteTransactions,
+      quoteLedger: ringQuoteTransactions, // Alias for backward compatibility
+      wholesaleLedger: wholesaleTransactions,
+      cubanEstimates: cubanEstimates,
+      masterSettings: settings,
+      goldApiKey: goldApiKey
     };
 
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `GoldAndRose_Ledger_Sync_Backup_${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `GoldAndRose_Full_Database_Backup_${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -258,81 +269,70 @@ export default function SettingsView({
     reader.onload = async (e) => {
       try {
         const json = JSON.parse(e.target?.result as string);
-        if (!json.scrapLedger && !json.quoteLedger && !json.wholesaleLedger) {
+        if (!json.scrapLedger && !json.quoteLedger && !json.retailLedger && !json.wholesaleLedger && !json.cubanEstimates) {
           alert("Invalid backup file format. Could not find ledger keys.");
           return;
         }
 
         if (window.confirm("This will merge and upload all backup data directly to your Firestore database. Proceed?")) {
-          if (json.scrapLedger) {
-            try {
-              const items = JSON.parse(json.scrapLedger);
-              if (Array.isArray(items)) {
-                for (const item of items) {
-                  if (item && item.id) {
-                    await saveDocument('scrap_ledger', item.id, item);
-                  }
-                }
+          // Helper to extract items whether they are direct arrays or stringified arrays
+          const parseItems = (val: any) => {
+            if (Array.isArray(val)) return val;
+            if (typeof val === 'string') {
+              try {
+                const parsed = JSON.parse(val);
+                return Array.isArray(parsed) ? parsed : [];
+              } catch {
+                return [];
               }
-            } catch (err) {
-              console.error("Failed to import scrap ledger:", err);
+            }
+            return [];
+          };
+
+          const scrapItems = parseItems(json.scrapLedger || json.scrap);
+          for (const item of scrapItems) {
+            if (item && item.id) {
+              await saveDocument('scrap_ledger', item.id, item);
             }
           }
-          if (json.quoteLedger) {
-            try {
-              const items = JSON.parse(json.quoteLedger);
-              if (Array.isArray(items)) {
-                for (const item of items) {
-                  if (item && item.id) {
-                    await saveDocument('retail_ledger', item.id, item);
-                  }
-                }
-              }
-            } catch (err) {
-              console.error("Failed to import retail ledger:", err);
+
+          const retailItems = parseItems(json.retailLedger || json.quoteLedger || json.retail);
+          for (const item of retailItems) {
+            if (item && item.id) {
+              await saveDocument('retail_ledger', item.id, item);
             }
           }
-          if (json.wholesaleLedger) {
-            try {
-              const items = JSON.parse(json.wholesaleLedger);
-              if (Array.isArray(items)) {
-                for (const item of items) {
-                  if (item && item.id) {
-                    await saveDocument('wholesale_ledger', item.id, item);
-                  }
-                }
-              }
-            } catch (err) {
-              console.error("Failed to import wholesale ledger:", err);
+
+          const wholesaleItems = parseItems(json.wholesaleLedger || json.wholesale);
+          for (const item of wholesaleItems) {
+            if (item && item.id) {
+              await saveDocument('wholesale_ledger', item.id, item);
             }
           }
-          if (json.masterSettings && json.masterSettings !== '{}') {
+
+          const cubanItems = parseItems(json.cubanEstimates || json.cuban);
+          for (const item of cubanItems) {
+            if (item && item.id) {
+              await saveDocument('cuban_estimates', item.id, item);
+            }
+          }
+
+          if (json.masterSettings) {
             try {
-              const master = JSON.parse(json.masterSettings);
-              await saveDocument('app_settings', 'master', master);
+              const master = typeof json.masterSettings === 'object' ? json.masterSettings : JSON.parse(json.masterSettings);
+              if (master && typeof master === 'object') {
+                await saveDocument('app_settings', 'master', master);
+              }
             } catch (err) {
               console.error("Failed to import master settings:", err);
             }
           }
-          if (json.cubanEstimates) {
-            try {
-              const items = JSON.parse(json.cubanEstimates);
-              if (Array.isArray(items)) {
-                for (const item of items) {
-                  if (item && item.id) {
-                    await saveDocument('cuban_estimates', item.id, item);
-                  }
-                }
-              }
-            } catch (err) {
-              console.error("Failed to import cuban estimates:", err);
-            }
-          }
+
           if (json.goldApiKey) {
             await saveDocument('app_settings', 'gold_api_key', { key: json.goldApiKey });
           }
 
-          alert("Sync data successfully imported and synced to Firestore! The application will now reload to apply all synced records.");
+          alert("Full database backup successfully imported and synced to Firestore! The application will now reload to apply all synced records.");
           window.location.reload();
         }
       } catch (err) {
@@ -2545,54 +2545,85 @@ export default function SettingsView({
               </div>
             </div>
 
-            {/* Cross-Device Sync Backup */}
+            {/* Cross-Device Sync & Full Database Backup */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-              <div>
-                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
-                  <FileJson size={15} className="text-sky-600" />
-                  Cross-Device Sync & Ledger Backup
-                </h4>
-                <p className="text-xs text-slate-600 leading-relaxed mt-1.5">
-                  Synchronize your complete calculator history, custom designs, and master parameters between desktop browsers and iPads via local file export/import.
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileJson size={16} className="text-sky-600" />
+                    Full Database JSON Backup & Sync
+                  </h4>
+                  <p className="text-xs text-slate-600 leading-relaxed mt-1">
+                    Export all JSON-structured ledger databases (scrap buybacks, retail quotes, wholesale jobs, cuban chains, and pricing parameters) into a single local file for secure record keeping and cross-device synchronization.
+                  </p>
+                </div>
+                <span className="self-start sm:self-auto text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200 shrink-0">
+                  {scrapTransactions.length + ringQuoteTransactions.length + wholesaleTransactions.length + cubanEstimates.length} Total Records
+                </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Data Summary Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 text-left">
+                  <span className="text-[9px] font-black uppercase text-slate-500 block">Scrap Ledger</span>
+                  <span className="text-xs font-mono font-black text-emerald-600">{scrapTransactions.length} records</span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 text-left">
+                  <span className="text-[9px] font-black uppercase text-slate-500 block">Retail Quotes</span>
+                  <span className="text-xs font-mono font-black text-amber-600">{ringQuoteTransactions.length} records</span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 text-left">
+                  <span className="text-[9px] font-black uppercase text-slate-500 block">Wholesale Jobs</span>
+                  <span className="text-xs font-mono font-black text-sky-600">{wholesaleTransactions.length} records</span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 text-left">
+                  <span className="text-[9px] font-black uppercase text-slate-500 block">Cuban Estimates</span>
+                  <span className="text-xs font-mono font-black text-indigo-600">{cubanEstimates.length} records</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
                 {/* Export Section */}
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5">
-                  <span className="text-xs font-black uppercase text-slate-900 tracking-wider block">1. Export Sync File</span>
-                  <p className="text-[11px] text-slate-500">
-                    Download complete application state as a single JSON backup file. Transfer to iPad via AirDrop or Files.
-                  </p>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5 flex flex-col justify-between">
+                  <div>
+                    <span className="text-xs font-black uppercase text-slate-900 tracking-wider block">1. Export Full Backup</span>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-normal">
+                      Download all scrap, retail, wholesale, and cuban transactions plus master settings into a single structured JSON archive file.
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={handleExportBackupJSON}
-                    className="w-full bg-slate-900 text-amber-400 hover:bg-black font-black py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                    className="w-full bg-slate-900 text-amber-400 hover:bg-black font-black py-3 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer hover:shadow-lg"
+                    title="Download full JSON database backup file"
                   >
-                    <Download size={14} />
-                    Download Sync File
+                    <Download size={15} className="text-amber-400" />
+                    Download Full Database Backup
                   </button>
                 </div>
 
                 {/* Import Section */}
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5">
-                  <span className="text-xs font-black uppercase text-slate-900 tracking-wider block">2. Import Sync File</span>
-                  <p className="text-[11px] text-slate-500">
-                    Select a sync backup file on your target device to import and merge your full ledger histories instantly.
-                  </p>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5 flex flex-col justify-between">
+                  <div>
+                    <span className="text-xs font-black uppercase text-slate-900 tracking-wider block">2. Restore / Sync Backup</span>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-normal">
+                      Select a JSON database backup file to import, merge, and sync all ledger histories across devices or restore records.
+                    </p>
+                  </div>
                   <div className="relative">
                     <input
                       type="file"
                       accept=".json"
                       onChange={handleImportBackupJSON}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      title="Upload JSON database backup file to restore"
                     />
                     <button
                       type="button"
-                      className="w-full bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-black py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-xs pointer-events-none"
+                      className="w-full bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-black py-3 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-xs pointer-events-none"
                     >
-                      <Upload size={14} className="text-amber-500" />
-                      Select Sync File
+                      <Upload size={15} className="text-amber-500" />
+                      Import Database Backup
                     </button>
                   </div>
                 </div>
