@@ -153,12 +153,29 @@ export function upgradeRingData(r: any): JewelryItem {
       if (!base.centerStone2.origin) base.centerStone2.origin = 'Lab';
     }
   }
-  if (!base.referenceSketches || (Array.isArray(base.referenceSketches) && base.referenceSketches.length === 0)) {
-    base.referenceSketches = base.referenceSketch ? [base.referenceSketch] : [];
+  // Sanitize and upgrade sketches and photos
+  const isValidImage = (str: any) => typeof str === 'string' && (str.startsWith('data:image/') || str.startsWith('http://') || str.startsWith('https://') || str.startsWith('blob:'));
+
+  let sketches: string[] = [];
+  if (Array.isArray(base.referenceSketches)) {
+    sketches = base.referenceSketches.filter(isValidImage);
   }
-  if (!base.referencePhotos || (Array.isArray(base.referencePhotos) && base.referencePhotos.length === 0)) {
-    base.referencePhotos = base.referencePhoto ? [base.referencePhoto] : [];
+  if (sketches.length === 0 && isValidImage(base.referenceSketch)) {
+    sketches = [base.referenceSketch];
   }
+  base.referenceSketches = sketches;
+  base.referenceSketch = sketches[0] || null;
+
+  let photos: string[] = [];
+  if (Array.isArray(base.referencePhotos)) {
+    photos = base.referencePhotos.filter(isValidImage);
+  }
+  if (photos.length === 0 && isValidImage(base.referencePhoto)) {
+    photos = [base.referencePhoto];
+  }
+  base.referencePhotos = photos;
+  base.referencePhoto = photos[0] || null;
+
   if (base.category === 'mensBand') {
     if (base.mbSize === undefined || base.mbSize === '') base.mbSize = '8.0';
     if (base.mbWidth === undefined || base.mbWidth === '') base.mbWidth = '5.0';
@@ -190,21 +207,29 @@ export function getEmptyQuoteSession(): QuoteSession {
   };
 }
 
-export function compressImage(base64Str: string, maxDim: number = 2400, quality: number = 0.94): Promise<string> {
+export function compressImage(base64Str: string, maxDim: number = 1200, quality: number = 0.85): Promise<string> {
   return new Promise((resolve) => {
-    if (!base64Str || typeof base64Str !== 'string' || !base64Str.startsWith('data:')) {
+    if (!base64Str || typeof base64Str !== 'string' || !base64Str.startsWith('data:image/')) {
+      resolve(base64Str);
+      return;
+    }
+    // If the image is already lightweight (< 60KB), don't re-compress
+    if (base64Str.length < 60000) {
       resolve(base64Str);
       return;
     }
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.onload = () => {
       // Scale down only if greater than maxDim, otherwise keep natural dimension with high quality
       const scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
       const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
       const ctx = canvas.getContext('2d');
       if (ctx) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -351,10 +376,12 @@ export function safeSetLocalStorage(key: string, data: any): void {
   try {
     localStorage.setItem(key, JSON.stringify(data));
   } catch (e) {
-    console.warn(`[safeSetLocalStorage] Quota exceeded for key: ${key}. Attempting to strip heavy images...`, e);
+    console.warn(`[safeSetLocalStorage] Quota exceeded for key: ${key}. Attempting optimized cache reduction...`, e);
     try {
       if (Array.isArray(data)) {
-        const stripped = data.map(item => {
+        // Keep the 15 most recent items with full images, and prune older ones for local storage only
+        const stripped = data.map((item, idx) => {
+          if (idx < 15) return item;
           if (item && item.fullData && Array.isArray(item.fullData.rings)) {
             return {
               ...item,
@@ -362,10 +389,10 @@ export function safeSetLocalStorage(key: string, data: any): void {
                 ...item.fullData,
                 rings: item.fullData.rings.map((r: any) => ({
                   ...r,
-                  referencePhoto: r.referencePhoto ? "(Image too large, omitted from local persistent history)" : null,
-                  referencePhotos: r.referencePhotos ? r.referencePhotos.map(() => "(Image too large, omitted)") : [],
-                  referenceSketch: r.referenceSketch ? "(Image too large, omitted from local persistent history)" : null,
-                  referenceSketches: r.referenceSketches ? r.referenceSketches.map(() => "(Image too large, omitted)") : []
+                  referencePhoto: null,
+                  referencePhotos: [],
+                  referenceSketch: null,
+                  referenceSketches: []
                 }))
               }
             };
@@ -373,15 +400,16 @@ export function safeSetLocalStorage(key: string, data: any): void {
           if (item && ('image' in item || 'signature' in item)) {
             return {
               ...item,
-              image: item.image ? "(Image too large, omitted from local persistent history)" : null,
-              signature: item.signature ? "(Signature too large, omitted)" : null
+              image: null,
+              signature: null
             };
           }
           return item;
         });
         localStorage.setItem(key, JSON.stringify(stripped));
       } else {
-        console.error("Local storage saving failed completely.");
+        // If it's a single session object, save without failing
+        localStorage.setItem(key, JSON.stringify(data));
       }
     } catch (err) {
       console.error("Local storage fallback saving failed:", err);
@@ -563,16 +591,24 @@ export function hasRingData(r: JewelryItem): boolean {
   if (r.category === 'repair') {
     return true;
   }
+  const isValidImage = (str: any) => typeof str === 'string' && (str.startsWith('data:image/') || str.startsWith('http://') || str.startsWith('https://') || str.startsWith('blob:'));
+  const hasSketches = (Array.isArray(r.referenceSketches) && r.referenceSketches.some(isValidImage)) || isValidImage(r.referenceSketch);
+  const hasPhotos = (Array.isArray(r.referencePhotos) && r.referencePhotos.some(isValidImage)) || isValidImage(r.referencePhoto);
+
   return !!(
     Number(r.goldGrams) > 0 ||
     (r.centerStones && r.centerStones.some(cs => Number(cs.carats) > 0)) ||
     Number(r.centerStone?.carats) > 0 ||
     Number(r.centerStone2?.carats) > 0 ||
-    r.fancy.some(f => Number(f.qty) > 0) ||
-    r.melee.some(m => Number(m.qty) > 0) ||
-    r.addons.some(a => Number(a.fee) > 0) ||
-    r.clientStones.some(c => Number(c.qty) > 0) ||
-    Number(r.tbManualStones) > 0
+    (r.fancy && r.fancy.some(f => Number(f.qty) > 0)) ||
+    (r.melee && r.melee.some(m => Number(m.qty) > 0)) ||
+    (r.addons && r.addons.some(a => Number(a.fee) > 0)) ||
+    (r.clientStones && r.clientStones.some(c => Number(c.qty) > 0)) ||
+    Number(r.tbManualStones) > 0 ||
+    hasSketches ||
+    hasPhotos ||
+    (r.designNotes && r.designNotes.length > 0) ||
+    (r.showEngraving && !!r.engravingText)
   );
 }
 

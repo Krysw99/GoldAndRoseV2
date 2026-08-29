@@ -521,9 +521,9 @@ export default function PhotoEditorModal({
         // Draw drawing annotation layer
         ctx.drawImage(drawingCanvasRef.current, 0, 0);
 
-        // Convert to ultra-high-resolution JPEG (2400px max, 0.94 quality)
-        const rawBase64 = exportCanvas.toDataURL('image/jpeg', 0.96);
-        const optimized = await compressImage(rawBase64, 2400, 0.94);
+        // Convert to high-resolution JPEG (1200px max, 0.85 quality)
+        const rawBase64 = exportCanvas.toDataURL('image/jpeg', 0.90);
+        const optimized = await compressImage(rawBase64, 1200, 0.85);
 
         onSave(optimized);
         onClose();

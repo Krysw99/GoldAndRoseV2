@@ -110,14 +110,30 @@ export default function App() {
   // Active custom quote sessions
   const [retailSession, setRetailSession] = useState<QuoteSession>(() => {
     try {
-      localStorage.removeItem('gr_active_retail_session');
-    } catch {}
-    return getEmptyQuoteSession();
+      const raw = localStorage.getItem('gr_active_retail_session');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.rings)) {
+          parsed.rings = parsed.rings.map(upgradeRingData);
+          return parsed;
+        }
+      }
+      return getEmptyQuoteSession();
+    } catch {
+      return getEmptyQuoteSession();
+    }
   });
   const [wholesaleSession, setWholesaleSession] = useState<QuoteSession>(() => {
     try {
       const raw = localStorage.getItem('gr_active_wholesale_session');
-      return raw ? JSON.parse(raw) : getEmptyQuoteSession();
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.rings)) {
+          parsed.rings = parsed.rings.map(upgradeRingData);
+          return parsed;
+        }
+      }
+      return getEmptyQuoteSession();
     } catch {
       return getEmptyQuoteSession();
     }
@@ -938,7 +954,15 @@ setIsCloudSynced(true);
     if (!item) return;
 
     const fullData = JSON.parse(JSON.stringify(item.fullData)) as QuoteSession;
-    fullData.rings = fullData.rings.map(upgradeRingData);
+    fullData.rings = (fullData.rings || []).map(upgradeRingData);
+
+    // Ensure active piece subtab exists so sketches and parameters render immediately
+    if (fullData.rings.length > 0) {
+      const ringExists = fullData.rings.some(r => r.id === fullData.activeSubTab);
+      if (!ringExists && fullData.activeSubTab !== 'summary') {
+        fullData.activeSubTab = fullData.rings[0].id;
+      }
+    }
 
     if (isWholesale) {
       updateWholesaleSessionLocal(fullData, true);

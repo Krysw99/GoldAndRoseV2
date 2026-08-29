@@ -776,13 +776,19 @@ export default function ClientInvoicePrint({
       )}
 
       {/* Dynamic Mockups Thumbnail Anchors */}
-      {session.rings && session.rings.some(r => r.referenceSketch || r.referencePhoto || (Array.isArray(r.referenceSketches) && r.referenceSketches.length > 0) || (Array.isArray(r.referencePhotos) && r.referencePhotos.length > 0)) && (
+      {session.rings && session.rings.some(r => {
+        const isValidImage = (str: any) => typeof str === 'string' && (str.startsWith('data:image/') || str.startsWith('http://') || str.startsWith('https://') || str.startsWith('blob:'));
+        const rSketches = (Array.isArray(r.referenceSketches) ? r.referenceSketches : (r.referenceSketch ? [r.referenceSketch] : [])).filter(isValidImage);
+        const rPhotos = (Array.isArray(r.referencePhotos) ? r.referencePhotos : (r.referencePhoto ? [r.referencePhoto] : [])).filter(isValidImage);
+        return rSketches.length > 0 || rPhotos.length > 0;
+      }) && (
         <div className="border-t border-brand-100 pt-6 space-y-4 print:pt-3 print:space-y-1.5">
           <h4 className="text-[10px] font-black text-brand-800 uppercase tracking-widest text-center print:text-[8px]">Reference Sketches & Photos</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:gap-2">
             {session.rings.map((r, ri) => {
-              const rSketches = Array.isArray(r.referenceSketches) ? r.referenceSketches : (r.referenceSketch ? [r.referenceSketch] : []);
-              const rPhotos = Array.isArray(r.referencePhotos) ? r.referencePhotos : (r.referencePhoto ? [r.referencePhoto] : []);
+              const isValidImage = (str: any) => typeof str === 'string' && (str.startsWith('data:image/') || str.startsWith('http://') || str.startsWith('https://') || str.startsWith('blob:'));
+              const rSketches = (Array.isArray(r.referenceSketches) ? r.referenceSketches : (r.referenceSketch ? [r.referenceSketch] : [])).filter(isValidImage);
+              const rPhotos = (Array.isArray(r.referencePhotos) ? r.referencePhotos : (r.referencePhoto ? [r.referencePhoto] : [])).filter(isValidImage);
               if (rSketches.length === 0 && rPhotos.length === 0) return null;
               return (
                 <div key={r.id || ri} className="border border-brand-100 bg-brand-50/20 rounded-2xl p-3 space-y-3 print:p-1.5 print:space-y-1.5 print:rounded-xl">
