@@ -153,14 +153,20 @@ export function upgradeRingData(r: any): JewelryItem {
       if (!base.centerStone2.origin) base.centerStone2.origin = 'Lab';
     }
   }
-  // Sanitize and upgrade sketches and photos
-  const isValidImage = (str: any) => typeof str === 'string' && (str.startsWith('data:image/') || str.startsWith('http://') || str.startsWith('https://') || str.startsWith('blob:'));
+  // Sanitize and upgrade sketches and photos safely
+  const isImageValid = (str: any): boolean => {
+    if (typeof str !== 'string') return false;
+    const s = str.trim();
+    if (s.length < 15) return false;
+    if (s.startsWith('(') && s.includes('omitted')) return false;
+    return s.startsWith('data:') || s.startsWith('http://') || s.startsWith('https://') || s.startsWith('blob:') || s.startsWith('<svg');
+  };
 
   let sketches: string[] = [];
   if (Array.isArray(base.referenceSketches)) {
-    sketches = base.referenceSketches.filter(isValidImage);
+    sketches = base.referenceSketches.filter(isImageValid);
   }
-  if (sketches.length === 0 && isValidImage(base.referenceSketch)) {
+  if (sketches.length === 0 && isImageValid(base.referenceSketch)) {
     sketches = [base.referenceSketch];
   }
   base.referenceSketches = sketches;
@@ -168,9 +174,9 @@ export function upgradeRingData(r: any): JewelryItem {
 
   let photos: string[] = [];
   if (Array.isArray(base.referencePhotos)) {
-    photos = base.referencePhotos.filter(isValidImage);
+    photos = base.referencePhotos.filter(isImageValid);
   }
-  if (photos.length === 0 && isValidImage(base.referencePhoto)) {
+  if (photos.length === 0 && isImageValid(base.referencePhoto)) {
     photos = [base.referencePhoto];
   }
   base.referencePhotos = photos;
@@ -591,9 +597,9 @@ export function hasRingData(r: JewelryItem): boolean {
   if (r.category === 'repair') {
     return true;
   }
-  const isValidImage = (str: any) => typeof str === 'string' && (str.startsWith('data:image/') || str.startsWith('http://') || str.startsWith('https://') || str.startsWith('blob:'));
-  const hasSketches = (Array.isArray(r.referenceSketches) && r.referenceSketches.some(isValidImage)) || isValidImage(r.referenceSketch);
-  const hasPhotos = (Array.isArray(r.referencePhotos) && r.referencePhotos.some(isValidImage)) || isValidImage(r.referencePhoto);
+  const isImgValid = (str: any) => typeof str === 'string' && str.trim().length > 15 && !str.includes('omitted') && (str.startsWith('data:') || str.startsWith('http') || str.startsWith('blob:') || str.startsWith('<svg'));
+  const hasSketches = (Array.isArray(r.referenceSketches) && r.referenceSketches.some(isImgValid)) || isImgValid(r.referenceSketch);
+  const hasPhotos = (Array.isArray(r.referencePhotos) && r.referencePhotos.some(isImgValid)) || isImgValid(r.referencePhoto);
 
   return !!(
     Number(r.goldGrams) > 0 ||

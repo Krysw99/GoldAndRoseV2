@@ -1182,8 +1182,8 @@ export default function QuoteCalculator({
     setPhotoEditorIdx(null);
   };
 
-  // Active ring being edited in the subtab
-  const activeRing = session.rings.find(r => r.id === session.activeSubTab);
+  // Active ring being edited in the subtab (with robust fallback to first ring)
+  const activeRing = session.rings.find(r => r.id === session.activeSubTab) || (session.activeSubTab !== 'summary' ? session.rings[0] : undefined);
 
   // Auto-calculate metal weight when relevant inputs change
   useEffect(() => {
@@ -1223,25 +1223,34 @@ export default function QuoteCalculator({
 
   // Helper to update active ring attributes
   const updateActiveRing = <K extends keyof JewelryItem>(field: K, value: JewelryItem[K]) => {
+    const targetId = activeRing?.id || session.activeSubTab;
     onChangeSession(prev => ({
       ...prev,
-      rings: prev.rings.map(r => r.id === prev.activeSubTab ? { ...r, [field]: value } : r)
+      rings: prev.rings.map(r => r.id === targetId ? { ...r, [field]: value } : r)
     }));
   };
 
-  const sketches = Array.isArray(activeRing?.referenceSketches)
-    ? activeRing.referenceSketches
-    : (activeRing?.referenceSketch ? [activeRing.referenceSketch] : []);
+  const isImgValid = (str: any): boolean => {
+    if (typeof str !== 'string') return false;
+    const s = str.trim();
+    if (s.length < 15 || s.includes('omitted')) return false;
+    return s.startsWith('data:') || s.startsWith('http') || s.startsWith('blob:') || s.startsWith('<svg');
+  };
 
-  const photos = Array.isArray(activeRing?.referencePhotos)
+  const sketches = (Array.isArray(activeRing?.referenceSketches)
+    ? activeRing.referenceSketches
+    : (activeRing?.referenceSketch ? [activeRing.referenceSketch] : [])).filter(isImgValid);
+
+  const photos = (Array.isArray(activeRing?.referencePhotos)
     ? activeRing.referencePhotos
-    : (activeRing?.referencePhoto ? [activeRing.referencePhoto] : []);
+    : (activeRing?.referencePhoto ? [activeRing.referencePhoto] : [])).filter(isImgValid);
 
   const updateSketches = (newSketches: string[]) => {
+    const targetId = activeRing?.id || session.activeSubTab;
     onChangeSession(prev => ({
       ...prev,
       rings: prev.rings.map(r => 
-        r.id === prev.activeSubTab 
+        r.id === targetId 
           ? {
               ...r,
               referenceSketch: newSketches[0] || null,
@@ -1253,10 +1262,11 @@ export default function QuoteCalculator({
   };
 
   const updatePhotos = (newPhotos: string[]) => {
+    const targetId = activeRing?.id || session.activeSubTab;
     onChangeSession(prev => ({
       ...prev,
       rings: prev.rings.map(r => 
-        r.id === prev.activeSubTab 
+        r.id === targetId 
           ? {
               ...r,
               referencePhoto: newPhotos[0] || null,
