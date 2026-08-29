@@ -957,6 +957,34 @@ setIsCloudSynced(true);
     setActiveTab('scrap');
   };
 
+  const handleApplyScrapToQuote = (scrapId: string, isWholesale: boolean) => {
+    const scrapTx = scrapTransactions.find(t => t.id === scrapId);
+    if (!scrapTx) return;
+
+    const payout = parseFloat(scrapTx.total) || 0;
+    if (isWholesale) {
+      updateWholesaleSessionLocal({
+        ...wholesaleSession,
+        scrapCredit: payout,
+        cName: wholesaleSession.cName || scrapTx.name || '',
+        cPhone: wholesaleSession.cPhone || scrapTx.phone || ''
+      }, true);
+      setActiveTab('wholesale');
+      playClickSound('success');
+      showToast(`Applied $${payout.toFixed(2)} scrap credit to Wholesale order!`, 'success');
+    } else {
+      updateRetailSessionLocal({
+        ...retailSession,
+        scrapCredit: payout,
+        cName: retailSession.cName || scrapTx.name || '',
+        cPhone: retailSession.cPhone || scrapTx.phone || ''
+      }, true);
+      setActiveTab('quote');
+      playClickSound('success');
+      showToast(`Applied $${payout.toFixed(2)} scrap credit to Retail quote!`, 'success');
+    }
+  };
+
   // Exporters
   const handleExportCsv = (type: 'scrap' | 'retail' | 'wholesale') => {
     let csv = "";
@@ -1570,6 +1598,7 @@ setIsCloudSynced(true);
               onDeleteTransaction={handleDeleteLedgerItem}
               onLoadIntoEditor={handleLoadQuote}
               onLoadScrapIntoEditor={handleLoadScrap}
+              onApplyScrapToQuote={handleApplyScrapToQuote}
               settings={settings}
               spotPrices={spotPrices}
               onAddDemoTransaction={handleCreateDemoTransaction}

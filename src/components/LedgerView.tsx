@@ -8,7 +8,7 @@ import {
   Search, Trash2, Printer, FileText, X, ArrowRight, User, Phone, 
   MapPin, ShieldCheck, Mail, Calendar, Sparkles, AlertCircle,
   ShoppingBag, Check, ExternalLink, Cpu, Copy, Info, ChevronDown, ChevronUp,
-  RefreshCw
+  RefreshCw, Coins
 } from 'lucide-react';
 import { ScrapTransaction, QuoteTransaction, AppSettings, QuoteSession, JewelryItem } from '../types';
 import { calculateRingCost, calculateScrapTotal, calculateScrapItemValue } from '../utils';
@@ -26,6 +26,7 @@ interface LedgerViewProps {
   onDeleteTransaction: (type: 'scrap' | 'retail' | 'wholesale', id: string) => void;
   onLoadIntoEditor: (id: string, isWholesale: boolean) => void;
   onLoadScrapIntoEditor?: (id: string) => void;
+  onApplyScrapToQuote?: (scrapId: string, isWholesale: boolean) => void;
   settings: AppSettings;
   spotPrices?: { gold: number; silver: number; platinum: number };
   onAddDemoTransaction?: () => void;
@@ -177,6 +178,7 @@ export default function LedgerView({
   onDeleteTransaction,
   onLoadIntoEditor,
   onLoadScrapIntoEditor,
+  onApplyScrapToQuote,
   settings,
   spotPrices,
   onAddDemoTransaction,
@@ -705,16 +707,29 @@ export default function LedgerView({
               <span className="text-[10px] font-black uppercase text-brand-400 tracking-wider">Inline Document Preview</span>
               <div className="flex gap-2">
                 {selectedTx.type === 'scrap' ? (
-                  onLoadScrapIntoEditor && (
-                    <button
-                      type="button"
-                      onClick={() => onLoadScrapIntoEditor(activeTx.id)}
-                      className="bg-brand-50 hover:bg-brand-100 text-brand-800 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl border border-brand-200 transition-all flex items-center gap-1 shadow-sm cursor-pointer"
-                    >
-                      <FileText size={12} />
-                      Adjust Scrap Buyback
-                    </button>
-                  )
+                  <>
+                    {onLoadScrapIntoEditor && (
+                      <button
+                        type="button"
+                        onClick={() => onLoadScrapIntoEditor(activeTx.id)}
+                        className="bg-brand-50 hover:bg-brand-100 text-brand-800 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl border border-brand-200 transition-all flex items-center gap-1 shadow-sm cursor-pointer"
+                      >
+                        <FileText size={12} />
+                        Adjust Scrap Buyback
+                      </button>
+                    )}
+                    {onApplyScrapToQuote && (
+                      <button
+                        type="button"
+                        onClick={() => onApplyScrapToQuote(activeTx.id, true)}
+                        className="bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
+                        title="Apply this scrap buyback credit to a Wholesale job order"
+                      >
+                        <Coins size={12} />
+                        Apply to Wholesale
+                      </button>
+                    )}
+                  </>
                 ) : (
                   <button
                     type="button"

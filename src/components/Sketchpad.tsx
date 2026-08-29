@@ -694,6 +694,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     { name: 'Yellow Gold', val: '#E5C453', bgClass: 'bg-yellow-500' },
     { name: 'Rose Gold', val: '#E0A899', bgClass: 'bg-rose-300' },
     { name: 'Platinum / White Gold', val: '#D1D5DB', bgClass: 'bg-gray-300' },
+    { name: 'Pure White', val: '#ffffff', bgClass: 'bg-white ring-1 ring-slate-300' },
     { name: 'Onyx Black', val: '#0f172a', bgClass: 'bg-black' },
     { name: 'Diamond Blue', val: '#38BDF8', bgClass: 'bg-sky-400' },
     { name: 'Ruby Red', val: '#DC2626', bgClass: 'bg-red-600' },
@@ -1934,7 +1935,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const result = ev.target?.result as string;
-      const compressed = await compressImage(result, 800);
+      const compressed = await compressImage(result, 1600, 0.88);
       setBgSrc(compressed);
       const img = new Image();
       img.onload = () => {
@@ -2287,8 +2288,8 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     // 2. Draw transparency-flattened drawing layer on top
     ctx.drawImage(canvas, 0, 0);
 
-    // Compress the flattened image to a max dimension of 600px to avoid localStorage quota issues
-    const MAX_DIM = 600;
+    // Compress the flattened image to a max dimension of 2400px to maintain high resolution and crisp detail
+    const MAX_DIM = 2400;
     let exportCanvas = virtualCanvas;
     if (virtualCanvas.width > MAX_DIM || virtualCanvas.height > MAX_DIM) {
       const scale = Math.min(MAX_DIM / virtualCanvas.width, MAX_DIM / virtualCanvas.height);
@@ -2297,12 +2298,14 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       compressCanvas.height = Math.round(virtualCanvas.height * scale);
       const compressCtx = compressCanvas.getContext('2d');
       if (compressCtx) {
+        compressCtx.imageSmoothingEnabled = true;
+        compressCtx.imageSmoothingQuality = 'high';
         compressCtx.drawImage(virtualCanvas, 0, 0, compressCanvas.width, compressCanvas.height);
         exportCanvas = compressCanvas;
       }
     }
 
-    const flattenedDataUrl = exportCanvas.toDataURL('image/jpeg', 0.6);
+    const flattenedDataUrl = exportCanvas.toDataURL('image/jpeg', 0.94);
     onSave(flattenedDataUrl);
   };
 
@@ -2947,7 +2950,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
             </div>
 
             {/* Color palette */}
-            <div className="flex items-center gap-1 px-2 py-1.5 bg-brand-50/50 rounded-xl border border-brand-100/80 overflow-x-auto max-w-[260px] sm:max-w-[320px] scrollbar-none shrink-0" title="Precious Metals & Fine Gemstones Palette">
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-brand-50/50 rounded-xl border border-brand-100/80 overflow-x-auto max-w-[300px] sm:max-w-[360px] scrollbar-none shrink-0" title="Precious Metals & Fine Gemstones Palette">
               {jewelryColors.map(c => (
                 <button
                   key={c.name}

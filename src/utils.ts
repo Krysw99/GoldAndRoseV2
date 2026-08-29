@@ -190,7 +190,7 @@ export function getEmptyQuoteSession(): QuoteSession {
   };
 }
 
-export function compressImage(base64Str: string, maxDim: number = 600, quality: number = 0.6): Promise<string> {
+export function compressImage(base64Str: string, maxDim: number = 2400, quality: number = 0.94): Promise<string> {
   return new Promise((resolve) => {
     if (!base64Str || typeof base64Str !== 'string' || !base64Str.startsWith('data:')) {
       resolve(base64Str);
@@ -198,13 +198,15 @@ export function compressImage(base64Str: string, maxDim: number = 600, quality: 
     }
     const img = new Image();
     img.onload = () => {
-      // Scale down if greater than maxDim, otherwise keep natural dimension but convert to JPEG 0.6 quality
+      // Scale down only if greater than maxDim, otherwise keep natural dimension with high quality
       const scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(img.width * scale);
       canvas.height = Math.round(img.height * scale);
       const ctx = canvas.getContext('2d');
       if (ctx) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         resolve(canvas.toDataURL('image/jpeg', quality));
       } else {
@@ -645,6 +647,42 @@ export function calculateWholesaleRingCost(r: JewelryItem, settings: AppSettings
       fC += q * Number(fd.carat) * rate;
     });
     c += (fQ * Number(w.settingFancy)) + fC;
+
+    // center stones setting & supply
+    if (r.centerStones && r.centerStones.length > 0) {
+      r.centerStones.forEach(cs => {
+        if (!cs.carats) return;
+        const cCt = parseFloat(cs.carats) || 0;
+        if (cCt > 0) {
+          c += Number(w.settingCenter);
+          if (r.stoneSource !== 'customer') {
+            const rate = settings.centerStoneRates?.[cs.type]?.[cs.origin] ?? 1000;
+            c += cCt * rate;
+          }
+        }
+      });
+    } else {
+      if (r.centerStone?.carats) {
+        const cCt = parseFloat(r.centerStone.carats) || 0;
+        if (cCt > 0) {
+          c += Number(w.settingCenter);
+          if (r.stoneSource !== 'customer') {
+            const rate = settings.centerStoneRates?.[r.centerStone.type]?.[r.centerStone.origin] ?? 1000;
+            c += cCt * rate;
+          }
+        }
+      }
+      if (r.centerStone2?.carats) {
+        const cCt = parseFloat(r.centerStone2.carats) || 0;
+        if (cCt > 0) {
+          c += Number(w.settingCenter);
+          if (r.stoneSource !== 'customer') {
+            const rate = settings.centerStoneRates?.[r.centerStone2.type]?.[r.centerStone2.origin] ?? 1000;
+            c += cCt * rate;
+          }
+        }
+      }
+    }
   }
   
   // Client Stones setting fee

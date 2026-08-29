@@ -8,7 +8,7 @@ import {
   Plus, Trash2, Camera, Compass, Type, Tag, HelpCircle, 
   Signature, CheckCircle, Calculator, Sparkles, AlertCircle, FileText,
   Gem, UserCheck, User, Lock, Unlock, Save, Edit3, Check, X,
-  Crop, PenTool
+  Crop, PenTool, Printer, Coins
 } from 'lucide-react';
 import { 
   QuoteSession, JewelryItem, MeleeItem, FancyItem, ClientStoneItem, 
@@ -23,8 +23,10 @@ import {
   calculateRingCost, calculateRawCost, hasRingData, compressImage
 } from '../utils';
 import { printElement } from '../utils/printHelper';
+import { playClickSound } from '../utils/audio';
 import SignaturePad from './SignaturePad';
 import WholesaleRepairView from './WholesaleRepairView';
+import WholesaleRepairInvoicePrint from './WholesaleRepairInvoicePrint';
 import ClientInvoicePrint from './ClientInvoicePrint';
 import PhotoEditorModal from './PhotoEditorModal';
 
@@ -1314,18 +1316,26 @@ export default function QuoteCalculator({
     updateActiveRing('melee', activeRing.melee.filter((_, i) => i !== idx));
   };
 
-  const updateMelee = (idx: number, field: keyof MeleeItem, val: string) => {
-    if (!activeRing) return;
-    const updated = activeRing.melee.map((m, i) => {
-      if (i !== idx) return m;
-      const nm = { ...m, [field]: val };
-      // if size changes, prefill estimated carat weight automatically
-      if (field === 'size') {
-        nm.carat = val ? String(ROUND_MELEE[val] || '0.000') : '';
-      }
-      return nm;
-    });
-    updateActiveRing('melee', updated);
+  const updateMelee = (idx: number, updatesOrField: keyof MeleeItem | Partial<MeleeItem>, val?: any) => {
+    const updates: Partial<MeleeItem> = typeof updatesOrField === 'string' ? { [updatesOrField]: val } : updatesOrField;
+    onChangeSession(prev => ({
+      ...prev,
+      rings: prev.rings.map(r => {
+        if (r.id !== prev.activeSubTab) return r;
+        const currentList = r.melee || [];
+        const updatedList = currentList.map((m, i) => {
+          if (i === idx) {
+            const nm = { ...m, ...updates };
+            if ('size' in updates && updates.size) {
+              nm.carat = String(ROUND_MELEE[updates.size] || '0.000');
+            }
+            return nm;
+          }
+          return m;
+        });
+        return { ...r, melee: updatedList };
+      })
+    }));
   };
 
   const addFancy = () => {
@@ -1339,9 +1349,22 @@ export default function QuoteCalculator({
     updateActiveRing('fancy', activeRing.fancy.filter((_, i) => i !== idx));
   };
 
-  const updateFancy = (idx: number, field: keyof FancyItem, val: any) => {
-    if (!activeRing) return;
-    updateActiveRing('fancy', activeRing.fancy.map((f, i) => i === idx ? { ...f, [field]: val } : f));
+  const updateFancy = (idx: number, updatesOrField: keyof FancyItem | Partial<FancyItem>, val?: any) => {
+    const updates: Partial<FancyItem> = typeof updatesOrField === 'string' ? { [updatesOrField]: val } : updatesOrField;
+    onChangeSession(prev => ({
+      ...prev,
+      rings: prev.rings.map(r => {
+        if (r.id !== prev.activeSubTab) return r;
+        const currentList = r.fancy || [];
+        const updatedList = currentList.map((f, i) => {
+          if (i === idx) {
+            return { ...f, ...updates };
+          }
+          return f;
+        });
+        return { ...r, fancy: updatedList };
+      })
+    }));
   };
 
   const addClientStone = () => {
@@ -1355,31 +1378,39 @@ export default function QuoteCalculator({
     updateActiveRing('clientStones', activeRing.clientStones.filter((_, i) => i !== idx));
   };
 
-  const updateClientStone = (idx: number, field: keyof ClientStoneItem, val: any) => {
-    if (!activeRing) return;
-    updateActiveRing('clientStones', activeRing.clientStones.map((cs, i) => {
-      if (i === idx) {
-        const updated = { ...cs, [field]: val };
-        if (field === 'type') {
-          if (val === 'Fancy') {
-            if (!updated.shape) updated.shape = 'Princess';
-            if (updated.sizeIdx === undefined) updated.sizeIdx = 0;
-          } else if (val === 'Melee') {
-            if (!updated.size) updated.size = '1.5';
+  const updateClientStone = (idx: number, updatesOrField: keyof ClientStoneItem | Partial<ClientStoneItem>, val?: any) => {
+    const updates: Partial<ClientStoneItem> = typeof updatesOrField === 'string' ? { [updatesOrField]: val } : updatesOrField;
+    onChangeSession(prev => ({
+      ...prev,
+      rings: prev.rings.map(r => {
+        if (r.id !== prev.activeSubTab) return r;
+        const currentList = r.clientStones || [];
+        const updatedList = currentList.map((cs, i) => {
+          if (i === idx) {
+            const updated = { ...cs, ...updates };
+            if ('type' in updates) {
+              if (updates.type === 'Fancy') {
+                if (!updated.shape) updated.shape = 'Princess';
+                if (updated.sizeIdx === undefined) updated.sizeIdx = 0;
+              } else if (updates.type === 'Melee') {
+                if (!updated.size) updated.size = '1.5';
+              }
+            }
+
+            // Auto calculate carats for Melee type
+            if (updated.type === 'Melee') {
+              const currentSize = updated.size || '1.5';
+              const perStoneCarat = ROUND_MELEE[currentSize] || 0.015;
+              const qtyVal = parseInt(updated.qty) || 0;
+              updated.carats = (qtyVal * perStoneCarat).toFixed(3);
+            }
+
+            return updated;
           }
-        }
-
-        // Auto calculate carats for Melee type
-        if (updated.type === 'Melee') {
-          const currentSize = updated.size || '1.5';
-          const perStoneCarat = ROUND_MELEE[currentSize] || 0.015;
-          const qtyVal = parseInt(updated.qty) || 0;
-          updated.carats = (qtyVal * perStoneCarat).toFixed(3);
-        }
-
-        return updated;
-      }
-      return cs;
+          return cs;
+        });
+        return { ...r, clientStones: updatedList };
+      })
     }));
   };
 
@@ -1520,6 +1551,21 @@ export default function QuoteCalculator({
   };
 
   const totals = compileSessionCost();
+
+  const handleSaveAndPrint = async () => {
+    playClickSound('click');
+    if (onSaveQuoteNoReset) {
+      await onSaveQuoteNoReset();
+    } else if (onSaveQuote) {
+      await onSaveQuote();
+    }
+    const targetId = isDesignerMode ? 'quote-cad-specs-box' : 'quote-client-invoice-box';
+    if (isIframe && onTriggerPrint) {
+      onTriggerPrint(() => printElement(targetId));
+    } else {
+      printElement(targetId);
+    }
+  };
 
   const getConsolidatedStones = () => {
     const list: Array<{
@@ -1853,10 +1899,10 @@ export default function QuoteCalculator({
           <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-[#1e293b] to-slate-900 opacity-50"></div>
           <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
             {/* Left Side: Piece Breakdown */}
-            <div className="space-y-3.5 border-r border-slate-700/40 pr-0 md:pr-6 text-left">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">PIECE BREAKDOWN</div>
+            <div className="space-y-3 border-r border-slate-700/40 pr-0 md:pr-6 text-left">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">PIECE BREAKDOWN</div>
               
-              <div className="space-y-2 max-h-64 overflow-y-auto font-mono text-xs">
+              <div className="space-y-1.5 font-mono text-[11px] sm:text-xs">
                 {session.rings.map((r, ri) => {
                   if (!hasRingData(r)) return null;
                   const cost = calculateRingCost(r, settings, spotPrices, 'retail');
@@ -1976,12 +2022,48 @@ export default function QuoteCalculator({
                   );
                 })()}
 
-                {Number(session.scrapCredit) > 0 && (
-                  <div className="flex justify-between items-center text-green-400 font-bold border-t border-slate-800 pt-1.5">
-                    <span>Scrap Buyback Credit</span>
-                    <span>-${Number(session.scrapCredit).toFixed(2)}</span>
+                <div className="flex justify-between items-center text-xs text-green-400 font-mono border-t border-slate-800 pt-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Coins size={12} className="text-amber-400" />
+                    <span className="font-bold text-slate-300">Scrap Credit:</span>
+                    {Number(session.scrapCredit) > 0 ? (
+                      <span className="font-bold text-green-400 font-mono">-${Number(session.scrapCredit).toFixed(2)}</span>
+                    ) : (
+                      <span className="text-[9px] text-slate-500 italic">$0.00</span>
+                    )}
                   </div>
-                )}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playClickSound('click');
+                        setShowScrapLinkModal(true);
+                      }}
+                      className="text-[9px] bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-400/30 font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                      title="Search and link a scrap buyback transaction from the ledger"
+                    >
+                      <Coins size={9} /> Link Scrap Ledger
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLinkLatestScrap}
+                      className="text-[9px] bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 px-1.5 py-0.5 rounded-md transition-all cursor-pointer"
+                      title="Quick-link the most recent scrap buyback"
+                    >
+                      Latest
+                    </button>
+                    {Number(session.scrapCredit) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => onChangeSession(prev => ({ ...prev, scrapCredit: 0 }))}
+                        className="text-[9px] text-red-400 hover:text-white bg-red-950/80 hover:bg-red-900 border border-red-800/60 px-1.5 py-0.5 rounded-md transition-all cursor-pointer"
+                        title="Remove scrap credit"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
 
                 {session.applyTax && (
                   <div className="flex justify-between items-center text-slate-400 font-bold border-t border-slate-800 pt-1.5">
@@ -2097,6 +2179,49 @@ export default function QuoteCalculator({
                         <div key={idx} className="text-[9px] text-slate-400 font-mono pl-3 leading-tight">• {det}</div>
                       ))}
                     </div>
+
+                <div className="flex justify-between items-center text-xs text-emerald-300 font-mono border-t border-[#155e46]/40 pt-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Coins size={12} className="text-emerald-400" />
+                    <span className="font-bold text-emerald-300">Scrap Credit:</span>
+                    {Number(session.scrapCredit) > 0 ? (
+                      <span className="font-bold text-green-400 font-mono">-${Number(session.scrapCredit).toFixed(2)}</span>
+                    ) : (
+                      <span className="text-[9px] text-emerald-400/60 italic">$0.00</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playClickSound('click');
+                        setShowScrapLinkModal(true);
+                      }}
+                      className="text-[9px] bg-emerald-700/80 hover:bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm transition-all cursor-pointer border border-emerald-500/40"
+                      title="Search and link a scrap buyback transaction from the ledger"
+                    >
+                      <Coins size={9} /> Link Scrap Ledger
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLinkLatestScrap}
+                      className="text-[9px] bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 px-1.5 py-0.5 rounded-md transition-all cursor-pointer"
+                      title="Quick-link the most recent scrap buyback"
+                    >
+                      Latest
+                    </button>
+                    {Number(session.scrapCredit) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => onChangeSession(prev => ({ ...prev, scrapCredit: 0 }))}
+                        className="text-[9px] text-red-300 hover:text-white bg-red-950/80 hover:bg-red-900 border border-red-800/60 px-1.5 py-0.5 rounded-md transition-all cursor-pointer"
+                        title="Remove scrap credit"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
                   </>
                 );
               })()}
@@ -2982,11 +3107,6 @@ export default function QuoteCalculator({
                       onChange={(e) => updateActiveRing('cBandThickness', e.target.value)}
                     />
                   </div>
-
-                  <div className="col-span-3 text-[10px] font-mono text-brand-500 flex justify-between pt-1 border-t border-brand-100">
-                    <span>Metal Weight:</span>
-                    <span className="font-bold text-brand-800">Manually adjust grams in Metal Grams field above</span>
-                  </div>
                 </div>
               )}
 
@@ -3300,16 +3420,65 @@ export default function QuoteCalculator({
                   </div>
                 )}
 
-                {/* Save/Commit Action */}
-                <button
-                  type="button"
-                  onClick={onSaveQuote}
-                  className="w-full bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 border border-brand-800 mt-6 cursor-pointer"
-                  title="Save this quote to the cloud ledger and clear the form"
-                >
-                  <Save size={14} className="text-brand-gold shrink-0" />
-                  Save to Ledger
-                </button>
+                {/* Action Buttons: Save to Ledger, Save and Print, Link Scrap Ledger */}
+                <div className="space-y-2.5 mt-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={onSaveQuote}
+                      className="w-full bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-3.5 px-3 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 border border-brand-800 cursor-pointer"
+                      title="Save this quote to the cloud ledger and clear the form"
+                    >
+                      <Save size={14} className="text-brand-gold shrink-0" />
+                      Save to Ledger
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveAndPrint}
+                      className="w-full bg-brand-gold text-brand-950 hover:bg-brand-400 font-black py-3.5 px-3 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 border border-brand-300 cursor-pointer"
+                      title="Save this quote to the ledger and immediately open the print invoice"
+                    >
+                      <Printer size={14} className="text-brand-950 shrink-0" />
+                      Save and Print
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playClickSound('click');
+                        setShowScrapLinkModal(true);
+                      }}
+                      className="flex-1 py-2.5 px-3 bg-slate-100 hover:bg-slate-200/90 border border-slate-300/90 text-slate-800 rounded-2xl text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                      title="Search and link a scrap buyback transaction from the ledger"
+                    >
+                      <Coins size={13} className="text-amber-600 shrink-0" />
+                      Link Scrap Ledger
+                      {Number(session.scrapCredit) > 0 && (
+                        <span className="ml-1 text-emerald-700 font-mono text-[10px] font-bold">(-${Number(session.scrapCredit).toFixed(2)})</span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLinkLatestScrap}
+                      className="py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-2xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs"
+                      title="Quick-link the most recent scrap buyback"
+                    >
+                      Latest
+                    </button>
+                    {Number(session.scrapCredit) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => onChangeSession(prev => ({ ...prev, scrapCredit: 0 }))}
+                        className="py-2.5 px-2.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-2xl text-xs font-bold transition-all cursor-pointer"
+                        title="Remove scrap credit"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -3525,7 +3694,7 @@ export default function QuoteCalculator({
                           <select
                             className="w-full bg-white border border-violet-200/60 p-1.5 rounded text-xs font-bold focus:border-violet-400 focus:ring-1 focus:ring-violet-400"
                             value={f.shape}
-                            onChange={(e) => updateFancy(idx, 'shape', e.target.value)}
+                            onChange={(e) => updateFancy(idx, { shape: e.target.value, sizeIdx: 0 })}
                           >
                             {Object.keys(FANCY_SHAPES).map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
@@ -3534,7 +3703,7 @@ export default function QuoteCalculator({
                           <select
                             className="w-full bg-white border border-violet-200/60 p-1.5 rounded text-xs font-bold focus:border-violet-400 focus:ring-1 focus:ring-violet-400"
                             value={f.sizeIdx}
-                            onChange={(e) => updateFancy(idx, 'sizeIdx', parseInt(e.target.value))}
+                            onChange={(e) => updateFancy(idx, 'sizeIdx', parseInt(e.target.value) || 0)}
                           >
                             {sizes.map((sz, sidx) => (
                               <option key={sidx} value={sidx}>{sz.label} ({sz.carat}ct)</option>
@@ -3613,17 +3782,14 @@ export default function QuoteCalculator({
                             <select
                               className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
                               value={currentShape}
-                              onChange={(e) => {
-                                updateClientStone(idx, 'shape', e.target.value);
-                                updateClientStone(idx, 'sizeIdx', 0);
-                              }}
+                              onChange={(e) => updateClientStone(idx, { shape: e.target.value, sizeIdx: 0 })}
                             >
                               {shapes.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                             <select
                               className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
                               value={currentSizeIdx}
-                              onChange={(e) => updateClientStone(idx, 'sizeIdx', parseInt(e.target.value))}
+                              onChange={(e) => updateClientStone(idx, 'sizeIdx', parseInt(e.target.value) || 0)}
                             >
                               {sizes.map((sz, sidx) => (
                                 <option key={sidx} value={sidx}>{sz.label} ({sz.carat}ct)</option>
@@ -3897,143 +4063,6 @@ export default function QuoteCalculator({
         {/* SUMMARY & TAX CONFIGURATION TAB */}
         {session.activeSubTab === 'summary' && (
           <div className="space-y-6 animate-fadeIn print:bg-white print:p-0">
-            {(() => {
-              const printPiecesCount = session.rings.filter(r => hasRingData(r)).length;
-              const shouldFitOnePage = printPiecesCount <= 2;
-              if (shouldFitOnePage) {
-                return (
-                  <style dangerouslySetInnerHTML={{ __html: `
-                    @media print {
-                      @page {
-                        size: letter portrait !important;
-                        margin: 0.15in !important;
-                      }
-                      body, html, #root {
-                        font-size: 7.5pt !important;
-                        background: #ffffff !important;
-                        color: #000000 !important;
-                        padding: 0 !important;
-                        margin: 0 !important;
-                      }
-                      
-                      /* Grayscale and high-contrast color mappings for printing */
-                      .text-brand-gold, .text-brand-gold-hover, .text-amber-500, .text-amber-600 {
-                        color: #374151 !important;
-                      }
-                      .text-brand-900, .text-brand-950, .text-slate-900, .text-slate-950, .text-slate-800 {
-                        color: #000000 !important;
-                      }
-                      .text-slate-500, .text-slate-600, .text-brand-500, .text-brand-600, .text-slate-400, .text-brand-400 {
-                        color: #4b5563 !important;
-                      }
-                      .text-emerald-700, .text-emerald-800, .text-emerald-900, .text-emerald-600 {
-                        color: #111827 !important;
-                      }
-                      .bg-brand-900, .bg-brand-950, .bg-slate-900, .bg-slate-800 {
-                        background-color: #f3f4f6 !important;
-                        color: #000000 !important;
-                      }
-                      .bg-brand-50, .bg-brand-100, .bg-slate-50, .bg-slate-100, .bg-slate-200 {
-                        background-color: #f9fafb !important;
-                      }
-                      .bg-emerald-50, .bg-emerald-100 {
-                        background-color: #f9fafb !important;
-                      }
-                      .border-brand-100, .border-brand-200, .border-slate-100, .border-slate-200, .border-slate-300 {
-                        border-color: #d1d5db !important;
-                      }
-                      .border, .border-t, .border-b, .border-l, .border-r {
-                        border-color: #d1d5db !important;
-                      }
-                      
-                      /* Drastically tighten padding, margins, and gaps for 1-page fit */
-                      .print\\:p-0 { padding: 0 !important; }
-                      .print\\:p-1 { padding: 1px !important; }
-                      .print\\:p-1\\.5 { padding: 2px !important; }
-                      .print\\:p-2 { padding: 3px !important; }
-                      .print\\:p-2\\.5 { padding: 3px !important; }
-                      .print\\:p-3 { padding: 4px !important; }
-                      .print\\:p-4 { padding: 5px !important; }
-                      .print\\:p-5 { padding: 5px !important; }
-                      .print\\:p-6 { padding: 5px !important; }
-                      .print\\:p-8 { padding: 0 !important; }
-                      
-                      .print\\:pt-1 { padding-top: 1px !important; }
-                      .print\\:pt-2 { padding-top: 2px !important; }
-                      .print\\:pt-3 { padding-top: 3px !important; }
-                      .print\\:pt-6 { padding-top: 4px !important; }
-                      
-                      .print\\:pb-1 { padding-bottom: 1px !important; }
-                      .print\\:pb-1\\.5 { padding-bottom: 2px !important; }
-                      .print\\:pb-2 { padding-bottom: 2px !important; }
-                      .print\\:pb-2\\.5 { padding-bottom: 2px !important; }
-                      .print\\:pb-3 { padding-bottom: 3px !important; }
-                      .print\\:pb-6 { padding-bottom: 4px !important; }
-                      
-                      .print\\:space-y-1 { margin-top: 1px !important; }
-                      .print\\:space-y-1\\.5 { margin-top: 2px !important; }
-                      .print\\:space-y-2 { margin-top: 2px !important; }
-                      .print\\:space-y-3 { margin-top: 3px !important; }
-                      .print\\:space-y-4 { margin-top: 4px !important; }
-                      .print\\:space-y-5 { margin-top: 4px !important; }
-                      .print\\:space-y-8 { margin-top: 5px !important; }
-                      
-                      .print\\:gap-1\\.5 { gap: 2px !important; }
-                      .print\\:gap-2 { gap: 3px !important; }
-                      .print\\:gap-3 { gap: 3px !important; }
-                      .print\\:gap-4 { gap: 4px !important; }
-                      
-                      .print\\:rounded-none { border-radius: 0 !important; }
-                      .print\\:rounded-lg { border-radius: 4px !important; }
-                      .print\\:rounded-xl { border-radius: 6px !important; }
-                      
-                      /* Tighter grid spacing and margins */
-                      .grid { gap: 4px !important; }
-                      .space-y-6 > * + * { margin-top: 3px !important; }
-                      .space-y-4 > * + * { margin-top: 2px !important; }
-                      .space-y-3 > * + * { margin-top: 2px !important; }
-                      .space-y-2 > * + * { margin-top: 1px !important; }
-                      .space-y-5 > * + * { margin-top: 3px !important; }
-                      
-                      /* Scales for images inside specs & references */
-                      .print\\:h-12 { height: 1.5rem !important; }
-                      .print\\:h-16 { height: 1.8rem !important; }
-                      .print\\:h-20 { height: 2.2rem !important; }
-                      .print\\:h-28 { height: 3.2rem !important; }
-                      .print\\:h-44 { height: 4.2rem !important; }
-                      
-                      /* Make text and layout extremely condensed */
-                      h1 { font-size: 12pt !important; margin: 0 !important; }
-                      h2 { font-size: 10pt !important; margin: 0 !important; }
-                      h3 { font-size: 8pt !important; margin: 0 !important; padding-top: 1px !important; }
-                      h4 { font-size: 7.5pt !important; margin: 0 !important; }
-                      p, span, li, td, th { font-size: 7pt !important; line-height: 1.15 !important; }
-                      
-                      th, td {
-                        padding: 2px 4px !important;
-                      }
-                      
-                      /* Border/divider margins */
-                      .border-t {
-                        margin-top: 3px !important;
-                        padding-top: 3px !important;
-                      }
-                      
-                      /* Reduce signature block height */
-                      .print\\:w-32 { width: 5.5rem !important; }
-                      .print\\:h-8 { height: 1.2rem !important; }
-                      .print\\:h-10 { height: 1.5rem !important; }
-                      
-                      /* Prevent page breaks inside container blocks */
-                      .page-break-inside-avoid {
-                        page-break-inside: avoid !important;
-                      }
-                    }
-                  ` }} />
-                );
-              }
-              return null;
-            })()}
             {/* Print Mode Selector Bar */}
             <div className="bg-white p-4 rounded-2xl border border-brand-200 shadow-sm flex flex-wrap gap-4 items-center justify-between print:hidden">
               <div>
@@ -4417,48 +4446,48 @@ export default function QuoteCalculator({
 
                 {/* Consolidated Stones & Gemstones Manifest */}
                 {consolidatedStones.length > 0 && (
-                  <div className="space-y-4 print:space-y-2 border-t border-slate-200 pt-6 print:pt-3">
-                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest pl-1 flex items-center gap-2 print:text-[9px]">
+                  <div className="space-y-1 print:space-y-0.5 border-t border-slate-200 pt-2 print:pt-1">
+                    <h3 className="text-[7.5px] font-black text-slate-800 uppercase tracking-widest pl-1 flex items-center gap-1.5 print:text-[5.5px]">
                       <span>🛠️ Consolidated Manufacturing Stones & Procurement Manifest</span>
-                      <span className="text-[9px] font-black uppercase text-slate-400 font-mono tracking-normal print:text-[7.5px]">
+                      <span className="text-[6.5px] font-black uppercase text-slate-400 font-mono tracking-normal print:text-[5px]">
                         ({consolidatedStones.reduce((acc, s) => acc + s.qty, 0)} stones total)
                       </span>
                     </h3>
-                    <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm print:rounded-xl">
-                      <table className="w-full text-left border-collapse text-xs print:text-[10px]">
+                    <div className="border border-slate-200 rounded-lg overflow-hidden shadow-xs print:rounded-md max-w-full">
+                      <table className="w-full text-left border-collapse text-[7px] print:text-[5px] leading-tight">
                         <thead>
-                          <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 uppercase text-[9px] tracking-wider font-black">
-                            <th className="p-2.5 pl-4 print:p-1.5 print:pl-3">Procurement Source</th>
-                            <th className="p-2.5 print:p-1.5">Stone Type</th>
-                            <th className="p-2.5 print:p-1.5">Shape/Cut</th>
-                            <th className="p-2.5 print:p-1.5">Size/Dimension</th>
-                            <th className="p-2.5 print:p-1.5 text-center">Qty</th>
-                            <th className="p-2.5 print:p-1.5">Total Weight</th>
-                            <th className="p-2.5 pr-4 text-right print:p-1.5 print:pr-3">Used in Pieces</th>
+                          <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 uppercase text-[6px] tracking-wider font-black print:text-[4.8px]">
+                            <th className="py-0.5 px-1 pl-1.5 print:py-0.2 print:px-0.5 print:pl-1">Procurement Source</th>
+                            <th className="py-0.5 px-1 print:py-0.2 print:px-0.5">Stone Type</th>
+                            <th className="py-0.5 px-1 print:py-0.2 print:px-0.5">Shape/Cut</th>
+                            <th className="py-0.5 px-1 print:py-0.2 print:px-0.5">Size/Dimension</th>
+                            <th className="py-0.5 px-1 print:py-0.2 print:px-0.5 text-center">Qty</th>
+                            <th className="py-0.5 px-1 print:py-0.2 print:px-0.5">Total Weight</th>
+                            <th className="py-0.5 px-1 pr-1.5 text-right print:py-0.2 print:px-0.5 print:pr-1">Used in Pieces</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {consolidatedStones.map((stone, sIdx) => (
                             <tr key={sIdx} className={`${stone.source === 'customer' ? 'bg-amber-50/10' : 'hover:bg-slate-50/20'} transition-colors`}>
-                              <td className="p-2.5 pl-4 print:p-1.5 print:pl-3 font-medium">
+                              <td className="py-0.5 px-1 pl-1.5 print:py-0.2 print:px-0.5 print:pl-1 font-medium">
                                 {stone.source === 'customer' ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full print:text-[8px] print:px-1.5">
+                                  <span className="inline-flex items-center gap-0.5 text-[6px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-1 py-0 rounded-full print:text-[4.5px] print:px-0.5">
                                     ⚠️ Client Supplied
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full print:text-[8px] print:px-1.5">
+                                  <span className="inline-flex items-center gap-0.5 text-[6px] font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-1 py-0 rounded-full print:text-[4.5px] print:px-0.5">
                                     🏢 Stock Supplied
                                   </span>
                                 )}
                               </td>
-                              <td className="p-2.5 print:p-1.5 font-bold text-slate-900">{stone.category}</td>
-                              <td className="p-2.5 print:p-1.5 font-semibold text-slate-700">{stone.shape}</td>
-                              <td className="p-2.5 print:p-1.5 font-mono text-slate-600">{stone.sizeLabel}</td>
-                              <td className="p-2.5 print:p-1.5 text-center font-bold font-mono text-slate-950">{stone.qty} pcs</td>
-                              <td className="p-2.5 print:p-1.5 font-bold font-mono text-slate-900">
+                              <td className="py-0.5 px-1 print:py-0.2 print:px-0.5 font-bold text-slate-900">{stone.category}</td>
+                              <td className="py-0.5 px-1 print:py-0.2 print:px-0.5 font-semibold text-slate-700">{stone.shape}</td>
+                              <td className="py-0.5 px-1 print:py-0.2 print:px-0.5 font-mono text-slate-600">{stone.sizeLabel}</td>
+                              <td className="py-0.5 px-1 print:py-0.2 print:px-0.5 text-center font-bold font-mono text-slate-950">{stone.qty} pcs</td>
+                              <td className="py-0.5 px-1 print:py-0.2 print:px-0.5 font-bold font-mono text-slate-900">
                                 {stone.totalCarats > 0 ? `${stone.totalCarats.toFixed(2)} ctw` : '--'}
                               </td>
-                              <td className="p-2.5 pr-4 text-right font-bold text-slate-600 print:p-1.5 print:pr-3">
+                              <td className="py-0.5 px-1 pr-1.5 text-right font-bold text-slate-600 print:py-0.2 print:px-0.5 print:pr-1">
                                 {stone.pieces.map(p => `#${p}`).join(', ')}
                               </td>
                             </tr>
@@ -4501,47 +4530,57 @@ export default function QuoteCalculator({
             </div>
 
             {/* Quick Action Buttons Row */}
-            <div className="flex flex-wrap gap-3 items-center justify-center p-2 print:hidden">
-              <button
-                type="button"
-                onClick={() => setShowScrapLinkModal(true)}
-                className="bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-800 font-bold py-3 px-6 rounded-2xl text-xs uppercase tracking-wider shadow-sm transition-all flex items-center gap-2 cursor-pointer"
-              >
-                <Calculator size={14} className="text-brand-gold" />
-                Link Ledger Scrap Credit
-              </button>
+            <div className="flex flex-wrap gap-3 items-center justify-center p-4 bg-white rounded-3xl border border-brand-100 shadow-md print:hidden">
               <button
                 type="button"
                 onClick={onSaveQuote}
-                className="bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-4 px-8 rounded-2xl shadow-lg transition-all text-xs uppercase tracking-widest flex items-center gap-2 border border-brand-800 cursor-pointer"
+                className="bg-brand-900 text-brand-gold hover:bg-brand-950 font-black py-3.5 px-6 rounded-2xl shadow-lg transition-all text-xs uppercase tracking-widest flex items-center gap-2 border border-brand-800 cursor-pointer"
                 title="Save quote to the cloud ledger and clear the form"
               >
-                <Save size={14} className="text-brand-gold" />
+                <Save size={15} className="text-brand-gold shrink-0" />
                 Save to Ledger
               </button>
               <button
                 type="button"
-                onClick={async () => {
-                  if (onSaveQuoteNoReset) {
-                    await onSaveQuoteNoReset();
-                  }
-                  const targetId = isDesignerMode ? 'quote-cad-specs-box' : 'quote-client-invoice-box';
-                  if (isIframe && onTriggerPrint) {
-                    onTriggerPrint(() => printElement(targetId));
-                  } else {
-                    printElement(targetId);
-                  }
-                }}
-                className="bg-brand-100 text-brand-900 hover:bg-brand-200 font-bold py-3 px-6 rounded-2xl text-xs uppercase tracking-wider shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+                onClick={handleSaveAndPrint}
+                className="bg-brand-gold text-brand-950 hover:bg-brand-400 font-black py-3.5 px-6 rounded-2xl shadow-lg transition-all text-xs uppercase tracking-widest flex items-center gap-2 border border-brand-300 cursor-pointer"
+                title="Save quote to the ledger and immediately open print/PDF invoice"
               >
-                <FileText size={14} className="text-brand-gold" />
-                Save & Print PDF
+                <Printer size={15} className="text-brand-950 shrink-0" />
+                Save and Print
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound('click');
+                  setShowScrapLinkModal(true);
+                }}
+                className="bg-slate-100 hover:bg-slate-200/90 border border-slate-300 text-slate-800 font-bold py-3.5 px-6 rounded-2xl text-xs uppercase tracking-wider shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+                title="Search and link a scrap buyback transaction from the ledger"
+              >
+                <Coins size={15} className="text-amber-600 shrink-0" />
+                Link Scrap Ledger
+                {Number(session.scrapCredit) > 0 && (
+                  <span className="text-emerald-700 font-mono text-[10px] font-bold">(-${Number(session.scrapCredit).toFixed(2)})</span>
+                )}
               </button>
             </div>
           </div>
         )}
 
-
+      {/* Offscreen print invoice container so Save & Print works seamlessly from any piece tab */}
+      {session.activeSubTab !== 'summary' && (
+        <div className="hidden" aria-hidden="true">
+          <ClientInvoicePrint
+            session={session}
+            settings={settings}
+            spotPrices={spotPrices}
+            isWholesale={isWholesale}
+            containerId="quote-client-invoice-box"
+            isInteractive={false}
+          />
+        </div>
+      )}
 
       {/* SCRAP CREDIT LINKING MODAL */}
       {showScrapLinkModal && (

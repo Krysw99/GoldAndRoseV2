@@ -298,8 +298,8 @@ export default function ScrapCalculator({
       const sourceWidth = (cropState.w / 100) * img.naturalWidth;
       const sourceHeight = (cropState.h / 100) * img.naturalHeight;
 
-      // Output optimized for storage: cap maximum dimension at 600px
-      const maxOutputDim = 600;
+      // Output optimized for crisp detail and fast storage: cap maximum dimension at 1600px
+      const maxOutputDim = 1600;
       let targetWidth = sourceWidth;
       let targetHeight = sourceHeight;
       
@@ -319,7 +319,7 @@ export default function ScrapCalculator({
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'medium';
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(
           img,
           sourceX,
@@ -332,8 +332,8 @@ export default function ScrapCalculator({
           targetHeight
         );
         
-        // Output as highly optimized JPEG at 0.6 quality to keep within storage caps
-        const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        // Output as high quality JPEG at 0.88 quality
+        const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
         setScrapImage(croppedDataUrl);
         setIsCropModalOpen(false);
       }
@@ -573,8 +573,8 @@ export default function ScrapCalculator({
 
             {/* Scan Gold Button */}
             <div className="flex items-center gap-2">
-              <label className="cursor-pointer text-xs bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-brand-950 px-4 py-2 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-sm">
-                <Camera size={14} className="text-brand-950" />
+              <label className="cursor-pointer text-xs bg-amber-100/90 hover:bg-amber-200/90 active:bg-amber-300 text-amber-950 border border-amber-300/80 px-4 py-2 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-xs">
+                <Camera size={14} className="text-amber-700" />
                 {goldImage ? 'Retake Gold' : 'Scan Gold'}
                 <input
                   type="file"
@@ -610,7 +610,7 @@ export default function ScrapCalculator({
                       setGoldEditorSrc(goldImage);
                       setIsGoldEditorOpen(true);
                     }}
-                    className="absolute bottom-0.5 left-0.5 right-0.5 bg-amber-400 text-brand-950 font-bold rounded text-[8px] hover:bg-amber-300 py-0.5 text-center shadow border border-amber-300"
+                    className="absolute bottom-0.5 left-0.5 right-0.5 bg-amber-700/90 text-white font-bold rounded text-[8px] hover:bg-amber-800 py-0.5 text-center shadow border border-amber-600"
                     title="Edit / Crop gold photo"
                   >
                     EDIT

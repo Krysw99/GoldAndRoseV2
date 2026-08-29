@@ -1,6 +1,6 @@
 import React from 'react';
 import { QuoteSession, AppSettings } from '../types';
-import { calculateRingCost, hasRingData } from '../utils';
+import { calculateRingCost, hasRingData, getTennisEstimates } from '../utils';
 import { FANCY_SHAPES, ROUND_MELEE } from '../constants';
 import { Edit3 } from 'lucide-react';
 
@@ -301,81 +301,121 @@ export default function ClientInvoicePrint({
         fabLaborDetails.push(`${ringLabel}: ${g.toFixed(2)}g x $${Number(w.laborPerGram).toFixed(2)}/g`);
       }
 
-      let mQ = 0;
-      let mC = 0;
-      let mCarats = 0;
-      (r.melee || []).forEach(m => {
-        const q = Number(m.qty) || 0;
-        if (q <= 0) return;
-        const rate = Number(w.meleeRates?.[m.size] ?? 400);
-        mQ += q;
-        const carats = q * Number(m.carat);
-        mCarats += carats;
-        mC += carats * rate;
-        stoneSupplyDetails.push(`${ringLabel}: Melee ${m.size}mm (${carats.toFixed(2)}ct) @ $${rate.toFixed(2)}/ct`);
-      });
-      if (mQ > 0) {
-        settingLabor += mQ * Number(w.settingMelee);
-        settingLaborDetails.push(`${ringLabel}: ${mQ}x Melee setting x $${Number(w.settingMelee).toFixed(2)}`);
-        stoneSupplyCost += mC;
-      }
-
-      let fQ = 0;
-      let fC = 0;
-      let fCarats = 0;
-      (r.fancy || []).forEach(f => {
-        const q = Number(f.qty) || 0;
-        if (q <= 0) return;
-        const aF = FANCY_SHAPES[f.shape] || [];
-        const fd = aF[f.sizeIdx] || { carat: 0, label: '' };
-        const key = fd.label ? `${f.shape}-${fd.label}` : '';
-        const rate = Number((key && w.fancyRates?.[key]) ?? w.fancyRates?.[f.shape] ?? 500);
-        fQ += q;
-        const carats = q * Number(fd.carat || 0);
-        fCarats += carats;
-        fC += carats * rate;
-        stoneSupplyDetails.push(`${ringLabel}: Fancy ${f.shape} ${fd.label} (${carats.toFixed(2)}ct) @ $${rate.toFixed(2)}/ct`);
-      });
-      if (fQ > 0) {
-        settingLabor += fQ * Number(w.settingFancy);
-        settingLaborDetails.push(`${ringLabel}: ${fQ}x Fancy setting x $${Number(w.settingFancy).toFixed(2)}`);
-        stoneSupplyCost += fC;
-      }
-
-      if (r.centerStones && r.centerStones.length > 0) {
-        r.centerStones.forEach((cs, csIdx) => {
-          if (!cs.carats) return;
-          const cCt = parseFloat(cs.carats) || 0;
-          if (cCt > 0) {
-            settingLabor += Number(w.settingCenter);
-            settingLaborDetails.push(`${ringLabel}: Center #${csIdx + 1} setting fee x $${Number(w.settingCenter).toFixed(2)}`);
-            const rate = settings.centerStoneRates?.[cs.type]?.[cs.origin] ?? 1000;
-            stoneSupplyCost += cCt * rate;
-            stoneSupplyDetails.push(`${ringLabel}: Center #${csIdx + 1} ${cs.carats}ct ${cs.shape} ${cs.type} (${cs.origin}) @ $${rate.toFixed(2)}/ct`);
-          }
-        });
+      if (r.category === 'tennisBracelet') {
+        const est = getTennisEstimates(r);
+        const fs = Number(r.tbManualStones) || est.estStones;
+        const fc = Number(r.tbManualCarats) || (fs * est.caratPerStone);
+        const ppc = r.tbShape === 'Round' 
+          ? (w.meleeRates?.[r.tbSizeRound || '2.0'] ?? settings.rawCostRates?.melee ?? 350) 
+          : (w.fancyRates?.[r.tbShape || 'Princess'] ?? settings.rawCostRates?.fancy ?? 450);
+        const settingFee = r.tbShape === 'Round'
+          ? Number(w.settingMelee || 5)
+          : Number(w.settingFancy || 8);
+        if (r.stoneSource !== 'customer') {
+          settingLabor += fs * settingFee;
+          settingLaborDetails.push(`${ringLabel}: ${fs}x Tennis setting x $${settingFee.toFixed(2)}`);
+          stoneSupplyCost += fc * ppc;
+          stoneSupplyDetails.push(`${ringLabel}: Tennis ${r.tbShape} stones (${fc.toFixed(2)}ct) @ $${ppc.toFixed(2)}/ct`);
+        }
       } else {
-        if (r.centerStone?.carats) {
-          const cCt = parseFloat(r.centerStone.carats) || 0;
-          if (cCt > 0) {
-            settingLabor += Number(w.settingCenter);
-            settingLaborDetails.push(`${ringLabel}: Center stone setting fee x $${Number(w.settingCenter).toFixed(2)}`);
-            const rate = settings.centerStoneRates?.[r.centerStone.type]?.[r.centerStone.origin] ?? 1000;
-            stoneSupplyCost += cCt * rate;
-            stoneSupplyDetails.push(`${ringLabel}: Center ${r.centerStone.carats}ct ${r.centerStone.shape} ${r.centerStone.type} (${r.centerStone.origin}) @ $${rate.toFixed(2)}/ct`);
-          }
+        let mQ = 0;
+        let mC = 0;
+        let mCarats = 0;
+        (r.melee || []).forEach(m => {
+          const q = Number(m.qty) || 0;
+          if (q <= 0) return;
+          const rate = Number(w.meleeRates?.[m.size] ?? 400);
+          mQ += q;
+          const carats = q * Number(m.carat);
+          mCarats += carats;
+          mC += carats * rate;
+          stoneSupplyDetails.push(`${ringLabel}: Melee ${m.size}mm (${carats.toFixed(2)}ct) @ $${rate.toFixed(2)}/ct`);
+        });
+        if (mQ > 0) {
+          settingLabor += mQ * Number(w.settingMelee);
+          settingLaborDetails.push(`${ringLabel}: ${mQ}x Melee setting x $${Number(w.settingMelee).toFixed(2)}`);
+          stoneSupplyCost += mC;
         }
-        if (r.centerStone2?.carats) {
-          const cCt = parseFloat(r.centerStone2.carats) || 0;
-          if (cCt > 0) {
-            settingLabor += Number(w.settingCenter);
-            settingLaborDetails.push(`${ringLabel}: Center #2 setting fee x $${Number(w.settingCenter).toFixed(2)}`);
-            const rate = settings.centerStoneRates?.[r.centerStone2.type]?.[r.centerStone2.origin] ?? 1000;
-            stoneSupplyCost += cCt * rate;
-            stoneSupplyDetails.push(`${ringLabel}: Center #2 ${r.centerStone2.carats}ct ${r.centerStone2.shape} ${r.centerStone2.type} (${r.centerStone2.origin}) @ $${rate.toFixed(2)}/ct`);
+
+        let fQ = 0;
+        let fC = 0;
+        let fCarats = 0;
+        (r.fancy || []).forEach(f => {
+          const q = Number(f.qty) || 0;
+          if (q <= 0) return;
+          const aF = FANCY_SHAPES[f.shape] || [];
+          const fd = aF[f.sizeIdx] || { carat: 0, label: '' };
+          const key = fd.label ? `${f.shape}-${fd.label}` : '';
+          const rate = Number((key && w.fancyRates?.[key]) ?? w.fancyRates?.[f.shape] ?? 500);
+          fQ += q;
+          const carats = q * Number(fd.carat || 0);
+          fCarats += carats;
+          fC += carats * rate;
+          stoneSupplyDetails.push(`${ringLabel}: Fancy ${f.shape} ${fd.label} (${carats.toFixed(2)}ct) @ $${rate.toFixed(2)}/ct`);
+        });
+        if (fQ > 0) {
+          settingLabor += fQ * Number(w.settingFancy);
+          settingLaborDetails.push(`${ringLabel}: ${fQ}x Fancy setting x $${Number(w.settingFancy).toFixed(2)}`);
+          stoneSupplyCost += fC;
+        }
+
+        if (r.centerStones && r.centerStones.length > 0) {
+          r.centerStones.forEach((cs, csIdx) => {
+            if (!cs.carats) return;
+            const cCt = parseFloat(cs.carats) || 0;
+            if (cCt > 0) {
+              settingLabor += Number(w.settingCenter);
+              settingLaborDetails.push(`${ringLabel}: Center #${csIdx + 1} setting fee x $${Number(w.settingCenter).toFixed(2)}`);
+              if (r.stoneSource !== 'customer') {
+                const rate = settings.centerStoneRates?.[cs.type]?.[cs.origin] ?? 1000;
+                stoneSupplyCost += cCt * rate;
+                stoneSupplyDetails.push(`${ringLabel}: Center #${csIdx + 1} ${cs.carats}ct ${cs.shape} ${cs.type} (${cs.origin}) @ $${rate.toFixed(2)}/ct`);
+              }
+            }
+          });
+        } else {
+          if (r.centerStone?.carats) {
+            const cCt = parseFloat(r.centerStone.carats) || 0;
+            if (cCt > 0) {
+              settingLabor += Number(w.settingCenter);
+              settingLaborDetails.push(`${ringLabel}: Center stone setting fee x $${Number(w.settingCenter).toFixed(2)}`);
+              if (r.stoneSource !== 'customer') {
+                const rate = settings.centerStoneRates?.[r.centerStone.type]?.[r.centerStone.origin] ?? 1000;
+                stoneSupplyCost += cCt * rate;
+                stoneSupplyDetails.push(`${ringLabel}: Center ${r.centerStone.carats}ct ${r.centerStone.shape} ${r.centerStone.type} (${r.centerStone.origin}) @ $${rate.toFixed(2)}/ct`);
+              }
+            }
+          }
+          if (r.centerStone2?.carats) {
+            const cCt = parseFloat(r.centerStone2.carats) || 0;
+            if (cCt > 0) {
+              settingLabor += Number(w.settingCenter);
+              settingLaborDetails.push(`${ringLabel}: Center #2 setting fee x $${Number(w.settingCenter).toFixed(2)}`);
+              if (r.stoneSource !== 'customer') {
+                const rate = settings.centerStoneRates?.[r.centerStone2.type]?.[r.centerStone2.origin] ?? 1000;
+                stoneSupplyCost += cCt * rate;
+                stoneSupplyDetails.push(`${ringLabel}: Center #2 ${r.centerStone2.carats}ct ${r.centerStone2.shape} ${r.centerStone2.type} (${r.centerStone2.origin}) @ $${rate.toFixed(2)}/ct`);
+              }
+            }
           }
         }
       }
+
+      // Client stones setting labor
+      (r.clientStones || []).forEach(cs => {
+        const q = Number(cs.qty) || 0;
+        if (q <= 0) return;
+        if (cs.type === 'Center') {
+          settingLabor += q * Number(w.settingCenter);
+          settingLaborDetails.push(`${ringLabel}: Client Center stone setting fee (${q}x) @ $${Number(w.settingCenter).toFixed(2)}`);
+        } else if (cs.type === 'Fancy') {
+          settingLabor += q * Number(w.settingFancy);
+          settingLaborDetails.push(`${ringLabel}: Client Fancy stone setting fee (${q}x) @ $${Number(w.settingFancy).toFixed(2)}`);
+        } else {
+          settingLabor += q * Number(w.settingMelee);
+          settingLaborDetails.push(`${ringLabel}: Client Melee stone setting fee (${q}x) @ $${Number(w.settingMelee).toFixed(2)}`);
+        }
+      });
 
       if (r.applyDesignFee) {
         const cadFeeVal = Number((w as any).cadFee ?? w.designFee);
@@ -587,48 +627,48 @@ export default function ClientInvoicePrint({
 
       {/* Consolidated Stones Manifest */}
       {consolidatedStones.length > 0 && (
-        <div className="space-y-3 print:space-y-1.5 border-t border-brand-100 pt-5 print:pt-2.5">
-          <h3 className="text-[11px] font-black text-brand-900 uppercase tracking-widest pl-1 flex items-center gap-2 print:text-[8px]">
+        <div className="space-y-1 print:space-y-0.5 border-t border-brand-100 pt-2 print:pt-1">
+          <h3 className="text-[7.5px] font-black text-brand-900 uppercase tracking-wider pl-1 flex items-center gap-1.5 print:text-[5.5px]">
             <span>💎 Consolidated Manufacturing Stones & Procurement Manifest</span>
-            <span className="text-[8.5px] font-black uppercase text-brand-500 font-mono tracking-normal print:text-[7px]">
+            <span className="text-[6.5px] font-black uppercase text-brand-500 font-mono tracking-normal print:text-[5px]">
               ({consolidatedStones.reduce((acc, s) => acc + s.qty, 0)} stones total)
             </span>
           </h3>
-          <div className="border border-brand-200 rounded-2xl overflow-hidden shadow-sm print:rounded-xl">
-            <table className="w-full text-left border-collapse text-[10.5px] print:text-[8.5px]">
+          <div className="border border-brand-200 rounded-lg overflow-hidden shadow-xs print:rounded-md max-w-full">
+            <table className="w-full text-left border-collapse text-[7px] print:text-[5px] leading-tight">
               <thead>
-                <tr className="bg-brand-900 text-brand-gold border-b border-brand-800 uppercase text-[8px] tracking-wider font-black print:text-[7px]">
-                  <th className="p-2 pl-3 print:p-1 print:pl-2">Procurement Source</th>
-                  <th className="p-2 print:p-1">Stone Type</th>
-                  <th className="p-2 print:p-1">Shape/Cut</th>
-                  <th className="p-2 print:p-1">Size/Dimension</th>
-                  <th className="p-2 print:p-1 text-center">Qty</th>
-                  <th className="p-2 print:p-1">Total Weight</th>
-                  <th className="p-2 pr-3 text-right print:p-1 print:pr-2">Used in Pieces</th>
+                <tr className="bg-brand-900 text-brand-gold border-b border-brand-800 uppercase text-[6px] tracking-wider font-black print:text-[4.8px]">
+                  <th className="py-0.5 px-1 pl-1.5 print:py-0.2 print:px-0.5 print:pl-1">Procurement Source</th>
+                  <th className="py-0.5 px-1 print:py-0.2 print:px-0.5">Stone Type</th>
+                  <th className="py-0.5 px-1 print:py-0.2 print:px-0.5">Shape/Cut</th>
+                  <th className="py-0.5 px-1 print:py-0.2 print:px-0.5">Size/Dimension</th>
+                  <th className="py-0.5 px-1 print:py-0.2 print:px-0.5 text-center">Qty</th>
+                  <th className="py-0.5 px-1 print:py-0.2 print:px-0.5">Total Weight</th>
+                  <th className="py-0.5 px-1 pr-1.5 text-right print:py-0.2 print:px-0.5 print:pr-1">Used in Pieces</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-brand-100">
                 {consolidatedStones.map((stone, sIdx) => (
                   <tr key={sIdx} className={`${stone.source === 'customer' ? 'bg-amber-50/20' : 'hover:bg-brand-50/30'} transition-colors`}>
-                    <td className="p-2 pl-3 print:p-1 print:pl-2 font-medium">
+                    <td className="py-0.5 px-1 pl-1.5 print:py-0.2 print:px-0.5 print:pl-1 font-medium">
                       {stone.source === 'customer' ? (
-                        <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full print:text-[7px] print:px-1 print:py-0">
+                        <span className="inline-flex items-center gap-0.5 text-[6px] font-black text-amber-800 bg-amber-50 border border-amber-200 px-1 py-0 rounded-full print:text-[4.5px] print:px-0.5">
                           ⚠️ Client Supplied
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full print:text-[7px] print:px-1 print:py-0">
+                        <span className="inline-flex items-center gap-0.5 text-[6px] font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-1 py-0 rounded-full print:text-[4.5px] print:px-0.5">
                           🏢 Stock Supplied
                         </span>
                       )}
                     </td>
-                    <td className="p-2 print:p-1 font-bold text-brand-900">{stone.category}</td>
-                    <td className="p-2 print:p-1 font-semibold text-brand-800">{stone.shape}</td>
-                    <td className="p-2 print:p-1 font-mono text-brand-600">{stone.sizeLabel}</td>
-                    <td className="p-2 print:p-1 text-center font-bold font-mono text-brand-950">{stone.qty} pcs</td>
-                    <td className="p-2 print:p-1 font-bold font-mono text-brand-900">
+                    <td className="py-0.5 px-1 print:py-0.2 print:px-0.5 font-bold text-brand-900">{stone.category}</td>
+                    <td className="py-0.5 px-1 print:py-0.2 print:px-0.5 font-semibold text-brand-800">{stone.shape}</td>
+                    <td className="py-0.5 px-1 print:py-0.2 print:px-0.5 font-mono text-brand-600">{stone.sizeLabel}</td>
+                    <td className="py-0.5 px-1 print:py-0.2 print:px-0.5 text-center font-bold font-mono text-brand-950">{stone.qty} pcs</td>
+                    <td className="py-0.5 px-1 print:py-0.2 print:px-0.5 font-bold font-mono text-brand-900">
                       {stone.totalCarats > 0 ? `${stone.totalCarats.toFixed(2)} ctw` : '--'}
                     </td>
-                    <td className="p-2 pr-3 text-right font-bold text-brand-600 print:p-1 print:pr-2">
+                    <td className="py-0.5 px-1 pr-1.5 text-right font-bold text-brand-600 print:py-0.2 print:px-0.5 print:pr-1">
                       {stone.pieces.map(p => `#${p}`).join(', ')}
                     </td>
                   </tr>

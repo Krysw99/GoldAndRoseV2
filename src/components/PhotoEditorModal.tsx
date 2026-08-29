@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
-  Crop, PenTool, Highlighter, ArrowRight, Circle, Square, 
+  Crop, PenTool, ArrowRight, Circle, Square, 
   Type, Eraser, RotateCw, RotateCcw, FlipHorizontal, FlipVertical,
   Check, X, Undo, Redo, ZoomIn, ZoomOut, Maximize2, RefreshCw, 
   Trash2, Move, Eye, Sparkles, Camera
@@ -22,7 +22,7 @@ interface PhotoEditorModalProps {
 }
 
 type EditorMode = 'crop' | 'draw';
-type DrawTool = 'pen' | 'highlighter' | 'arrow' | 'line' | 'circle' | 'rect' | 'text' | 'eraser';
+type DrawTool = 'pen' | 'arrow' | 'line' | 'circle' | 'rect' | 'text' | 'eraser';
 type AspectRatio = 'free' | '1:1' | '4:3' | '3:4' | '16:9' | '9:16';
 
 interface Point {
@@ -72,7 +72,7 @@ export default function PhotoEditorModal({
   const [flipH, setFlipH] = useState<boolean>(false);
   const [flipV, setFlipV] = useState<boolean>(false);
 
-  // Canvases
+  // Canvases & Containers
   const containerRef = useRef<HTMLDivElement | null>(null);
   const drawingCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -84,6 +84,11 @@ export default function PhotoEditorModal({
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
   const [startPoint, setStartPoint] = useState<Point | null>(null);
   const [currentPoint, setCurrentPoint] = useState<Point | null>(null);
+
+  // Smooth drawing point trackers
+  const lastPosRef = useRef<Point | null>(null);
+  const midPosRef = useRef<Point | null>(null);
+  const pointsRef = useRef<Point[]>([]);
 
   // Undo / Redo History (stores ImageData of drawing layer)
   const [history, setHistory] = useState<ImageData[]>([]);
@@ -114,7 +119,7 @@ export default function PhotoEditorModal({
       setFlipV(false);
       setZoom(1);
 
-      // Initialize crop rect with 10% inset
+      // Initialize crop rect with 5% inset
       setCropRect({
         x: Math.round(img.width * 0.05),
         y: Math.round(img.height * 0.05),
@@ -122,7 +127,7 @@ export default function PhotoEditorModal({
         h: Math.round(img.height * 0.9),
       });
 
-      // Prepare drawing canvas
+      // Prepare drawing canvas with high resolution backing
       const canvas = drawingCanvasRef.current;
       if (canvas) {
         canvas.width = img.width;
@@ -130,6 +135,10 @@ export default function PhotoEditorModal({
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
           const initialSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
           setHistory([initialSnapshot]);
           setHistoryIdx(0);
@@ -138,6 +147,134 @@ export default function PhotoEditorModal({
     };
     img.src = imageSrc;
   }, [imageSrc]);
+
+  // Window-level crop drag handler for seamless panning and resizing without dropping capture
+  useEffect(() => {
+    if (!cropDragMode || !cropDragStart || !loadedImg || !drawingCanvasRef.current) return;
+
+    const onPointerMove = (e: PointerEvent) => {
+      e.preventDefault();
+      const canvas = drawingCanvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      const dx = (e.clientX - cropDragStart.x) * scaleX;
+      const dy = (e.clientY - cropDragStart.y) * scaleY;
+
+      const orig = cropDragStart.rect;
+      const maxW = canvas.width;
+      const maxH = canvas.height;
+
+      let targetRatio = 0;
+      if (aspectRatio === '1:1') targetRatio = 1;
+      else if (aspectRatio === '4:3') targetRatio = 4 / 3;
+      else if (aspectRatio === '3:4') targetRatio = 3 / 4;
+      else if (aspectRatio === '16:9') targetRatio = 16 / 9;
+      else if (aspectRatio === '9:16') targetRatio = 9 / 16;
+
+      let newX = orig.x;
+      let newY = orig.y;
+      let newW = orig.w;
+      let newH = orig.h;
+
+      if (cropDragMode === 'move') {
+        // Effortless full panning across the photo bounds
+        newX = Math.max(0, Math.min(orig.x + dx, maxW - orig.w));
+        newY = Math.max(0, Math.min(orig.y + dy, maxH - orig.h));
+      } else if (cropDragMode === 'br') {
+        // Bottom-Right Corner Handle
+        newW = Math.max(30, Math.min(orig.w + dx, maxW - orig.x));
+        newH = targetRatio > 0 ? newW / targetRatio : Math.max(30, Math.min(orig.h + dy, maxH - orig.y));
+        if (orig.y + newH > maxH && targetRatio > 0) {
+          newH = maxH - orig.y;
+          newW = newH * targetRatio;
+        }
+      } else if (cropDragMode === 'bl') {
+        // Bottom-Left Corner Handle
+        const targetX = Math.max(0, Math.min(orig.x + dx, orig.x + orig.w - 30));
+        newW = orig.w + (orig.x - targetX);
+        newH = targetRatio > 0 ? newW / targetRatio : Math.max(30, Math.min(orig.h + dy, maxH - orig.y));
+        newX = targetX;
+        if (orig.y + newH > maxH && targetRatio > 0) {
+          newH = maxH - orig.y;
+          newW = newH * targetRatio;
+          newX = orig.x + orig.w - newW;
+        }
+      } else if (cropDragMode === 'tl') {
+        // Top-Left Corner Handle
+        const targetX = Math.max(0, Math.min(orig.x + dx, orig.x + orig.w - 30));
+        const targetY = Math.max(0, Math.min(orig.y + dy, orig.y + orig.h - 30));
+        newW = orig.w + (orig.x - targetX);
+        newH = targetRatio > 0 ? newW / targetRatio : orig.h + (orig.y - targetY);
+        newX = targetRatio > 0 ? orig.x + orig.w - newW : targetX;
+        newY = targetRatio > 0 ? orig.y + orig.h - newH : targetY;
+        if (newX < 0) newX = 0;
+        if (newY < 0) newY = 0;
+      } else if (cropDragMode === 'tr') {
+        // Top-Right Corner Handle
+        newW = Math.max(30, Math.min(orig.w + dx, maxW - orig.x));
+        const targetY = Math.max(0, Math.min(orig.y + dy, orig.y + orig.h - 30));
+        newH = targetRatio > 0 ? newW / targetRatio : orig.h + (orig.y - targetY);
+        newY = targetRatio > 0 ? orig.y + orig.h - newH : targetY;
+        if (newY < 0) newY = 0;
+      } else if (cropDragMode === 'b') {
+        // Bottom Edge Handle
+        newH = Math.max(30, Math.min(orig.h + dy, maxH - orig.y));
+        if (targetRatio > 0) {
+          newW = newH * targetRatio;
+          newX = Math.max(0, orig.x + (orig.w - newW) / 2);
+        }
+      } else if (cropDragMode === 't') {
+        // Top Edge Handle
+        const targetY = Math.max(0, Math.min(orig.y + dy, orig.y + orig.h - 30));
+        newH = orig.h + (orig.y - targetY);
+        newY = targetY;
+        if (targetRatio > 0) {
+          newW = newH * targetRatio;
+          newX = Math.max(0, orig.x + (orig.w - newW) / 2);
+        }
+      } else if (cropDragMode === 'l') {
+        // Left Edge Handle
+        const targetX = Math.max(0, Math.min(orig.x + dx, orig.x + orig.w - 30));
+        newW = orig.w + (orig.x - targetX);
+        newX = targetX;
+        if (targetRatio > 0) {
+          newH = newW / targetRatio;
+          newY = Math.max(0, orig.y + (orig.h - newH) / 2);
+        }
+      } else if (cropDragMode === 'r') {
+        // Right Edge Handle
+        newW = Math.max(30, Math.min(orig.w + dx, maxW - orig.x));
+        if (targetRatio > 0) {
+          newH = newW / targetRatio;
+          newY = Math.max(0, orig.y + (orig.h - newH) / 2);
+        }
+      }
+
+      setCropRect({
+        x: Math.round(newX),
+        y: Math.round(newY),
+        w: Math.round(newW),
+        h: Math.round(newH)
+      });
+    };
+
+    const onPointerUp = () => {
+      setCropDragMode(null);
+      setCropDragStart(null);
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+  }, [cropDragMode, cropDragStart, loadedImg, aspectRatio]);
 
   // Helper to push history
   const pushHistory = useCallback(() => {
@@ -278,6 +415,8 @@ export default function PhotoEditorModal({
       const compCtx = compCanvas.getContext('2d');
 
       if (compCtx) {
+        compCtx.imageSmoothingEnabled = true;
+        compCtx.imageSmoothingQuality = 'high';
         compCtx.save();
         compCtx.translate(transformedW / 2, transformedH / 2);
         compCtx.rotate((rotation * Math.PI) / 180);
@@ -302,9 +441,11 @@ export default function PhotoEditorModal({
         const finalCtx = finalCanvas.getContext('2d');
 
         if (finalCtx) {
+          finalCtx.imageSmoothingEnabled = true;
+          finalCtx.imageSmoothingQuality = 'high';
           finalCtx.drawImage(compCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-          // Update loadedImg to cropped version
+          // Update loadedImg to cropped version at high quality
           const newBase64 = finalCanvas.toDataURL('image/jpeg', 0.95);
           const newImg = new Image();
           newImg.onload = () => {
@@ -328,6 +469,8 @@ export default function PhotoEditorModal({
               const dCtx = drawingCanvasRef.current.getContext('2d');
               if (dCtx) {
                 dCtx.clearRect(0, 0, newImg.width, newImg.height);
+                dCtx.imageSmoothingEnabled = true;
+                dCtx.imageSmoothingQuality = 'high';
                 const snap = dCtx.getImageData(0, 0, newImg.width, newImg.height);
                 setHistory([snap]);
                 setHistoryIdx(0);
@@ -364,6 +507,9 @@ export default function PhotoEditorModal({
       const ctx = exportCanvas.getContext('2d');
 
       if (ctx) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
         // Draw background photo with orientation transforms
         ctx.save();
         ctx.translate(transformedW / 2, transformedH / 2);
@@ -375,9 +521,9 @@ export default function PhotoEditorModal({
         // Draw drawing annotation layer
         ctx.drawImage(drawingCanvasRef.current, 0, 0);
 
-        // Convert to high-quality JPEG and compress for fast cloud ledger sync
-        const rawBase64 = exportCanvas.toDataURL('image/jpeg', 0.9);
-        const optimized = await compressImage(rawBase64, 800, 0.75);
+        // Convert to ultra-high-resolution JPEG (2400px max, 0.94 quality)
+        const rawBase64 = exportCanvas.toDataURL('image/jpeg', 0.96);
+        const optimized = await compressImage(rawBase64, 2400, 0.94);
 
         onSave(optimized);
         onClose();
@@ -390,12 +536,21 @@ export default function PhotoEditorModal({
     }
   };
 
-  // --- DRAWING EVENT HANDLERS ---
-  const handleDrawingStart = (e: React.MouseEvent | React.TouchEvent) => {
+  // --- SMOOTH DRAWING EVENT HANDLERS ---
+  const handleDrawingStart = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (activeMode !== 'draw') return;
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    const pt = getCanvasCoords(clientX, clientY);
+    if (e.cancelable) e.preventDefault();
+
+    // Ignore hovering stylus or non-pressed events
+    if (e.buttons === 0 || (e.pointerType === 'pen' && e.pressure === 0)) return;
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Fallback
+    }
+
+    const pt = getCanvasCoords(e.clientX, e.clientY);
     if (!pt) return;
 
     const canvas = drawingCanvasRef.current;
@@ -403,32 +558,37 @@ export default function PhotoEditorModal({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Save snapshot before drag for shapes (arrow, circle, rect, line)
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    // Save snapshot before drag for live shape preview (arrow, circle, rect, line)
     previewSnapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
     setIsDrawing(true);
     setStartPoint(pt);
     setCurrentPoint(pt);
+    lastPosRef.current = pt;
+    midPosRef.current = pt;
 
-    if (drawTool === 'pen' || drawTool === 'highlighter' || drawTool === 'eraser') {
-      ctx.beginPath();
-      ctx.moveTo(pt.x, pt.y);
+    if (drawTool === 'pen' || drawTool === 'eraser') {
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.lineWidth = strokeWidth;
 
       if (drawTool === 'eraser') {
         ctx.globalCompositeOperation = 'destination-out';
-      } else if (drawTool === 'highlighter') {
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.strokeStyle = color;
-        ctx.globalAlpha = 0.38;
-        ctx.lineWidth = strokeWidth * 2.8;
+        ctx.lineWidth = strokeWidth * 2.5;
       } else {
         ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = color;
+        ctx.fillStyle = color;
         ctx.globalAlpha = 1.0;
+        ctx.lineWidth = strokeWidth;
       }
+
+      // Draw initial smooth dot for click/tap
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, (drawTool === 'eraser' ? strokeWidth * 1.25 : strokeWidth) / 2, 0, Math.PI * 2);
+      ctx.fill();
     } else if (drawTool === 'text') {
       // Stamp text immediately at click position
       drawTextStamp(ctx, pt.x, pt.y, customText, color);
@@ -437,65 +597,119 @@ export default function PhotoEditorModal({
     }
   };
 
-  const handleDrawingMove = (e: React.MouseEvent | React.TouchEvent) => {
+  const handleDrawingMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawing || activeMode !== 'draw' || !startPoint) return;
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    const pt = getCanvasCoords(clientX, clientY);
-    if (!pt) return;
+    if (e.cancelable) e.preventDefault();
 
     const canvas = drawingCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    setCurrentPoint(pt);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
-    if (drawTool === 'pen' || drawTool === 'highlighter' || drawTool === 'eraser') {
-      ctx.lineTo(pt.x, pt.y);
-      ctx.stroke();
-    } else if (previewSnapshotRef.current) {
-      // For shapes: restore snapshot and draw live preview
-      ctx.putImageData(previewSnapshotRef.current, 0, 0);
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = 1.0;
-      ctx.strokeStyle = color;
-      ctx.fillStyle = color;
-      ctx.lineWidth = strokeWidth;
+    // Use coalesced events for ultra-smooth stylus/pencil tracking if supported
+    const coalesced = (e.nativeEvent && typeof (e.nativeEvent as unknown as { getCoalescedEvents?: () => PointerEvent[] }).getCoalescedEvents === 'function')
+      ? (e.nativeEvent as unknown as { getCoalescedEvents: () => PointerEvent[] }).getCoalescedEvents()
+      : [e];
 
-      if (drawTool === 'line') {
+    if (drawTool === 'pen' || drawTool === 'eraser') {
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      if (drawTool === 'eraser') {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineWidth = strokeWidth * 2.5;
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 1.0;
+        ctx.lineWidth = strokeWidth;
+      }
+
+      for (const ev of coalesced) {
+        const pt = getCanvasCoords(ev.clientX, ev.clientY);
+        if (!pt) continue;
+
+        const last = lastPosRef.current || pt;
+        const startMid = midPosRef.current || last;
+        const endMid = { x: (last.x + pt.x) / 2, y: (last.y + pt.y) / 2 };
+
+        // Quadratic Bézier curve interpolation for anti-aliased, ultra-smooth lines
         ctx.beginPath();
-        ctx.moveTo(startPoint.x, startPoint.y);
-        ctx.lineTo(pt.x, pt.y);
+        ctx.moveTo(startMid.x, startMid.y);
+        ctx.quadraticCurveTo(last.x, last.y, endMid.x, endMid.y);
         ctx.stroke();
-      } else if (drawTool === 'arrow') {
-        drawArrow(ctx, startPoint.x, startPoint.y, pt.x, pt.y, strokeWidth, color);
-      } else if (drawTool === 'circle') {
-        const radiusX = Math.abs(pt.x - startPoint.x) / 2;
-        const radiusY = Math.abs(pt.y - startPoint.y) / 2;
-        const centerX = Math.min(startPoint.x, pt.x) + radiusX;
-        const centerY = Math.min(startPoint.y, pt.y) + radiusY;
-        ctx.beginPath();
-        ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
-        ctx.stroke();
-      } else if (drawTool === 'rect') {
-        const x = Math.min(startPoint.x, pt.x);
-        const y = Math.min(startPoint.y, pt.y);
-        const w = Math.abs(pt.x - startPoint.x);
-        const h = Math.abs(pt.y - startPoint.y);
-        ctx.strokeRect(x, y, w, h);
+
+        lastPosRef.current = pt;
+        midPosRef.current = endMid;
+      }
+    } else {
+      const pt = getCanvasCoords(e.clientX, e.clientY);
+      if (!pt) return;
+      setCurrentPoint(pt);
+
+      if (previewSnapshotRef.current) {
+        // For shapes: restore snapshot and draw live preview
+        ctx.putImageData(previewSnapshotRef.current, 0, 0);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1.0;
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = strokeWidth;
+
+        if (drawTool === 'line') {
+          ctx.beginPath();
+          ctx.moveTo(startPoint.x, startPoint.y);
+          ctx.lineTo(pt.x, pt.y);
+          ctx.stroke();
+        } else if (drawTool === 'arrow') {
+          drawArrow(ctx, startPoint.x, startPoint.y, pt.x, pt.y, strokeWidth, color);
+        } else if (drawTool === 'circle') {
+          const radiusX = Math.abs(pt.x - startPoint.x) / 2;
+          const radiusY = Math.abs(pt.y - startPoint.y) / 2;
+          const centerX = Math.min(startPoint.x, pt.x) + radiusX;
+          const centerY = Math.min(startPoint.y, pt.y) + radiusY;
+          ctx.beginPath();
+          ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (drawTool === 'rect') {
+          const x = Math.min(startPoint.x, pt.x);
+          const y = Math.min(startPoint.y, pt.y);
+          const w = Math.abs(pt.x - startPoint.x);
+          const h = Math.abs(pt.y - startPoint.y);
+          ctx.strokeRect(x, y, w, h);
+        }
       }
     }
   };
 
-  const handleDrawingEnd = () => {
+  const handleDrawingEnd = (e?: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawing || activeMode !== 'draw') return;
     setIsDrawing(false);
+
+    if (e) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // Pointer capture may already be released
+      }
+    }
 
     const canvas = drawingCanvasRef.current;
     if (canvas) {
       const ctx = canvas.getContext('2d');
       if (ctx) {
+        // Draw trailing connection to last position
+        if ((drawTool === 'pen' || drawTool === 'eraser') && midPosRef.current && lastPosRef.current) {
+          ctx.beginPath();
+          ctx.moveTo(midPosRef.current.x, midPosRef.current.y);
+          ctx.lineTo(lastPosRef.current.x, lastPosRef.current.y);
+          ctx.stroke();
+        }
+
         ctx.globalAlpha = 1.0;
         ctx.globalCompositeOperation = 'source-over';
         pushHistory();
@@ -503,6 +717,8 @@ export default function PhotoEditorModal({
     }
     setStartPoint(null);
     setCurrentPoint(null);
+    lastPosRef.current = null;
+    midPosRef.current = null;
     previewSnapshotRef.current = null;
   };
 
@@ -582,24 +798,29 @@ export default function PhotoEditorModal({
   };
 
   // --- CROP BOX INTERACTION HANDLERS ---
-  const handleCropMouseDown = (e: React.MouseEvent | React.TouchEvent, handleType: string) => {
+  const handleCropPointerDown = (e: React.PointerEvent<HTMLElement>, handleType: string) => {
     if (activeMode !== 'crop') return;
+    e.preventDefault();
     e.stopPropagation();
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Fallback
+    }
 
     setCropDragMode(handleType);
     setCropDragStart({
-      x: clientX,
-      y: clientY,
+      x: e.clientX,
+      y: e.clientY,
       rect: { ...cropRect }
     });
   };
 
-  const handleCropMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
+  const handleCropPointerMove = (e: React.PointerEvent<HTMLElement>) => {
     if (!cropDragMode || !cropDragStart || !loadedImg || !drawingCanvasRef.current) return;
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    e.preventDefault();
+    e.stopPropagation();
 
     const canvas = drawingCanvasRef.current;
     const rect = canvas.getBoundingClientRect();
@@ -608,12 +829,19 @@ export default function PhotoEditorModal({
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
 
-    const dx = (clientX - cropDragStart.x) * scaleX;
-    const dy = (clientY - cropDragStart.y) * scaleY;
+    const dx = (e.clientX - cropDragStart.x) * scaleX;
+    const dy = (e.clientY - cropDragStart.y) * scaleY;
 
     const orig = cropDragStart.rect;
     const maxW = canvas.width;
     const maxH = canvas.height;
+
+    let targetRatio = 0;
+    if (aspectRatio === '1:1') targetRatio = 1;
+    else if (aspectRatio === '4:3') targetRatio = 4 / 3;
+    else if (aspectRatio === '3:4') targetRatio = 3 / 4;
+    else if (aspectRatio === '16:9') targetRatio = 16 / 9;
+    else if (aspectRatio === '9:16') targetRatio = 9 / 16;
 
     let newX = orig.x;
     let newY = orig.y;
@@ -621,28 +849,77 @@ export default function PhotoEditorModal({
     let newH = orig.h;
 
     if (cropDragMode === 'move') {
+      // Clean panning: translate entire crop box while staying inside photo bounds
       newX = Math.max(0, Math.min(orig.x + dx, maxW - orig.w));
       newY = Math.max(0, Math.min(orig.y + dy, maxH - orig.h));
     } else if (cropDragMode === 'br') {
+      // Bottom-Right Corner Handle
       newW = Math.max(30, Math.min(orig.w + dx, maxW - orig.x));
-      newH = Math.max(30, Math.min(orig.h + dy, maxH - orig.y));
-    } else if (cropDragMode === 'tl') {
-      const targetX = Math.max(0, Math.min(orig.x + dx, orig.x + orig.w - 30));
-      const targetY = Math.max(0, Math.min(orig.y + dy, orig.y + orig.h - 30));
-      newW = orig.w + (orig.x - targetX);
-      newH = orig.h + (orig.y - targetY);
-      newX = targetX;
-      newY = targetY;
-    } else if (cropDragMode === 'tr') {
-      const targetY = Math.max(0, Math.min(orig.y + dy, orig.y + orig.h - 30));
-      newW = Math.max(30, Math.min(orig.w + dx, maxW - orig.x));
-      newH = orig.h + (orig.y - targetY);
-      newY = targetY;
+      newH = targetRatio > 0 ? newW / targetRatio : Math.max(30, Math.min(orig.h + dy, maxH - orig.y));
+      if (orig.y + newH > maxH && targetRatio > 0) {
+        newH = maxH - orig.y;
+        newW = newH * targetRatio;
+      }
     } else if (cropDragMode === 'bl') {
+      // Bottom-Left Corner Handle
       const targetX = Math.max(0, Math.min(orig.x + dx, orig.x + orig.w - 30));
       newW = orig.w + (orig.x - targetX);
-      newH = Math.max(30, Math.min(orig.h + dy, maxH - orig.y));
+      newH = targetRatio > 0 ? newW / targetRatio : Math.max(30, Math.min(orig.h + dy, maxH - orig.y));
       newX = targetX;
+      if (orig.y + newH > maxH && targetRatio > 0) {
+        newH = maxH - orig.y;
+        newW = newH * targetRatio;
+        newX = orig.x + orig.w - newW;
+      }
+    } else if (cropDragMode === 'tl') {
+      // Top-Left Corner Handle
+      const targetX = Math.max(0, Math.min(orig.x + dx, orig.x + orig.w - 30));
+      const targetY = Math.max(0, Math.min(orig.y + dy, orig.y + orig.h - 30));
+      newW = orig.w + (orig.x - targetX);
+      newH = targetRatio > 0 ? newW / targetRatio : orig.h + (orig.y - targetY);
+      newX = targetRatio > 0 ? orig.x + orig.w - newW : targetX;
+      newY = targetRatio > 0 ? orig.y + orig.h - newH : targetY;
+      if (newX < 0) newX = 0;
+      if (newY < 0) newY = 0;
+    } else if (cropDragMode === 'tr') {
+      // Top-Right Corner Handle
+      newW = Math.max(30, Math.min(orig.w + dx, maxW - orig.x));
+      const targetY = Math.max(0, Math.min(orig.y + dy, orig.y + orig.h - 30));
+      newH = targetRatio > 0 ? newW / targetRatio : orig.h + (orig.y - targetY);
+      newY = targetRatio > 0 ? orig.y + orig.h - newH : targetY;
+      if (newY < 0) newY = 0;
+    } else if (cropDragMode === 'b') {
+      // Bottom Edge Handle
+      newH = Math.max(30, Math.min(orig.h + dy, maxH - orig.y));
+      if (targetRatio > 0) {
+        newW = newH * targetRatio;
+        newX = Math.max(0, orig.x + (orig.w - newW) / 2);
+      }
+    } else if (cropDragMode === 't') {
+      // Top Edge Handle
+      const targetY = Math.max(0, Math.min(orig.y + dy, orig.y + orig.h - 30));
+      newH = orig.h + (orig.y - targetY);
+      newY = targetY;
+      if (targetRatio > 0) {
+        newW = newH * targetRatio;
+        newX = Math.max(0, orig.x + (orig.w - newW) / 2);
+      }
+    } else if (cropDragMode === 'l') {
+      // Left Edge Handle
+      const targetX = Math.max(0, Math.min(orig.x + dx, orig.x + orig.w - 30));
+      newW = orig.w + (orig.x - targetX);
+      newX = targetX;
+      if (targetRatio > 0) {
+        newH = newW / targetRatio;
+        newY = Math.max(0, orig.y + (orig.h - newH) / 2);
+      }
+    } else if (cropDragMode === 'r') {
+      // Right Edge Handle
+      newW = Math.max(30, Math.min(orig.w + dx, maxW - orig.x));
+      if (targetRatio > 0) {
+        newH = newW / targetRatio;
+        newY = Math.max(0, orig.y + (orig.h - newH) / 2);
+      }
     }
 
     setCropRect({
@@ -653,7 +930,14 @@ export default function PhotoEditorModal({
     });
   };
 
-  const handleCropMouseUp = () => {
+  const handleCropPointerUp = (e?: React.PointerEvent<HTMLElement>) => {
+    if (e) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // Pointer capture may already be released
+      }
+    }
     setCropDragMode(null);
     setCropDragStart(null);
   };
@@ -668,7 +952,7 @@ export default function PhotoEditorModal({
   const cropPctHeight = (cropRect.h / canvasHeight) * 100;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-2 sm:p-4 animate-fadeIn select-none">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2 sm:p-4 animate-fadeIn select-none font-sans">
       <div className="bg-slate-900 text-white rounded-3xl w-full max-w-5xl h-[92vh] flex flex-col shadow-2xl border border-slate-700/80 overflow-hidden">
         
         {/* TOP HEADER & TOOLBAR TABS */}
@@ -734,18 +1018,11 @@ export default function PhotoEditorModal({
                 <button
                   type="button"
                   onClick={() => { playClickSound('click'); setDrawTool('pen'); }}
-                  className={`p-2 rounded-lg transition-colors cursor-pointer ${drawTool === 'pen' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'}`}
-                  title="Precision Pen"
+                  className={`p-2 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${drawTool === 'pen' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'}`}
+                  title="Precision Smooth Pen"
                 >
                   <PenTool size={14} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { playClickSound('click'); setDrawTool('highlighter'); }}
-                  className={`p-2 rounded-lg transition-colors cursor-pointer ${drawTool === 'highlighter' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'}`}
-                  title="Translucent Highlighter"
-                >
-                  <Highlighter size={14} />
+                  <span className="text-[10px] font-bold">Pen</span>
                 </button>
                 <button
                   type="button"
@@ -942,11 +1219,7 @@ export default function PhotoEditorModal({
         {/* MAIN CANVAS WORKSPACE AREA */}
         <div 
           ref={containerRef}
-          className="flex-1 relative bg-slate-950 overflow-hidden flex items-center justify-center p-4 cursor-crosshair"
-          onMouseMove={activeMode === 'crop' ? handleCropMouseMove : handleDrawingMove}
-          onTouchMove={activeMode === 'crop' ? handleCropMouseMove : handleDrawingMove}
-          onMouseUp={activeMode === 'crop' ? handleCropMouseUp : handleDrawingEnd}
-          onTouchEnd={activeMode === 'crop' ? handleCropMouseUp : handleDrawingEnd}
+          className="flex-1 relative bg-slate-950 overflow-hidden flex items-center justify-center p-4 select-none touch-none"
         >
           {loadedImg && (
             <div 
@@ -971,17 +1244,24 @@ export default function PhotoEditorModal({
               {/* Interactive Drawing Canvas Layer */}
               <canvas
                 ref={drawingCanvasRef}
-                className={`absolute inset-0 w-full h-full ${activeMode === 'draw' ? 'pointer-events-auto cursor-crosshair' : 'pointer-events-none'}`}
-                onMouseDown={handleDrawingStart}
-                onTouchStart={handleDrawingStart}
+                className={`absolute inset-0 w-full h-full touch-none ${activeMode === 'draw' ? 'pointer-events-auto cursor-crosshair z-20' : 'pointer-events-none z-10'}`}
+                onPointerDown={handleDrawingStart}
+                onPointerMove={handleDrawingMove}
+                onPointerUp={handleDrawingEnd}
+                onPointerCancel={handleDrawingEnd}
               />
 
               {/* Interactive Visual Cropping Box Overlay (Visible only in crop mode) */}
               {activeMode === 'crop' && (
-                <div className="absolute inset-0 pointer-events-auto">
+                <div 
+                  className="absolute inset-0 pointer-events-auto z-30 select-none touch-none"
+                  onPointerMove={handleCropPointerMove}
+                  onPointerUp={handleCropPointerUp}
+                  onPointerCancel={handleCropPointerUp}
+                >
                   {/* Darkened semi-transparent mask around crop box */}
                   <div 
-                    className="absolute inset-0 bg-slate-950/60 pointer-events-none"
+                    className="absolute inset-0 bg-slate-950/65 pointer-events-none"
                     style={{
                       clipPath: `polygon(0% 0%, 0% 100%, ${cropPctLeft}% 100%, ${cropPctLeft}% ${cropPctTop}%, ${cropPctLeft + cropPctWidth}% ${cropPctTop}%, ${cropPctLeft + cropPctWidth}% ${cropPctTop + cropPctHeight}%, ${cropPctLeft}% ${cropPctTop + cropPctHeight}%, ${cropPctLeft}% 100%, 100% 100%, 100% 0%)`
                     }}
@@ -989,15 +1269,14 @@ export default function PhotoEditorModal({
 
                   {/* Active Crop Box Boundary */}
                   <div
-                    className="absolute border-2 border-amber-400 shadow-2xl cursor-move pointer-events-auto"
+                    className="absolute border-2 border-amber-400 shadow-2xl cursor-move pointer-events-auto group"
                     style={{
                       left: `${cropPctLeft}%`,
                       top: `${cropPctTop}%`,
                       width: `${cropPctWidth}%`,
                       height: `${cropPctHeight}%`
                     }}
-                    onMouseDown={(e) => handleCropMouseDown(e, 'move')}
-                    onTouchStart={(e) => handleCropMouseDown(e, 'move')}
+                    onPointerDown={(e) => handleCropPointerDown(e, 'move')}
                   >
                     {/* Rule of Thirds Grid Guidelines */}
                     <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none opacity-40">
@@ -1007,32 +1286,85 @@ export default function PhotoEditorModal({
                       <div className="border-r border-b border-white/60" />
                       <div className="border-r border-b border-white/60" />
                       <div className="border-b border-white/60" />
-                      <div className="border-r border-white/60" />
-                      <div className="border-r border-white/60" />
+                      <div className="border-r border-b border-white/60" />
+                      <div className="border-r border-b border-white/60" />
                       <div />
                     </div>
 
-                    {/* Corner Drag Handles */}
+                    {/* Central Pan / Move Badge for effortless dragging */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-60 group-hover:opacity-100 transition-opacity">
+                      <div className="bg-slate-950/80 text-amber-300 px-2.5 py-1 rounded-full border border-amber-400/50 text-[9px] font-black tracking-wider uppercase flex items-center gap-1 shadow-lg">
+                        <Move size={10} />
+                        <span>Pan Box</span>
+                      </div>
+                    </div>
+
+                    {/* 4 Corner Drag Handles (with prominent bottom corner emphasis) */}
+                    {/* Top-Left */}
                     <div
-                      className="absolute -top-2 -left-2 w-5 h-5 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nwse-resize shadow-md"
-                      onMouseDown={(e) => handleCropMouseDown(e, 'tl')}
-                      onTouchStart={(e) => handleCropMouseDown(e, 'tl')}
-                    />
+                      className="absolute -top-3 -left-3 w-6 h-6 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nwse-resize shadow-lg flex items-center justify-center transition-transform hover:scale-125 z-40"
+                      onPointerDown={(e) => handleCropPointerDown(e, 'tl')}
+                      title="Adjust Top-Left"
+                    >
+                      <div className="w-1.5 h-1.5 bg-slate-950 rounded-full" />
+                    </div>
+
+                    {/* Top-Right */}
                     <div
-                      className="absolute -top-2 -right-2 w-5 h-5 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nesw-resize shadow-md"
-                      onMouseDown={(e) => handleCropMouseDown(e, 'tr')}
-                      onTouchStart={(e) => handleCropMouseDown(e, 'tr')}
-                    />
+                      className="absolute -top-3 -right-3 w-6 h-6 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nesw-resize shadow-lg flex items-center justify-center transition-transform hover:scale-125 z-40"
+                      onPointerDown={(e) => handleCropPointerDown(e, 'tr')}
+                      title="Adjust Top-Right"
+                    >
+                      <div className="w-1.5 h-1.5 bg-slate-950 rounded-full" />
+                    </div>
+
+                    {/* Bottom-Left (Adjustable Corner) */}
                     <div
-                      className="absolute -bottom-2 -left-2 w-5 h-5 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nesw-resize shadow-md"
-                      onMouseDown={(e) => handleCropMouseDown(e, 'bl')}
-                      onTouchStart={(e) => handleCropMouseDown(e, 'bl')}
-                    />
+                      className="absolute -bottom-3 -left-3 w-7 h-7 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nesw-resize shadow-xl flex items-center justify-center transition-transform hover:scale-125 ring-2 ring-amber-400/40 z-40"
+                      onPointerDown={(e) => handleCropPointerDown(e, 'bl')}
+                      title="Adjust Bottom-Left Corner"
+                    >
+                      <div className="w-2 h-2 bg-slate-950 rounded-full" />
+                    </div>
+
+                    {/* Bottom-Right (Adjustable Corner) */}
                     <div
-                      className="absolute -bottom-2 -right-2 w-5 h-5 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nwse-resize shadow-md"
-                      onMouseDown={(e) => handleCropMouseDown(e, 'br')}
-                      onTouchStart={(e) => handleCropMouseDown(e, 'br')}
+                      className="absolute -bottom-3 -right-3 w-7 h-7 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nwse-resize shadow-xl flex items-center justify-center transition-transform hover:scale-125 ring-2 ring-amber-400/40 z-40"
+                      onPointerDown={(e) => handleCropPointerDown(e, 'br')}
+                      title="Adjust Bottom-Right Corner"
+                    >
+                      <div className="w-2 h-2 bg-slate-950 rounded-full" />
+                    </div>
+
+                    {/* 4 Edge Adjustment Handles */}
+                    {/* Top Edge */}
+                    <div
+                      className="absolute -top-2 left-1/2 -translate-x-1/2 w-10 h-3 bg-amber-400 border border-slate-950 rounded-full cursor-ns-resize shadow-md flex items-center justify-center hover:scale-110 z-35"
+                      onPointerDown={(e) => handleCropPointerDown(e, 't')}
+                      title="Adjust Top Edge"
                     />
+
+                    {/* Bottom Edge (Adjustable Bottom Edge) */}
+                    <div
+                      className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-12 h-3.5 bg-amber-400 border-2 border-slate-950 rounded-full cursor-ns-resize shadow-lg flex items-center justify-center hover:scale-110 ring-1 ring-amber-300 z-35"
+                      onPointerDown={(e) => handleCropPointerDown(e, 'b')}
+                      title="Adjust Bottom Edge"
+                    />
+
+                    {/* Left Edge */}
+                    <div
+                      className="absolute -left-2 top-1/2 -translate-y-1/2 w-3 h-10 bg-amber-400 border border-slate-950 rounded-full cursor-ew-resize shadow-md flex items-center justify-center hover:scale-110 z-35"
+                      onPointerDown={(e) => handleCropPointerDown(e, 'l')}
+                      title="Adjust Left Edge"
+                    />
+
+                    {/* Right Edge */}
+                    <div
+                      className="absolute -right-2 top-1/2 -translate-y-1/2 w-3 h-10 bg-amber-400 border border-slate-950 rounded-full cursor-ew-resize shadow-md flex items-center justify-center hover:scale-110 z-35"
+                      onPointerDown={(e) => handleCropPointerDown(e, 'r')}
+                      title="Adjust Right Edge"
+                    />
+
                   </div>
                 </div>
               )}
@@ -1040,7 +1372,7 @@ export default function PhotoEditorModal({
           )}
 
           {/* Floating Zoom & Centering Controls in Canvas bottom-left */}
-          <div className="absolute bottom-4 left-4 flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md px-2.5 py-1.5 rounded-2xl border border-slate-800 text-slate-400 shadow-xl">
+          <div className="absolute bottom-4 left-4 flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md px-2.5 py-1.5 rounded-2xl border border-slate-800 text-slate-400 shadow-xl z-50">
             <button
               type="button"
               onClick={() => setZoom(prev => Math.min(prev + 0.25, 3))}
@@ -1077,8 +1409,8 @@ export default function PhotoEditorModal({
             <Sparkles size={14} className="text-amber-400 animate-pulse shrink-0" />
             <span>
               {activeMode === 'draw'
-                ? "Tip: Use Pen, Arrows, or Translucent Highlighter to mark claw tips and stone details."
-                : "Tip: Drag corner handles to crop, or use Rotate to align the photo."}
+                ? "Tip: Use Precision Pen, Arrows, or Circle tools to mark claw tips and bench specs."
+                : "Tip: Drag the corner or bottom handles to resize crop area, or drag inside the box to pan."}
             </span>
           </div>
 

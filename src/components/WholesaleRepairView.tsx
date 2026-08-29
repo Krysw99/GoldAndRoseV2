@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Trash2, Camera, Check, Printer, Coins, FileText, Sparkles, 
   X, Edit2, Save, Undo, Image as ImageIcon, PenTool, Lock, Unlock, HelpCircle, CheckCircle, AlertCircle,
-  Crop
+  Crop, Search, Calculator
 } from 'lucide-react';
 import { 
   QuoteSession, JewelryItem, RepairSelection, AddonItem, 
@@ -87,6 +87,61 @@ export default function WholesaleRepairView({
   const [unlockedPriceIds, setUnlockedPriceIds] = useState<Record<string, boolean>>({});
   const [heavyPolishPrice, setHeavyPolishPrice] = useState<number>(0);
   const [selectedPlatingColors, setSelectedPlatingColors] = useState<Record<string, boolean>>({});
+
+  // Scrap Ledger Linking Modal State
+  const [showScrapLinkModal, setShowScrapLinkModal] = useState(false);
+  const [scrapSearchQuery, setScrapSearchQuery] = useState('');
+
+  const getScrapTransactionsList = (): ScrapTransaction[] => {
+    if (scrapTransactions && scrapTransactions.length > 0) {
+      return scrapTransactions;
+    }
+    try {
+      const raw = localStorage.getItem('scrap_transactions_v1');
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  };
+
+  const handleLinkScrapTransaction = (tx: ScrapTransaction) => {
+    playClickSound('click');
+    const amt = parseFloat(tx.total) || 0;
+    onChangeSession(prev => ({
+      ...prev,
+      scrapCredit: parseFloat(amt.toFixed(2)),
+      cName: prev.cName ? prev.cName : (tx.name || ''),
+      cPhone: prev.cPhone ? prev.cPhone : (tx.phone || '')
+    }));
+    setShowScrapLinkModal(false);
+    setScrapSearchQuery('');
+  };
+
+  const handleLinkLatestScrap = () => {
+    const txs = getScrapTransactionsList();
+    if (txs.length > 0) {
+      const latest = txs[0];
+      const amt = parseFloat(latest.total) || 0;
+      if (amt > 0) {
+        playClickSound('click');
+        onChangeSession(prev => ({
+          ...prev,
+          scrapCredit: parseFloat(amt.toFixed(2)),
+          cName: prev.cName ? prev.cName : (latest.name || ''),
+          cPhone: prev.cPhone ? prev.cPhone : (latest.phone || '')
+        }));
+        alert(`Linked latest scrap buyback credit of $${amt.toFixed(2)} CAD (${latest.name || 'Client'})!`);
+        return;
+      }
+    }
+    alert("No recent scrap buyback records found in ledger.");
+  };
+
+  const handleClearScrapCredit = () => {
+    playClickSound('clear');
+    onChangeSession(prev => ({ ...prev, scrapCredit: 0 }));
+  };
 
   // Photo Crop & Draw Editor State
   const [photoEditorSrc, setPhotoEditorSrc] = useState<string | null>(null);
@@ -551,6 +606,17 @@ export default function WholesaleRepairView({
     onSaveQuote();
   };
 
+  // Save and immediately trigger printing
+  const handleSaveAndPrint = async () => {
+    if (!session.cName.trim()) {
+      alert("Please provide a Wholesale Client or Store Name before saving.");
+      return;
+    }
+    playClickSound('click');
+    await onSaveQuote();
+    handlePrintQuoteInvoice();
+  };
+
   // Clean / Reset state
   const handleClearRepairSheet = () => {
     if (!window.confirm("Are you sure you want to completely clear this wholesale repair sheet?")) return;
@@ -638,19 +704,39 @@ export default function WholesaleRepairView({
               <p className="text-[10px] text-brand-400 font-bold uppercase tracking-widest mt-0.5 font-mono">Bespoke Jewelry Restoration & Sizing Workspace</p>
             </div>
 
-            {/* Wholesale Profiles dropdown */}
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <span className="text-[9px] font-black text-brand-500 uppercase tracking-wider font-mono">Client Profile:</span>
-              <select
-                className="bg-brand-50 border border-brand-200 px-3 py-1.5 rounded-xl text-xs font-black outline-none w-full sm:w-56 cursor-pointer text-brand-800"
-                value={profileId}
-                onChange={(e) => handleProfileChange(e.target.value)}
+            {/* Wholesale Profiles dropdown & Scrap Ledger Link */}
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound('click');
+                  setShowScrapLinkModal(true);
+                }}
+                className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
+                title="Search and link a scrap trade-in buyout credit"
               >
-                <option value="">Default Wholesale Pricing</option>
-                {(settings.wholesaleProfiles || []).map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+                <Coins size={12} className="text-amber-600" />
+                <span>Link Scrap Ledger</span>
+                {Number(session.scrapCredit) > 0 && (
+                  <span className="bg-amber-600 text-white font-mono px-1.5 py-0.5 rounded text-[8px] font-bold">
+                    ${Number(session.scrapCredit).toFixed(2)}
+                  </span>
+                )}
+              </button>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] font-black text-brand-500 uppercase tracking-wider font-mono">Profile:</span>
+                <select
+                  className="bg-brand-50 border border-brand-200 px-3 py-1.5 rounded-xl text-xs font-black outline-none w-full sm:w-48 cursor-pointer text-brand-800"
+                  value={profileId}
+                  onChange={(e) => handleProfileChange(e.target.value)}
+                >
+                  <option value="">Default Wholesale Pricing</option>
+                  {(settings.wholesaleProfiles || []).map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -1284,16 +1370,55 @@ export default function WholesaleRepairView({
           </div>
 
           {/* Scrap credit trade-in deduction input */}
-          <div className="flex justify-between items-center text-xs text-brand-500 gap-2">
-            <span>Scrap Trade-in Credit ($):</span>
-            <div className="relative inline-block w-24">
-              <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] text-green-500 font-black">$</span>
-              <input
-                type="number"
-                className="w-full bg-slate-50 border border-brand-200 text-right pl-4 pr-1 py-1 rounded-lg text-xs font-bold font-mono outline-none"
-                value={session.scrapCredit || ''}
-                onChange={(e) => onChangeSession(prev => ({ ...prev, scrapCredit: parseFloat(e.target.value) || 0 }))}
-              />
+          <div className="col-span-2 sm:col-span-1 bg-amber-50/50 p-2.5 rounded-xl border border-amber-200/80 space-y-1.5">
+            <div className="flex justify-between items-center text-xs text-brand-700">
+              <span className="font-bold flex items-center gap-1">
+                <Coins size={12} className="text-amber-600" />
+                Scrap Buyback Credit ($):
+              </span>
+              <div className="relative inline-block w-24">
+                <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] text-green-600 font-black">$</span>
+                <input
+                  type="number"
+                  className="w-full bg-white border border-brand-200 text-right pl-4 pr-1 py-1 rounded-lg text-xs font-bold font-mono outline-none focus:border-brand-gold focus:ring-1 focus:ring-brand-gold"
+                  value={session.scrapCredit || ''}
+                  onChange={(e) => onChangeSession(prev => ({ ...prev, scrapCredit: parseFloat(e.target.value) || 0 }))}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+            {/* Scrap Ledger Link Action Bar */}
+            <div className="flex items-center gap-1.5 pt-1 border-t border-amber-200/50">
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound('click');
+                  setShowScrapLinkModal(true);
+                }}
+                className="flex-1 py-1 px-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 shadow-sm transition-all cursor-pointer"
+                title="Search and link a scrap buyback transaction from the ledger"
+              >
+                <FileText size={10} />
+                Link Scrap Ledger
+              </button>
+              <button
+                type="button"
+                onClick={handleLinkLatestScrap}
+                className="py-1 px-2 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm"
+                title="Quick-link the most recent scrap buyback"
+              >
+                Latest
+              </button>
+              {Number(session.scrapCredit) > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearScrapCredit}
+                  className="py-1 px-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-[9px] font-bold transition-all cursor-pointer"
+                  title="Remove scrap credit"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           </div>
 
@@ -1381,26 +1506,55 @@ export default function WholesaleRepairView({
             <Undo size={14} /> Clear Sheet
           </button>
 
-          <div className="flex items-center gap-2.5">
-            <button
-              type="button"
-              onClick={handlePrintQuoteInvoice}
-              className="bg-brand-800 hover:bg-brand-750 border border-brand-700 text-brand-gold font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
-            >
-              <Printer size={14} /> Print Job Sheet
-            </button>
-
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               onClick={handleSaveToLedger}
               disabled={!session.cName.trim()}
-              className={`font-black px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-lg ${
+              className={`font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-lg ${
+                session.cName.trim()
+                  ? 'bg-brand-900 text-brand-gold hover:bg-brand-950 border border-brand-800 cursor-pointer'
+                  : 'bg-brand-800 text-brand-500 border-brand-850 cursor-not-allowed opacity-50'
+              }`}
+            >
+              <Save size={14} className="text-brand-gold shrink-0" /> Save to Ledger
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSaveAndPrint}
+              disabled={!session.cName.trim()}
+              className={`font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-lg ${
                 session.cName.trim()
                   ? 'bg-brand-gold text-brand-950 hover:bg-brand-400 border border-brand-300 cursor-pointer'
                   : 'bg-brand-800 text-brand-500 border-brand-850 cursor-not-allowed opacity-50'
               }`}
+              title="Save this wholesale order to the ledger and immediately open print sheet"
             >
-              <Save size={14} /> Save Job Order
+              <Printer size={14} className="text-brand-950 shrink-0" /> Save and Print
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                playClickSound('click');
+                setShowScrapLinkModal(true);
+              }}
+              className="bg-brand-800/90 hover:bg-brand-750 border border-brand-700 text-slate-200 font-semibold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Search and link a scrap buyback transaction credit"
+            >
+              <Coins size={14} className="text-amber-400 shrink-0" /> Link Scrap Ledger
+              {Number(session.scrapCredit) > 0 && (
+                <span className="ml-1 text-emerald-400 font-mono text-[10px]">(-${Number(session.scrapCredit).toFixed(2)})</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrintQuoteInvoice}
+              className="bg-brand-800 hover:bg-brand-750 border border-brand-700 text-brand-gold font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
+            >
+              <Printer size={14} /> Print Job Sheet
             </button>
           </div>
         </div>
@@ -1564,6 +1718,141 @@ export default function WholesaleRepairView({
           }}
           title={photoEditorIdx !== null ? `Edit Intake Photo #${photoEditorIdx + 1}` : "Crop & Draw on Intake Photo"}
         />
+      )}
+
+      {/* SCRAP CREDIT LINKING MODAL */}
+      {showScrapLinkModal && (
+        <div className="fixed inset-0 bg-brand-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-xl shadow-2xl border border-brand-100 flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between pb-4 border-b border-brand-100">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-brand-900 flex items-center gap-2">
+                  <Coins className="text-amber-600" size={20} />
+                  Link Scrap Ledger Buyout Credit
+                </h3>
+                <p className="text-xs text-brand-400">Apply a client's gold/silver trade-in payout directly to this wholesale repair order</p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => {
+                  setShowScrapLinkModal(false);
+                  setScrapSearchQuery('');
+                }}
+                className="text-brand-400 hover:text-brand-900 p-2 rounded-full hover:bg-brand-50 transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div className="py-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search by client name, phone, or items..."
+                  value={scrapSearchQuery}
+                  onChange={(e) => setScrapSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-brand-50/50 border border-brand-200 rounded-xl text-xs font-medium focus:bg-white focus:border-brand-gold outline-none transition-all"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Transactions List */}
+            <div className="overflow-y-auto flex-1 space-y-2.5 pr-1 py-1 custom-scrollbar">
+              {(() => {
+                const list = getScrapTransactionsList();
+                const filtered = list.filter(tx => {
+                  const q = scrapSearchQuery.toLowerCase();
+                  return (
+                    (tx.name || '').toLowerCase().includes(q) ||
+                    (tx.phone || '').toLowerCase().includes(q) ||
+                    (tx.summary || '').toLowerCase().includes(q) ||
+                    (tx.date || '').toLowerCase().includes(q)
+                  );
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="text-center py-10 text-brand-400 bg-brand-50/30 rounded-2xl border border-dashed border-brand-200 p-6">
+                      <Coins className="mx-auto text-brand-300 mb-2 opacity-50" size={32} />
+                      <p className="text-sm font-bold text-brand-700">No Scrap Transactions Found</p>
+                      <p className="text-xs text-brand-400 mt-1">
+                        {scrapSearchQuery ? "No matches found for your search query." : "Save a scrap buyback in the Scrap tab first to link it here."}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return filtered.map(tx => {
+                  const payout = parseFloat(tx.total) || 0;
+                  const isCurrentCredit = Number(session.scrapCredit) === payout && payout > 0;
+                  return (
+                    <div 
+                      key={tx.id}
+                      className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                        isCurrentCredit 
+                          ? 'bg-amber-50/80 border-amber-300 ring-1 ring-amber-300' 
+                          : 'bg-white hover:bg-brand-50/50 border-brand-150'
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-brand-900 truncate">
+                            {tx.name || 'Anonymous Client'}
+                          </span>
+                          {tx.phone && (
+                            <span className="text-[10px] text-brand-500 font-mono bg-brand-100/60 px-2 py-0.5 rounded-md">
+                              {tx.phone}
+                            </span>
+                          )}
+                          {isCurrentCredit && (
+                            <span className="text-[9px] font-black uppercase text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
+                              Active
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-brand-500 truncate mt-0.5">{tx.summary}</p>
+                        <span className="text-[10px] text-brand-400 font-mono block mt-1">{tx.date}</span>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="text-right">
+                          <span className="block text-xs font-black text-emerald-700 font-mono">
+                            ${payout.toFixed(2)} CAD
+                          </span>
+                          <span className="text-[9px] uppercase tracking-wider text-brand-400 font-bold">Buyback Total</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleLinkScrapTransaction(tx)}
+                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-3 rounded-xl text-xs uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Check size={13} /> Link
+                        </button>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-brand-100 flex items-center justify-between text-xs text-brand-400">
+              <span>Selected credit will reduce total wholesale balance</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowScrapLinkModal(false);
+                  setScrapSearchQuery('');
+                }}
+                className="font-bold text-brand-600 hover:text-brand-900 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
