@@ -46,13 +46,19 @@ export function printElement(elementId: string) {
         <title>Print Document</title>
         ${stylesHtml}
         <style>
-          /* Optimized high-fidelity print styles */
+          /* Optimized high-fidelity single-page print styles */
+          @page {
+            size: auto;
+            margin: 8mm 10mm;
+          }
           body, html {
             background: #ffffff !important;
             color: #000000 !important;
             padding: 0 !important;
             margin: 0 !important;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           
           /* Force immediate layout rendering */
@@ -80,8 +86,11 @@ export function printElement(elementId: string) {
             display: block;
           }
 
-          body {
-            padding: 24px !important;
+          .print-container {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
           }
         </style>
       </head>

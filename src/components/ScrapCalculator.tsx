@@ -21,6 +21,7 @@ interface ScrapCalculatorProps {
       phone: string;
       address: string;
       driversLicense: string;
+      employeeId?: string;
       stoneRemovalQty: string;
       items: ScrapItem[];
       image: string | null;
@@ -54,6 +55,7 @@ export default function ScrapCalculator({
   const [phoneNumber, setPhoneNumber] = useState('');
   const [address, setAddress] = useState('');
   const [driversLicense, setDriversLicense] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
   const [stoneRemovalQty, setStoneRemovalQty] = useState('');
   const [scrapImage, setScrapImage] = useState<string | null>(null);
   const [goldImage, setGoldImage] = useState<string | null>(null);
@@ -114,6 +116,7 @@ export default function ScrapCalculator({
       setPhoneNumber(editingTransaction.phone || '');
       setAddress(editingTransaction.address || '');
       setDriversLicense(editingTransaction.driversLicense || '');
+      setEmployeeId(editingTransaction.employeeId || '');
       setStoneRemovalQty(editingTransaction.stoneRemovalQty || '');
       setScrapImage(editingTransaction.image || null);
       setGoldImage(editingTransaction.goldImage || null);
@@ -362,6 +365,7 @@ export default function ScrapCalculator({
       phone: phoneNumber,
       address,
       driversLicense,
+      employeeId: employeeId.trim(),
       stoneRemovalQty,
       items: activeItems,
       image: scrapImage,
@@ -376,6 +380,7 @@ export default function ScrapCalculator({
         setPhoneNumber('');
         setAddress('');
         setDriversLicense('');
+        setEmployeeId('');
         setStoneRemovalQty('');
         setScrapImage(null);
         setGoldImage(null);
@@ -649,7 +654,14 @@ export default function ScrapCalculator({
             value={driversLicense}
             onChange={(e) => setDriversLicense(e.target.value)}
           />
-          <div className="flex items-center border p-2 rounded-xl bg-white shadow-sm">
+          <input
+            type="text"
+            placeholder="Employee ID / Staff Name"
+            className="border p-3 rounded-xl text-sm shadow-sm font-medium"
+            value={employeeId}
+            onChange={(e) => setEmployeeId(e.target.value)}
+          />
+          <div className="flex items-center border p-2 rounded-xl bg-white shadow-sm md:col-span-2">
             <span className="text-[10px] font-bold text-brand-500 uppercase px-2">
               Stone Removal (-$5):
             </span>
@@ -658,6 +670,7 @@ export default function ScrapCalculator({
               className="w-full text-sm font-bold text-red-600 no-spinner"
               value={stoneRemovalQty}
               onChange={(e) => setStoneRemovalQty(e.target.value)}
+              placeholder="0"
             />
           </div>
         </div>
@@ -816,7 +829,7 @@ export default function ScrapCalculator({
               onClick={() => handleSave(false)}
               className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-black text-sm tracking-widest uppercase py-4 rounded-xl shadow-md transition-colors cursor-pointer"
             >
-              Save Adjusted Buyback
+              Save Adjusted Payout
             </button>
             <button
               type="button"
@@ -824,7 +837,7 @@ export default function ScrapCalculator({
               className="flex-1 bg-brand-800 hover:bg-brand-900 text-brand-gold font-black text-sm tracking-widest uppercase py-4 rounded-xl shadow-md transition-colors cursor-pointer flex items-center justify-center gap-1.5"
             >
               <Printer size={16} />
-              Save & Print Payout Log
+              Save & Print Payout
             </button>
           </>
         ) : (
@@ -834,7 +847,7 @@ export default function ScrapCalculator({
               onClick={() => handleSave(false)}
               className="flex-1 bg-brand-100 hover:bg-brand-200 text-brand-800 font-bold text-sm tracking-widest uppercase py-4 rounded-xl transition-colors cursor-pointer"
             >
-              Commit Payout Log
+              Save Payout
             </button>
             <button
               type="button"
@@ -842,138 +855,237 @@ export default function ScrapCalculator({
               className="flex-1 bg-brand-800 text-brand-gold hover:bg-brand-900 font-black text-sm tracking-widest uppercase py-4 rounded-xl shadow-md transition-colors cursor-pointer flex items-center justify-center gap-1.5"
             >
               <Printer size={16} />
-              Commit & Print Payout Log
+              Save & Print Payout
             </button>
           </>
         )}
       </div>
     </div>
 
-    {/* Print-only container */}
-    <div id="scrap-receipt-box" className="hidden print:block bg-white text-brand-800 text-left font-sans w-full p-4">
-      <div className="max-w-xl mx-auto">
-        {/* Header info */}
-        <div className="flex justify-between items-start border-b border-brand-900 pb-4 mb-6">
+    {/* Print-only container: Guaranteed 1-Page Layout */}
+    <div id="scrap-receipt-box" className="hidden print:block bg-white text-brand-900 text-left font-sans w-full max-w-2xl mx-auto p-2 print:p-0 print:max-h-[1020px] print:overflow-hidden break-inside-avoid">
+      <div className="border border-brand-200 rounded-xl p-4 print:p-3.5 bg-white shadow-none space-y-3">
+        {/* 1. Header with Brand & Receipt Metadata */}
+        <div className="flex justify-between items-start border-b border-brand-900 pb-2.5">
           <div>
-            <h1 className="font-serif text-2xl font-black italic tracking-wide text-brand-900 mb-0.5">Gold And Rose Jewellery Corp</h1>
-            <p className="text-[10px] text-brand-500 font-bold uppercase tracking-wider">James Lee • 604-250-7414</p>
-            <p className="text-[8px] text-brand-400 font-mono mt-0.5">GST/HST: 737186213RT0001</p>
+            <h1 className="font-serif text-xl font-black italic tracking-wide text-brand-950 mb-0.5 leading-none">
+              Gold And Rose Jewellery Corp
+            </h1>
+            <p className="text-[9px] text-brand-600 font-bold uppercase tracking-wider">
+              James Lee • 604-250-7414 • Vancouver, BC
+            </p>
+            <p className="text-[7.5px] text-brand-400 font-mono">
+              GST/HST: 737186213RT0001
+            </p>
           </div>
           <div className="text-right">
-            <h2 className="text-sm font-black uppercase tracking-widest text-brand-400">Buyback Receipt</h2>
-            <p className="text-[10px] font-bold text-brand-800 mt-0.5">
+            <h2 className="text-xs font-black uppercase tracking-widest text-brand-800">
+              Precious Metals Buyback Log
+            </h2>
+            <p className="text-[9px] font-bold text-brand-700 mt-0.5">
               {new Date().toLocaleDateString('en-US', { 
                 year: 'numeric', 
-                month: 'long', 
+                month: 'short', 
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
               })}
             </p>
-            <p className="text-[8px] font-mono text-brand-400">Ref: #{editingTransaction?.id || 'NEW'}</p>
+            <p className="text-[7.5px] font-mono text-brand-400">
+              Ref ID: #{editingTransaction?.id || 'NEW'}
+              {employeeId && ` • Staff ID: ${employeeId}`}
+            </p>
           </div>
         </div>
 
-        {/* Customer Details */}
-        <div className="grid grid-cols-2 gap-4 mb-6 text-xs">
-          <div className="bg-brand-50 p-3 rounded-xl border border-brand-100">
-            <p className="text-[9px] uppercase font-black text-brand-400 tracking-wider mb-1">Client Details</p>
-            <p className="font-bold text-brand-900">{customerName || 'N/A'}</p>
+        {/* 2. Spot Price Market Benchmarks Banner */}
+        <div className="bg-brand-50/80 px-2.5 py-1 rounded-lg border border-brand-200/60 flex items-center justify-between text-[8px] text-brand-600 font-mono">
+          <span className="font-bold text-brand-800 uppercase tracking-wider text-[7.5px]">Market Benchmarks:</span>
+          <span>Gold: <strong className="text-brand-900">${spotPrices.gold.toFixed(2)}</strong>/oz CAD</span>
+          <span>Silver: <strong className="text-brand-900">${spotPrices.silver.toFixed(2)}</strong>/oz CAD</span>
+          <span>Platinum: <strong className="text-brand-900">${spotPrices.platinum.toFixed(2)}</strong>/oz CAD</span>
+        </div>
+
+        {/* 3. Customer Information & Payout Summary Card */}
+        <div className="grid grid-cols-2 gap-2.5 text-[9.5px]">
+          <div className="bg-brand-50/60 p-2.5 rounded-lg border border-brand-200">
+            <p className="text-[8px] uppercase font-black text-brand-400 tracking-wider mb-1">
+              Client & Compliance Details
+            </p>
+            <p className="font-black text-brand-900 text-[10px] leading-tight">{customerName || 'Walk-in Client'}</p>
             {phoneNumber && (
-              <p className="text-brand-600 mt-0.5">{phoneNumber}</p>
+              <p className="text-brand-700 mt-0.5 font-medium leading-tight">Phone: {phoneNumber}</p>
             )}
             {address && (
-              <p className="text-brand-500 mt-0.5 leading-relaxed">{address}</p>
+              <p className="text-brand-500 mt-0.5 leading-tight">{address}</p>
             )}
             {driversLicense && (
-              <p className="text-[9px] text-brand-400 mt-1 font-mono">ID: {driversLicense}</p>
+              <p className="text-[8px] text-brand-700 mt-1 font-mono font-bold bg-white/80 inline-block px-1.5 py-0.5 rounded border border-brand-200">
+                Verified ID / DL: {driversLicense}
+              </p>
+            )}
+            {employeeId && (
+              <p className="text-[8px] text-brand-600 mt-1 font-mono font-bold bg-brand-100/60 inline-block px-1.5 py-0.5 rounded border border-brand-200">
+                Staff Rep / ID: {employeeId}
+              </p>
             )}
           </div>
-          <div className="bg-green-50/50 p-3 rounded-xl border border-green-100 text-right flex flex-col justify-center">
-            <p className="text-[9px] uppercase font-black text-green-700 tracking-wider mb-1">Total Payout Paid (CAD)</p>
-            <p className="text-2xl font-black text-green-600">${finalPayout.toFixed(2)}</p>
-            {isOfferOverridden && (
-              <p className="text-[8px] font-mono text-amber-700 font-bold">(Manual Offer Override)</p>
-            )}
-          </div>
-        </div>
-
-        {/* Items list */}
-        <div className="space-y-4 mb-6">
-          <div>
-            <p className="text-[10px] uppercase font-black text-brand-500 tracking-widest border-b border-brand-100 pb-1 mb-2">Verified Items Received</p>
-            <div className="bg-brand-50/50 p-3 rounded-xl border border-brand-100/50 text-xs text-brand-700 space-y-1.5 leading-relaxed">
-              {items.filter(i => Number(i.weight) > 0).map((it, idx) => {
-                const val = calculateScrapItemValue(it, spotPrices);
-                const pStr = `${it.purity}%`;
-                return (
-                  <div key={idx} className="flex justify-between items-center border-b border-dashed border-brand-100 pb-1.5 last:border-none last:pb-0">
-                    <span>
-                      {it.weight}g {it.material} ({pStr} purity) @ {it.rate}% buyback rate
-                    </span>
-                    <span className="font-bold text-brand-900 font-mono">${val.toFixed(2)}</span>
-                  </div>
-                );
-              })}
-              {Number(stoneRemovalQty) > 0 && (
-                <div className="flex justify-between items-center text-red-600 pt-1">
-                  <span>Stone extraction fee ({stoneRemovalQty} stones)</span>
-                  <span className="font-bold font-mono">-${(Number(stoneRemovalQty) * 5).toFixed(2)}</span>
-                </div>
+          <div className="bg-emerald-50/70 p-2.5 rounded-lg border border-emerald-200 text-right flex flex-col justify-between">
+            <div>
+              <p className="text-[8px] uppercase font-black text-emerald-800 tracking-wider">
+                Total Net Payout Paid (CAD)
+              </p>
+              <p className="text-xl font-black text-emerald-700 leading-none mt-0.5">
+                ${finalPayout.toFixed(2)}
+              </p>
+              {isOfferOverridden && (
+                <p className="text-[7.5px] font-mono text-amber-700 font-bold mt-0.5">
+                  (Agreed Offer Override)
+                </p>
               )}
+            </div>
+            <div className="text-[8px] text-emerald-800/80 font-mono mt-1 pt-1 border-t border-emerald-200/60 flex justify-between">
+              <span>Total Weight: <strong>{items.reduce((acc, it) => acc + (Number(it.weight) || 0), 0).toFixed(2)}g</strong></span>
+              <span>Settled in Full</span>
             </div>
           </div>
         </div>
 
-        {/* Snapshot of Driver's license / items if available */}
+        {/* 4. Itemized Verified Precious Metals Table */}
+        <div className="space-y-1">
+          <div className="flex justify-between items-center border-b border-brand-200 pb-1">
+            <span className="text-[8.5px] uppercase font-black text-brand-700 tracking-wider">
+              Verified Precious Metals Received
+            </span>
+            <span className="text-[7.5px] font-mono text-brand-500">
+              {items.filter(i => Number(i.weight) > 0).length} lot(s) evaluated
+            </span>
+          </div>
+
+          <table className="w-full text-left text-[9px] border-collapse">
+            <thead>
+              <tr className="border-b border-brand-200 text-[8px] font-black uppercase text-brand-500 bg-brand-50/50">
+                <th className="py-1 px-1.5">#</th>
+                <th className="py-1 px-1.5">Material / Karat</th>
+                <th className="py-1 px-1.5">Purity</th>
+                <th className="py-1 px-1.5">Gross Wt</th>
+                <th className="py-1 px-1.5 text-center">Payout Rate</th>
+                <th className="py-1 px-1.5 text-right">Value (CAD)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-brand-100">
+              {items.filter(i => Number(i.weight) > 0).map((it, idx) => {
+                const val = calculateScrapItemValue(it, spotPrices);
+                const numPurity = Number(it.purity) || 0;
+                const pStr = `${it.purity}%`;
+                let karatLabel = '';
+                if (it.material === 'gold') {
+                  const kVal = Math.round((numPurity / 100) * 24);
+                  karatLabel = `${kVal}K Gold`;
+                } else if (it.material === 'silver') {
+                  karatLabel = `${numPurity >= 92.5 ? 'Sterling 925' : 'Fine'} Silver`;
+                } else {
+                  karatLabel = `${numPurity >= 95 ? 'Plat 950' : 'Plat 900'} Platinum`;
+                }
+
+                return (
+                  <tr key={idx} className="hover:bg-brand-50/30">
+                    <td className="py-1 px-1.5 font-mono text-brand-400 font-bold">{idx + 1}</td>
+                    <td className="py-1 px-1.5 font-bold text-brand-900">{karatLabel}</td>
+                    <td className="py-1 px-1.5 font-mono text-brand-600">{pStr}</td>
+                    <td className="py-1 px-1.5 font-mono font-bold text-brand-800">{Number(it.weight).toFixed(2)}g</td>
+                    <td className="py-1 px-1.5 font-mono text-center text-brand-700">{it.rate}%</td>
+                    <td className="py-1 px-1.5 font-mono font-bold text-right text-brand-900">${val.toFixed(2)}</td>
+                  </tr>
+                );
+              })}
+
+              {Number(stoneRemovalQty) > 0 && (
+                <tr className="bg-red-50/40 text-red-700 font-medium">
+                  <td className="py-1 px-1.5 font-mono text-red-400 font-bold">•</td>
+                  <td colSpan={4} className="py-1 px-1.5">
+                    Stone extraction & bench refining fee ({stoneRemovalQty} stone{Number(stoneRemovalQty) > 1 ? 's' : ''} @ $5.00/ea)
+                  </td>
+                  <td className="py-1 px-1.5 font-mono font-bold text-right text-red-700">
+                    -${(Number(stoneRemovalQty) * 5).toFixed(2)}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 5. Verified Compliance Photographs (Thumbnails adjusted for 1-page fit) */}
         {(scrapImage || goldImage) && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 print:mb-8 break-inside-avoid">
-            {scrapImage && (
-              <div>
-                <p className="text-[10px] uppercase font-black text-brand-400 tracking-wider mb-2 print:text-[8px] print:text-brand-500">Verified ID Photograph</p>
-                <img 
-                  src={scrapImage} 
-                  alt="Compliance photo" 
-                  className="h-28 w-full object-contain rounded-xl border border-brand-200 shadow-sm cursor-pointer hover:opacity-90 hover:scale-[1.01] transition-all print:h-64 print:w-auto print:max-w-xs print:rounded-lg print:border print:border-brand-150 print:shadow-none" 
-                  onClick={() => setEnlargeImage(scrapImage)}
-                  title="Click to enlarge"
-                />
-              </div>
-            )}
-            {goldImage && (
-              <div>
-                <p className="text-[10px] uppercase font-black text-amber-700 tracking-wider mb-2 print:text-[8px] print:text-amber-800">Scanned Metal / Gold Photo (Proof On Record)</p>
-                <img 
-                  src={goldImage} 
-                  alt="Scanned gold photo" 
-                  className="h-28 w-full object-contain rounded-xl border border-amber-300 shadow-sm cursor-pointer hover:opacity-90 hover:scale-[1.01] transition-all print:h-64 print:w-auto print:max-w-xs print:rounded-lg print:border print:border-amber-200 print:shadow-none" 
-                  onClick={() => setEnlargeImage(goldImage)}
-                  title="Click to enlarge"
-                />
-              </div>
-            )}
+          <div className="border border-brand-200 rounded-lg p-2 bg-brand-50/30 space-y-1">
+            <p className="text-[7.5px] uppercase font-black text-brand-500 tracking-wider">
+              Verification Proof & Compliance Attachments
+            </p>
+            <div className={`grid ${scrapImage && goldImage ? 'grid-cols-2' : 'grid-cols-1 max-w-xs mx-auto'} gap-2`}>
+              {scrapImage && (
+                <div className="bg-white p-1 rounded border border-brand-200 flex flex-col items-center">
+                  <span className="text-[7px] font-bold uppercase text-brand-500 mb-0.5">Verified ID / Photo</span>
+                  <img 
+                    src={scrapImage} 
+                    alt="Compliance ID" 
+                    className="h-20 max-h-20 w-full object-contain rounded bg-slate-50"
+                  />
+                </div>
+              )}
+              {goldImage && (
+                <div className="bg-white p-1 rounded border border-amber-200 flex flex-col items-center">
+                  <span className="text-[7px] font-bold uppercase text-amber-800 mb-0.5">Metal Lot Photograph</span>
+                  <img 
+                    src={goldImage} 
+                    alt="Metal lot scanned" 
+                    className="h-20 max-h-20 w-full object-contain rounded bg-amber-50/20"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Sign-off terms */}
-        <div className="border-t border-brand-200 pt-5 text-center space-y-4">
-          <p className="text-[8px] text-brand-400 italic leading-relaxed font-sans">
-            I declare that I am the legal owner of the scrap items presented above and have full right to transact and sell them to Gold & Rose Jewellery Corp. All buyout transactions are absolute and final.
+        {/* 6. Legal Terms & Signatures */}
+        <div className="border-t border-brand-200 pt-2 space-y-2">
+          <p className="text-[7.5px] text-brand-500 italic leading-relaxed text-center">
+            I certify and declare that I am 18 years of age or older, the sole legal owner of the precious metal items listed above, and possess full right and authority to sell them to Gold & Rose Jewellery Corp. All buyout transactions are absolute, final, and non-refundable.
           </p>
-          <div className="flex flex-col items-center justify-center font-sans">
-            {customerSignature ? (
-              <div className="h-16 w-40 flex items-center justify-center relative overflow-hidden mb-1">
-                <img 
-                  src={customerSignature} 
-                  alt="Client signature" 
-                  className="max-h-16 max-w-full object-contain filter brightness-95" 
-                />
+
+          <div className="grid grid-cols-2 gap-4 items-end pt-1">
+            <div className="text-center flex flex-col items-center">
+              {customerSignature ? (
+                <div className="h-10 w-36 flex items-center justify-center relative overflow-hidden mb-0.5">
+                  <img 
+                    src={customerSignature} 
+                    alt="Client signature" 
+                    className="max-h-10 max-w-full object-contain filter brightness-95" 
+                  />
+                </div>
+              ) : (
+                <div className="h-10"></div>
+              )}
+              <div className="w-full max-w-[170px] border-b border-brand-400"></div>
+              <p className="text-[7.5px] uppercase font-bold tracking-wider text-brand-700 mt-0.5">
+                Client Authorization Signature
+              </p>
+              <p className="text-[7px] text-brand-400">
+                {customerName || 'Authorized Seller'}
+              </p>
+            </div>
+
+            <div className="text-center flex flex-col items-center">
+              <div className="h-10 flex items-center justify-center">
+                <span className="font-serif italic font-black text-brand-900 text-sm">James Lee</span>
               </div>
-            ) : (
-              <div className="h-12"></div>
-            )}
-            <div className="w-40 border-b border-brand-300"></div>
-            <p className="text-[8px] uppercase tracking-wider text-brand-500 mt-1">Client Authorization Signature</p>
+              <div className="w-full max-w-[170px] border-b border-brand-400"></div>
+              <p className="text-[7.5px] uppercase font-bold tracking-wider text-brand-700 mt-0.5">
+                Authorized Buyer / Appraiser
+              </p>
+              <p className="text-[7px] text-brand-400">
+                Gold & Rose Jewellery Corp
+              </p>
+            </div>
           </div>
         </div>
       </div>

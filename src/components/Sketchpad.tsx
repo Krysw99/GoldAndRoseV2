@@ -607,6 +607,9 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
 
   const lastPosRef = useRef<{ x: number; y: number } | null>(null);
   const midPosRef = useRef<{ x: number; y: number } | null>(null);
+  const isDrawingRef = useRef<boolean>(false);
+  const drawingPointerIdRef = useRef<number | null>(null);
+  const isStylusRef = useRef<boolean>(false);
 
   // Stencil states
   const [stencilType, setStencilType] = useState<string>('none');
@@ -1411,8 +1414,13 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       e.preventDefault();
     }
 
-    // Strictly ignore hovering S-Pen / Apple Pencil / Stylus proximity events when not pressing firmly on glass
-    if (e.buttons === 0 || (e.pointerType === 'pen' && e.pressure === 0) || (e.pointerType === 'touch' && e.buttons === 0)) {
+    // Palm rejection: If a stylus/pen is currently drawing, ignore resting palm touches
+    if (isDrawingRef.current && isStylusRef.current && e.pointerType === 'touch') {
+      return;
+    }
+
+    // Strictly ignore hovering S-Pen / Apple Pencil / Stylus proximity events before touching glass
+    if (e.pointerType === 'pen' && e.buttons === 0 && e.pressure === 0) {
       return;
     }
 
@@ -1421,44 +1429,46 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     if (!canvas) return;
     canvasRectRef.current = canvas.getBoundingClientRect();
 
-    // Track active pointer for multi-touch pinch-to-zoom
-    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // Multi-touch pinch-to-zoom tracking (ONLY for touch gestures when NOT drawing with a stylus)
+    if (e.pointerType === 'touch' && !isStylusRef.current && !isDrawingRef.current) {
+      activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    // Handle multi-touch gesture start
-    if (activePointersRef.current.size >= 2) {
-      // Abort any active drawing/stamping/measuring state cleanly
-      if (tool === 'stamp' && isStamping && savedCanvasData) {
-        const ctx = canvas.getContext('2d');
-        if (ctx) ctx.putImageData(savedCanvasData, 0, 0);
+      // Handle multi-touch gesture start
+      if (activePointersRef.current.size >= 2) {
+        if (tool === 'stamp' && isStamping && savedCanvasData) {
+          const ctx = canvas.getContext('2d');
+          if (ctx) ctx.putImageData(savedCanvasData, 0, 0);
+        }
+        if (tool === 'line' && isDrawingLine && savedCanvasData) {
+          const ctx = canvas.getContext('2d');
+          if (ctx) ctx.putImageData(savedCanvasData, 0, 0);
+        }
+        setIsDrawing(false);
+        isDrawingRef.current = false;
+        setIsStamping(false);
+        setIsMeasuring(false);
+        setIsDrawingLine(false);
+
+        const pointers = Array.from(activePointersRef.current.values()) as { x: number; y: number }[];
+        const p1 = pointers[0];
+        const p2 = pointers[1];
+
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        initialPinchDistanceRef.current = Math.sqrt(dx * dx + dy * dy);
+        initialZoomRef.current = zoom;
+
+        const container = containerRef.current;
+        if (container) {
+          const rect = container.getBoundingClientRect();
+          const midX = (p1.x + p2.x) / 2 - rect.left;
+          const midY = (p1.y + p2.y) / 2 - rect.top;
+          initialPinchMidpointRef.current = { x: midX, y: midY };
+        }
+        initialPanRef.current = { x: panX, y: panY };
+        wasGesturingRef.current = true;
+        return;
       }
-      if (tool === 'line' && isDrawingLine && savedCanvasData) {
-        const ctx = canvas.getContext('2d');
-        if (ctx) ctx.putImageData(savedCanvasData, 0, 0);
-      }
-      setIsDrawing(false);
-      setIsStamping(false);
-      setIsMeasuring(false);
-      setIsDrawingLine(false);
-
-      const pointers = Array.from(activePointersRef.current.values()) as { x: number; y: number }[];
-      const p1 = pointers[0];
-      const p2 = pointers[1];
-
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      initialPinchDistanceRef.current = Math.sqrt(dx * dx + dy * dy);
-      initialZoomRef.current = zoom;
-
-      const container = containerRef.current;
-      if (container) {
-        const rect = container.getBoundingClientRect();
-        const midX = (p1.x + p2.x) / 2 - rect.left;
-        const midY = (p1.y + p2.y) / 2 - rect.top;
-        initialPinchMidpointRef.current = { x: midX, y: midY };
-      }
-      initialPanRef.current = { x: panX, y: panY };
-      wasGesturingRef.current = true;
-      return;
     }
 
     const { x, y } = getCanvasCoords(e.clientX, e.clientY, true);
@@ -1479,7 +1489,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       initialStampSizeRef.current = stampSize;
       dragThresholdMetRef.current = false;
       setIsStamping(true);
-      setStampAngle(0); // Reset rotation angle at start of stamp interaction
+      setStampAngle(0);
       setPointerPos({ x, y });
     } else if (tool === 'ruler') {
       try {
@@ -1502,15 +1512,47 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       captureCanvasState();
       setIsDrawingLine(true);
     } else {
+      // Freehand drawing (Pen, Highlighter, Eraser)
+      isDrawingRef.current = true;
+      drawingPointerIdRef.current = e.pointerId;
+      isStylusRef.current = (e.pointerType === 'pen');
       setIsDrawing(true);
+
       try {
         canvas.setPointerCapture(e.pointerId);
       } catch {
         // Fallback
       }
+
       lastPosRef.current = { x, y };
       midPosRef.current = { x, y };
-      drawSegment(x, y, x, y, ctx, canvas.width, canvas.height);
+
+      // Render immediate crisp dot on touchdown for responsive stippling / single tap dots
+      const strokeDotRadius = (tool === 'eraser' ? thickness * 6 : (tool === 'highlighter' ? thickness * 4 : thickness)) / 2;
+      ctx.beginPath();
+      ctx.arc(x, y, strokeDotRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Symmetrical mirror dots on touchdown
+      if (symmetryMode === 'vertical') {
+        ctx.beginPath();
+        ctx.arc(canvas.width - x, y, strokeDotRadius, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (symmetryMode === 'horizontal') {
+        ctx.beginPath();
+        ctx.arc(x, canvas.height - y, strokeDotRadius, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (symmetryMode === 'quad') {
+        ctx.beginPath();
+        ctx.arc(canvas.width - x, y, strokeDotRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x, canvas.height - y, strokeDotRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(canvas.width - x, canvas.height - y, strokeDotRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   };
 
@@ -1520,19 +1562,18 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       e.preventDefault();
     }
 
-    // Check if pointer is hovering (S Pen / Stylus hovering in mid-air with zero pressure or buttons)
-    const isHovering = e.buttons === 0 || (e.pointerType === 'pen' && e.pressure === 0);
-
-    // If hovering while in an active stroke/drag, terminate drawing cleanly immediately
-    if (isHovering) {
-      if (isDrawing || isStamping || isMeasuring || isDrawingLine) {
-        handlePointerUp(e);
-      }
+    // Palm rejection: ignore non-drawing touches when stylus is actively drawing
+    if (isDrawingRef.current && isStylusRef.current && e.pointerType === 'touch') {
       return;
     }
 
-    // Track pointer movement
-    if (activePointersRef.current.has(e.pointerId)) {
+    // If another pointer is moving while we're locked into a drawing stroke, ignore it
+    if (isDrawingRef.current && drawingPointerIdRef.current !== null && e.pointerId !== drawingPointerIdRef.current) {
+      return;
+    }
+
+    // Track touch pointers for pinch zoom if not drawing
+    if (e.pointerType === 'touch' && !isStylusRef.current && activePointersRef.current.has(e.pointerId)) {
       activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
 
@@ -1588,8 +1629,6 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
         if (dist >= 5) {
           dragThresholdMetRef.current = true;
           setStampSize(Math.max(5, Math.round(dist)));
-          
-          // Rotate based on drag direction vector relative to the center
           const angle = Math.atan2(dy, dx);
           setStampAngle(angle);
         }
@@ -1611,23 +1650,42 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       return;
     }
 
-    if (!isDrawing) return;
+    if (!isDrawingRef.current) return;
 
     const ctx = getCanvasContext();
     if (!ctx) return;
 
-    // Use high-precision coalesced pointer events for S Pen smoothness if available
-    let coalesced = (e.nativeEvent && typeof e.nativeEvent.getCoalescedEvents === 'function')
-      ? e.nativeEvent.getCoalescedEvents()
-      : (typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : []);
-    
-    if (!coalesced || coalesced.length === 0) {
-      coalesced = [e];
+    // Extract all hardware coalesced sub-events (120Hz/240Hz Apple Pencil & S Pen points)
+    const rawEvents: Array<{ clientX: number; clientY: number; pressure?: number }> = [];
+    const native = e.nativeEvent as unknown as { getCoalescedEvents?: () => PointerEvent[] };
+    if (native && typeof native.getCoalescedEvents === 'function') {
+      const coalesced = native.getCoalescedEvents();
+      if (coalesced && coalesced.length > 0) {
+        for (let i = 0; i < coalesced.length; i++) {
+          rawEvents.push(coalesced[i]);
+        }
+      }
+    } else if (typeof (e as unknown as { getCoalescedEvents?: () => PointerEvent[] }).getCoalescedEvents === 'function') {
+      const coalesced = (e as unknown as { getCoalescedEvents: () => PointerEvent[] }).getCoalescedEvents();
+      if (coalesced && coalesced.length > 0) {
+        for (let i = 0; i < coalesced.length; i++) {
+          rawEvents.push(coalesced[i]);
+        }
+      }
+    }
+    if (rawEvents.length === 0) {
+      rawEvents.push(e);
     }
 
-    for (const ev of coalesced) {
+    for (const ev of rawEvents) {
       const coords = getCanvasCoords(ev.clientX, ev.clientY);
       const last = lastPosRef.current || coords;
+      
+      // Skip micro-movements to avoid zero-length Bézier computations
+      const dX = coords.x - last.x;
+      const dY = coords.y - last.y;
+      if (dX * dX + dY * dY < 0.1) continue;
+
       const startMid = midPosRef.current || last;
       const endMid = { x: (last.x + coords.x) / 2, y: (last.y + coords.y) / 2 };
 
@@ -1669,7 +1727,10 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
 
     if (hadGesture) {
       // Suppress any normal drawing, stamping, or measuring triggers on pointer up
+      isDrawingRef.current = false;
       setIsDrawing(false);
+      drawingPointerIdRef.current = null;
+      isStylusRef.current = false;
       setIsStamping(false);
       setIsMeasuring(false);
       setIsDrawingLine(false);
@@ -1743,7 +1804,8 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       return;
     }
 
-    if (!isDrawing) return;
+    if (!isDrawingRef.current) return;
+    isDrawingRef.current = false;
     setIsDrawing(false);
 
     const ctx = getCanvasContext();
@@ -1761,11 +1823,15 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       pushToHistory(canvas.toDataURL());
     }
 
+    drawingPointerIdRef.current = null;
+    isStylusRef.current = false;
     lastPosRef.current = null;
     midPosRef.current = null;
   };
 
   const handlePointerLeave = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // If pointer is captured for drawing, pointerleave will not trigger
+    // But if it does, keep active drawing stroke intact until pointerup/pointercancel
     activePointersRef.current.delete(e.pointerId);
     if (activePointersRef.current.size < 2) {
       initialPinchDistanceRef.current = null;
@@ -1775,7 +1841,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       wasGesturingRef.current = false;
     }
 
-    if (isStamping) return; // Prevent clearing preview state while scaling in mid-drag
+    if (isStamping) return;
     if (tool === 'stamp' && savedCanvasData) {
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext('2d');
@@ -1783,7 +1849,9 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
         ctx.putImageData(savedCanvasData, 0, 0);
       }
     }
-    setPointerPos(null);
+    if (tool === 'stamp') {
+      setPointerPos(null);
+    }
   };
 
   // Render live stamp preview under the pointer OR active stamp adjustments

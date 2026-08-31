@@ -307,7 +307,9 @@ export default function App() {
     lastLocalChangeTimeRef.current = Date.now();
     setSettings(newSettings);
     // Sync to cloud Firestore immediately on manual save/profile operations
-    saveDocument('app_settings', 'master', newSettings);
+    saveDocument('app_settings', 'master', newSettings).catch(err => {
+      console.warn("Could not sync app_settings to cloud, saved locally:", err?.message || err);
+    });
   };
 
   // Firestore server synchronization & real-time updates
@@ -677,6 +679,7 @@ setIsCloudSynced(true);
       phone: string;
       address: string;
       driversLicense: string;
+      employeeId?: string;
       stoneRemovalQty: string;
       items: ScrapItem[];
       image: string | null;
@@ -709,6 +712,7 @@ setIsCloudSynced(true);
         phone: data.phone,
         address: data.address,
         driversLicense: data.driversLicense,
+        employeeId: data.employeeId || '',
         stoneRemovalQty: data.stoneRemovalQty,
         spotPrices: original ? original.spotPrices : { ...spotPrices },
         items: data.items,
@@ -748,6 +752,7 @@ setIsCloudSynced(true);
         phone: data.phone,
         address: data.address,
         driversLicense: data.driversLicense,
+        employeeId: data.employeeId || '',
         stoneRemovalQty: data.stoneRemovalQty,
         spotPrices: { ...spotPrices },
         items: data.items,
@@ -1013,9 +1018,9 @@ setIsCloudSynced(true);
   const handleExportCsv = (type: 'scrap' | 'retail' | 'wholesale') => {
     let csv = "";
     if (type === 'scrap') {
-      csv = "ID,Date,Name,Phone,Summary,Total paid\n";
+      csv = "ID,Date,Name,Phone,Employee ID,Summary,Total paid\n";
       scrapTransactions.forEach(t => {
-        csv += `"${t.id}","${t.date}","${t.name}","${t.phone}","${t.summary.replace(/"/g, '""')}","${t.total}"\n`;
+        csv += `"${t.id}","${t.date}","${t.name}","${t.phone}","${(t.employeeId || '').replace(/"/g, '""')}","${t.summary.replace(/"/g, '""')}","${t.total}"\n`;
       });
     } else if (type === 'retail') {
       csv = "ID,Date,Client,Phone,Pieces Summary,Total Due\n";
@@ -1641,7 +1646,9 @@ setIsCloudSynced(true);
               onSaveApiKey={(key) => { 
                 const trimmed = key.trim(); 
                 setGoldApiKey(trimmed); 
-                saveDocument('app_settings', 'gold_api_key', { key: trimmed }); 
+                saveDocument('app_settings', 'gold_api_key', { key: trimmed }).catch(err => {
+                  console.warn("Could not sync gold_api_key to cloud, saved locally:", err?.message || err);
+                }); 
               }}
               onExportCsv={handleExportCsv}
               onClearHistory={handleClearHistory}

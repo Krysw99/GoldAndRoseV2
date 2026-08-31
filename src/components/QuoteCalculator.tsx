@@ -4007,36 +4007,62 @@ export default function QuoteCalculator({
             {/* SECTION 4: Piece Studio Notes */}
             <div className="space-y-4">
               <h3 className="text-[10px] font-black text-brand-400 uppercase tracking-wider block border-b border-brand-50 pb-1">4. Studio Notes</h3>
-              <div className="bg-brand-50/50 p-4 rounded-2xl border border-brand-100 flex flex-col gap-2">
+              <div className="bg-brand-50/50 p-4 rounded-2xl border border-brand-100 flex flex-col gap-3">
                 <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-bold text-brand-700">Studio Notes</label>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-bold text-brand-700">Studio Notes</label>
+                    {activeRing.designNotes && activeRing.designNotes.length > 0 && (
+                      <span className="text-[8px] font-mono font-bold bg-brand-200/70 text-brand-800 px-1.5 py-0.5 rounded-full">
+                        {activeRing.designNotes.length} {activeRing.designNotes.length === 1 ? 'note' : 'notes'}
+                      </span>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={addDesignNote}
-                    className="text-[8px] font-black uppercase text-brand-700 bg-white border px-2 py-0.5 rounded shadow-sm"
+                    className="text-[8px] font-black uppercase text-brand-700 hover:text-brand-900 bg-white hover:bg-brand-50 border border-brand-200 px-2.5 py-1 rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
                   >
-                    + Note
+                    <Plus size={10} /> Add Note
                   </button>
                 </div>
-                <div className="space-y-1 overflow-y-auto max-h-24">
-                  {activeRing.designNotes?.map((dn, idx) => (
-                    <div key={idx} className="flex gap-1 items-center">
-                      <input
-                        type="text"
-                        placeholder="Special design instructions..."
-                        className="w-full bg-white border border-brand-200 p-1.5 rounded text-[10px] font-medium"
-                        value={dn.text}
-                        onChange={(e) => updateDesignNote(idx, e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeDesignNote(idx)}
-                        className="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                <div className="space-y-2">
+                  {(!activeRing.designNotes || activeRing.designNotes.length === 0) ? (
+                    <div className="text-[10px] text-slate-400 italic py-2.5 text-center bg-white/60 rounded-xl border border-dashed border-brand-200">
+                      No studio notes added yet. Click "+ Add Note" to add bench instructions or specifications.
                     </div>
-                  ))}
+                  ) : (
+                    <>
+                      {activeRing.designNotes.map((dn, idx) => (
+                        <div key={idx} className="flex gap-2 items-center">
+                          <span className="text-[9px] font-bold text-brand-400 w-5 text-center shrink-0 font-mono">#{idx + 1}</span>
+                          <input
+                            type="text"
+                            placeholder="Special design instructions or bench note..."
+                            className="w-full bg-white border border-brand-200 p-2 rounded-xl text-xs font-medium focus:ring-1 focus:ring-brand-gold focus:border-brand-gold outline-none shadow-2xs"
+                            value={dn.text}
+                            onChange={(e) => updateDesignNote(idx, e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeDesignNote(idx)}
+                            className="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 shrink-0 transition-colors cursor-pointer"
+                            title="Remove note"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="pt-1 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={addDesignNote}
+                          className="text-[8px] font-black uppercase text-brand-700 hover:text-brand-900 bg-white hover:bg-brand-50 border border-brand-200 px-2.5 py-1 rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus size={10} /> Add Another Note
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

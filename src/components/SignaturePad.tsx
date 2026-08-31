@@ -16,13 +16,16 @@ export default function SignaturePad({ initialSignature, onSave, onClear }: Sign
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSigned, setHasSigned] = useState(!!initialSignature);
+  const lastPosRef = useRef<{ x: number; y: number } | null>(null);
+  const midPosRef = useRef<{ x: number; y: number } | null>(null);
+  const isDrawingRef = useRef<boolean>(false);
 
   // Resize canvas to container width
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { desynchronized: true });
     if (!ctx) return;
 
     // Set high DPI scale
@@ -34,6 +37,7 @@ export default function SignaturePad({ initialSignature, onSave, onClear }: Sign
 
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.strokeStyle = '#1c120c'; // Luxury Atelier Espresso dark stroke
 
     // Draw initial signature if any
@@ -47,8 +51,10 @@ export default function SignaturePad({ initialSignature, onSave, onClear }: Sign
   }, [initialSignature]);
 
   const startDrawing = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    // Ignore hovering S-Pen / Apple Pencil / stylus proximity events when not pressing firmly
-    if (e.buttons === 0 || (e.pointerType === 'pen' && e.pressure === 0)) {
+    if (e.cancelable) e.preventDefault();
+
+    // Ignore hovering S-Pen before touching glass
+    if (e.pointerType === 'pen' && e.buttons === 0 && e.pressure === 0) {
       return;
     }
 
@@ -62,9 +68,22 @@ export default function SignaturePad({ initialSignature, onSave, onClear }: Sign
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#1c120c';
+    ctx.fillStyle = '#1c120c';
+    ctx.lineWidth = 2.5;
+
+    // Immediate dot on touchdown
     ctx.beginPath();
-    ctx.moveTo(x, y);
+    ctx.arc(x, y, 1.25, 0, Math.PI * 2);
+    ctx.fill();
+
+    isDrawingRef.current = true;
     setIsDrawing(true);
+    lastPosRef.current = { x, y };
+    midPosRef.current = { x, y };
+
     try {
       canvas.setPointerCapture(e.pointerId);
     } catch {
@@ -73,13 +92,8 @@ export default function SignaturePad({ initialSignature, onSave, onClear }: Sign
   };
 
   const draw = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
-
-    // Ignore hovering stylus or released pointer
-    if (e.buttons === 0 || (e.pointerType === 'pen' && e.pressure === 0)) {
-      stopDrawing(e);
-      return;
-    }
+    if (!isDrawingRef.current) return;
+    if (e.cancelable) e.preventDefault();
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -88,25 +102,72 @@ export default function SignaturePad({ initialSignature, onSave, onClear }: Sign
     if (!ctx) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    
+    // Coalesced hardware events for 120Hz/240Hz stylus fluidity
+    const rawEvents: Array<{ clientX: number; clientY: number }> = [];
+    const native = e.nativeEvent as unknown as { getCoalescedEvents?: () => PointerEvent[] };
+    if (native && typeof native.getCoalescedEvents === 'function') {
+      const coalesced = native.getCoalescedEvents();
+      if (coalesced && coalesced.length > 0) {
+        for (let i = 0; i < coalesced.length; i++) rawEvents.push(coalesced[i]);
+      }
+    }
+    if (rawEvents.length === 0) rawEvents.push(e);
 
-    ctx.lineTo(x, y);
-    ctx.stroke();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#1c120c';
+    ctx.lineWidth = 2.5;
+
+    for (const ev of rawEvents) {
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      const pt = { x, y };
+      const last = lastPosRef.current || pt;
+
+      const dX = x - last.x;
+      const dY = y - last.y;
+      if (dX * dX + dY * dY < 0.1) continue;
+
+      const startMid = midPosRef.current || last;
+      const endMid = { x: (last.x + x) / 2, y: (last.y + y) / 2 };
+
+      ctx.beginPath();
+      ctx.moveTo(startMid.x, startMid.y);
+      ctx.quadraticCurveTo(last.x, last.y, endMid.x, endMid.y);
+      ctx.stroke();
+
+      lastPosRef.current = pt;
+      midPosRef.current = endMid;
+    }
+
     setHasSigned(true);
   };
 
   const stopDrawing = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
+    if (!isDrawingRef.current) return;
+    isDrawingRef.current = false;
     setIsDrawing(false);
     
     const canvas = canvasRef.current;
     if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx && lastPosRef.current && midPosRef.current) {
+        ctx.beginPath();
+        ctx.moveTo(midPosRef.current.x, midPosRef.current.y);
+        ctx.quadraticCurveTo(lastPosRef.current.x, lastPosRef.current.y, lastPosRef.current.x, lastPosRef.current.y);
+        ctx.stroke();
+      }
+
       try {
         canvas.releasePointerCapture(e.pointerId);
       } catch {
         // Pointer capture fallback
       }
+      
+      lastPosRef.current = null;
+      midPosRef.current = null;
+
       // Trigger save on mouse/touch up
       const dataUrl = canvas.toDataURL('image/png');
       onSave(dataUrl);

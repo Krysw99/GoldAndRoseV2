@@ -155,6 +155,7 @@ export interface ScrapTransaction {
   phone: string;
   address: string;
   driversLicense: string;
+  employeeId?: string;
   stoneRemovalQty: string;
   spotPrices: {
     gold: number;

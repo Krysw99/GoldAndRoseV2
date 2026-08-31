@@ -56,8 +56,9 @@ interface FirestoreErrorInfo {
 }
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const message = error instanceof Error ? error.message : String(error);
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: message,
     authInfo: {
       userId: auth.currentUser?.uid || null,
       email: auth.currentUser?.email || null,
@@ -72,7 +73,12 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  
+  if (message.includes('Quota limit exceeded') || message.includes('RESOURCE_EXHAUSTED')) {
+    console.warn(`[Firestore Quota Notice] Free daily quota reached for ${operationType} on ${path || 'database'}. Operating in local offline mode.`);
+  } else {
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+  }
   throw new Error(JSON.stringify(errInfo));
 }
 
@@ -248,7 +254,11 @@ export async function deleteDocument(collectionName: string, id: string) {
 /**
  * Real-time listener for a Firestore collection.
  */
-export function listenCollection(collectionName: string, onUpdate: (docs: any[]) => void) {
+export function listenCollection(
+  collectionName: string, 
+  onUpdate: (docs: any[]) => void,
+  onError?: (error: any) => void
+) {
   const colRef = collection(db, collectionName);
   const q = query(colRef);
   
@@ -259,7 +269,15 @@ export function listenCollection(collectionName: string, onUpdate: (docs: any[])
     }));
     onUpdate(docs);
   }, (error) => {
-    handleFirestoreError(error, OperationType.GET, collectionName);
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('Quota limit exceeded') || message.includes('RESOURCE_EXHAUSTED')) {
+      console.warn(`[Firestore Quota Notice] Free daily read quota reached for collection "${collectionName}". Preserving current local cache.`);
+    } else {
+      console.warn(`Firestore onSnapshot warning for "${collectionName}":`, message);
+    }
+    if (onError) {
+      onError(error);
+    }
   });
 }
 
