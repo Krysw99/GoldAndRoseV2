@@ -48,8 +48,8 @@ export function printElement(elementId: string) {
         <style>
           /* Optimized high-fidelity single-page print styles */
           @page {
-            size: auto;
-            margin: 8mm 10mm;
+            size: letter portrait;
+            margin: 6mm 8mm;
           }
           body, html {
             background: #ffffff !important;
@@ -71,6 +71,11 @@ export function printElement(elementId: string) {
             print-color-adjust: exact !important;
           }
 
+          .break-inside-avoid {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+
           .print\\:hidden, button, nav, header, footer, .container-close-btn {
             display: none !important;
           }
@@ -79,11 +84,10 @@ export function printElement(elementId: string) {
             display: block !important;
           }
 
-          /* Ensure nested image wrappers are clean */
+          /* Ensure image thumbnails respect constraints and don't stretch */
           img {
-            max-width: 100% !important;
-            height: auto !important;
-            display: block;
+            max-width: 100%;
+            object-fit: contain;
           }
 
           .print-container {

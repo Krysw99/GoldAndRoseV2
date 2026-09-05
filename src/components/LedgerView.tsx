@@ -47,8 +47,9 @@ function getQuoteTransactionScore(tx: QuoteTransaction, queryWords: string[], fu
   const jobDesc = (tx.fullData?.jobDesc || "").toLowerCase();
   const notes = (tx.fullData?.notes || "").toLowerCase();
   const email = (tx.fullData?.cEmail || "").toLowerCase();
+  const empId = (tx.employeeId || tx.fullData?.employeeId || "").toLowerCase();
 
-  const combinedHeader = `${name} ${phone} ${jobNum} ${jobDesc} ${notes} ${email}`.toLowerCase();
+  const combinedHeader = `${name} ${phone} ${jobNum} ${jobDesc} ${notes} ${email} ${empId}`.toLowerCase();
   if (combinedHeader.includes(fullSearchStr)) {
     score += 500;
   }
@@ -594,7 +595,14 @@ export default function LedgerView({
                   className={`p-3.5 rounded-xl border transition-all cursor-pointer shadow-sm flex items-center justify-between ${selectedTx?.id === tx.id ? 'bg-brand-50 border-brand-gold' : 'bg-white border-brand-100 hover:border-brand-300'}`}
                 >
                   <div className="space-y-0.5">
-                    <p className="font-bold text-xs text-brand-900">{tx.name}</p>
+                    <p className="font-bold text-xs text-brand-900 flex items-center flex-wrap gap-1.5">
+                      <span>{tx.name || 'Unnamed Client'}</span>
+                      {(tx.employeeId || tx.fullData?.employeeId) && (
+                        <span className="bg-brand-100 text-brand-700 text-[8.5px] font-bold px-1.5 py-0.2 rounded font-mono">
+                          Emp: {tx.employeeId || tx.fullData?.employeeId}
+                        </span>
+                      )}
+                    </p>
                     <p className="text-[9px] text-brand-400 font-mono">{tx.date}</p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -630,6 +638,11 @@ export default function LedgerView({
                       {tx.fullData?.jobNum && (
                         <span className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded font-mono">
                           #{tx.fullData.jobNum}
+                        </span>
+                      )}
+                      {(tx.employeeId || tx.fullData?.employeeId) && (
+                        <span className="bg-emerald-50 text-emerald-700 text-[8.5px] font-bold px-1.5 py-0.2 rounded font-mono">
+                          Emp: {tx.employeeId || tx.fullData?.employeeId}
                         </span>
                       )}
                     </p>
@@ -890,7 +903,17 @@ export default function LedgerView({
                             const numPurity = Number(it.purity) || 0;
                             const pStr = `${it.purity}%`;
                             let karatLabel = '';
-                            if (it.material === 'gold') {
+                            if (it.purityMode === 'karat' && it.karatOption) {
+                              if (it.material === 'gold') {
+                                karatLabel = `${it.karatOption.replace(/k/i, '')}K Gold`;
+                              } else if (it.material === 'silver') {
+                                karatLabel = `${it.karatOption} Silver`;
+                              } else {
+                                karatLabel = `${it.karatOption} Platinum`;
+                              }
+                            } else if (it.purityMode === 'manual') {
+                              karatLabel = `Custom ${it.material ? it.material.toUpperCase() : 'Lot'} (${it.purity}%)`;
+                            } else if (it.material === 'gold') {
                               const kVal = Math.round((numPurity / 100) * 24);
                               karatLabel = `${kVal}K Gold`;
                             } else if (it.material === 'silver') {
@@ -928,30 +951,30 @@ export default function LedgerView({
 
                     {/* 5. Verified Compliance Photographs (Thumbnails adjusted for 1-page fit) */}
                     {((activeTx as ScrapTransaction).image || (activeTx as ScrapTransaction).goldImage) && (
-                      <div className="border border-brand-200 rounded-lg p-2 bg-brand-50/30 space-y-1">
+                      <div className="border border-brand-200 rounded-lg p-1.5 bg-brand-50/30 space-y-1">
                         <p className="text-[7.5px] uppercase font-black text-brand-500 tracking-wider">
                           Verification Proof & Compliance Attachments
                         </p>
-                        <div className={`grid ${(activeTx as ScrapTransaction).image && (activeTx as ScrapTransaction).goldImage ? 'grid-cols-2' : 'grid-cols-1 max-w-xs mx-auto'} gap-2`}>
+                        <div className="flex items-center justify-center gap-3">
                           {(activeTx as ScrapTransaction).image && (
-                            <div className="bg-white p-1 rounded border border-brand-200 flex flex-col items-center">
-                              <span className="text-[7px] font-bold uppercase text-brand-500 mb-0.5">Verified ID / Photo</span>
+                            <div className="bg-white p-1 rounded border border-brand-200 flex flex-col items-center flex-1 max-w-[200px]">
+                              <span className="text-[6.5px] font-bold uppercase text-brand-500 mb-0.5">Verified ID / Photo</span>
                               <img 
                                 src={(activeTx as ScrapTransaction).image!} 
                                 alt="Compliance photo" 
-                                className="h-20 max-h-20 w-full object-contain rounded bg-slate-50 cursor-pointer hover:opacity-90 transition-opacity" 
+                                className="h-12 max-h-12 w-auto object-contain rounded bg-slate-50 cursor-pointer hover:opacity-90 transition-opacity" 
                                 onClick={() => setEnlargeImage((activeTx as ScrapTransaction).image!)}
                                 title="Click to enlarge"
                               />
                             </div>
                           )}
                           {(activeTx as ScrapTransaction).goldImage && (
-                            <div className="bg-white p-1 rounded border border-amber-200 flex flex-col items-center">
-                              <span className="text-[7px] font-bold uppercase text-amber-800 mb-0.5">Metal Lot Photograph</span>
+                            <div className="bg-white p-1 rounded border border-amber-200 flex flex-col items-center flex-1 max-w-[200px]">
+                              <span className="text-[6.5px] font-bold uppercase text-amber-800 mb-0.5">Metal Lot Photograph</span>
                               <img 
                                 src={(activeTx as ScrapTransaction).goldImage!} 
                                 alt="Scanned gold photo" 
-                                className="h-20 max-h-20 w-full object-contain rounded bg-amber-50/20 cursor-pointer hover:opacity-90 transition-opacity" 
+                                className="h-12 max-h-12 w-auto object-contain rounded bg-amber-50/20 cursor-pointer hover:opacity-90 transition-opacity" 
                                 onClick={() => setEnlargeImage((activeTx as ScrapTransaction).goldImage!)}
                                 title="Click to enlarge"
                               />
@@ -962,25 +985,25 @@ export default function LedgerView({
                     )}
 
                     {/* 6. Legal Terms & Signatures */}
-                    <div className="border-t border-brand-200 pt-2 space-y-2">
-                      <p className="text-[7.5px] text-brand-500 italic leading-relaxed text-center">
+                    <div className="border-t border-brand-200 pt-1.5 space-y-1.5">
+                      <p className="text-[7px] text-brand-500 italic leading-relaxed text-center">
                         I certify and declare that I am 18 years of age or older, the sole legal owner of the precious metal items listed above, and possess full right and authority to sell them to Gold & Rose Jewellery Corp. All buyout transactions are absolute, final, and non-refundable.
                       </p>
 
                       <div className="grid grid-cols-2 gap-4 items-end pt-1">
                         <div className="text-center flex flex-col items-center">
                           {(activeTx as ScrapTransaction).signature ? (
-                            <div className="h-10 w-36 flex items-center justify-center relative overflow-hidden mb-0.5">
+                            <div className="h-8 w-32 flex items-center justify-center relative overflow-hidden mb-0.5">
                               <img 
                                 src={(activeTx as ScrapTransaction).signature!} 
                                 alt="Client signature" 
-                                className="max-h-10 max-w-full object-contain filter brightness-95" 
+                                className="max-h-8 max-w-full object-contain filter brightness-95" 
                               />
                             </div>
                           ) : (
-                            <div className="h-10"></div>
+                            <div className="h-8"></div>
                           )}
-                          <div className="w-full max-w-[170px] border-b border-brand-400"></div>
+                          <div className="w-full max-w-[150px] border-b border-brand-400"></div>
                           <p className="text-[7.5px] uppercase font-bold tracking-wider text-brand-700 mt-0.5">
                             Client Authorization Signature
                           </p>
@@ -990,10 +1013,10 @@ export default function LedgerView({
                         </div>
 
                         <div className="text-center flex flex-col items-center">
-                          <div className="h-10 flex items-center justify-center">
+                          <div className="h-8 flex items-center justify-center">
                             <span className="font-serif italic font-black text-brand-900 text-sm">James Lee</span>
                           </div>
-                          <div className="w-full max-w-[170px] border-b border-brand-400"></div>
+                          <div className="w-full max-w-[150px] border-b border-brand-400"></div>
                           <p className="text-[7.5px] uppercase font-bold tracking-wider text-brand-700 mt-0.5">
                             Authorized Buyer / Appraiser
                           </p>

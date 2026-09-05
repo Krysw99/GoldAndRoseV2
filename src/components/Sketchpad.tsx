@@ -610,6 +610,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
   const isDrawingRef = useRef<boolean>(false);
   const drawingPointerIdRef = useRef<number | null>(null);
   const isStylusRef = useRef<boolean>(false);
+  const canvasContextRef = useRef<CanvasRenderingContext2D | null>(null);
 
   // Stencil states
   const [stencilType, setStencilType] = useState<string>('none');
@@ -633,7 +634,6 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
   });
 
   // Interactivity tracking
-  const [isDrawing, setIsDrawing] = useState(false);
   const [transformMode, setTransformMode] = useState<'drag' | 'scale' | 'rotate' | null>(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [initialImgState, setInitialImgState] = useState<ImageState | null>(null);
@@ -948,11 +948,14 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     isGridEnabled, gridCellSize, symmetryMode, rulerMeasurements, isMeasuring, rulerStart, rulerEnd
   ]);
 
-  // Update canvas context styles based on active tool
+  // Update canvas context styles based on active tool (cached for high-frequency pen strokes)
   const getCanvasContext = () => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true, desynchronized: true });
+    if (!canvasContextRef.current || canvasContextRef.current.canvas !== canvas) {
+      canvasContextRef.current = canvas.getContext('2d', { willReadFrequently: true, desynchronized: true });
+    }
+    const ctx = canvasContextRef.current;
     if (!ctx) return null;
 
     ctx.lineCap = 'round';
@@ -1419,11 +1422,6 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       return;
     }
 
-    // Strictly ignore hovering S-Pen / Apple Pencil / Stylus proximity events before touching glass
-    if (e.pointerType === 'pen' && e.buttons === 0 && e.pressure === 0) {
-      return;
-    }
-
     // Refresh bounding rect for exact precision
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1443,7 +1441,6 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
           const ctx = canvas.getContext('2d');
           if (ctx) ctx.putImageData(savedCanvasData, 0, 0);
         }
-        setIsDrawing(false);
         isDrawingRef.current = false;
         setIsStamping(false);
         setIsMeasuring(false);
@@ -1516,19 +1513,22 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       isDrawingRef.current = true;
       drawingPointerIdRef.current = e.pointerId;
       isStylusRef.current = (e.pointerType === 'pen');
-      setIsDrawing(true);
 
-      try {
-        canvas.setPointerCapture(e.pointerId);
-      } catch {
-        // Fallback
+      // Do NOT capture pointer for stylus/pen to prevent iOS/Android OS gesture conflicts and stroke cutoffs
+      if (e.pointerType !== 'pen') {
+        try {
+          canvas.setPointerCapture(e.pointerId);
+        } catch {
+          // Fallback
+        }
       }
 
       lastPosRef.current = { x, y };
       midPosRef.current = { x, y };
 
-      // Render immediate crisp dot on touchdown for responsive stippling / single tap dots
-      const strokeDotRadius = (tool === 'eraser' ? thickness * 6 : (tool === 'highlighter' ? thickness * 4 : thickness)) / 2;
+      // Render immediate crisp dot on touchdown with dynamic pressure support for S Pen / Apple Pencil
+      const pressureDotFactor = (e.pressure !== undefined && e.pressure > 0) ? (0.65 + e.pressure * 0.7) : 1;
+      const strokeDotRadius = ((tool === 'eraser' ? thickness * 6 : (tool === 'highlighter' ? thickness * 4 : thickness)) * pressureDotFactor) / 2;
       ctx.beginPath();
       ctx.arc(x, y, strokeDotRadius, 0, Math.PI * 2);
       ctx.fill();
@@ -1681,13 +1681,19 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       const coords = getCanvasCoords(ev.clientX, ev.clientY);
       const last = lastPosRef.current || coords;
       
-      // Skip micro-movements to avoid zero-length Bézier computations
+      // Skip micro-jitter to prevent zero-length Bézier computations
       const dX = coords.x - last.x;
       const dY = coords.y - last.y;
-      if (dX * dX + dY * dY < 0.1) continue;
+      if (dX === 0 && dY === 0) continue;
 
       const startMid = midPosRef.current || last;
       const endMid = { x: (last.x + coords.x) / 2, y: (last.y + coords.y) / 2 };
+
+      // Responsive Apple Pencil & S Pen pressure modulation
+      if (ev.pressure !== undefined && ev.pressure > 0) {
+        const pressureFactor = 0.65 + ev.pressure * 0.7;
+        ctx.lineWidth = (tool === 'eraser' ? thickness * 6 : (tool === 'highlighter' ? thickness * 4 : thickness)) * pressureFactor;
+      }
 
       drawCurveSegment(
         startMid.x, startMid.y,
@@ -1728,7 +1734,6 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     if (hadGesture) {
       // Suppress any normal drawing, stamping, or measuring triggers on pointer up
       isDrawingRef.current = false;
-      setIsDrawing(false);
       drawingPointerIdRef.current = null;
       isStylusRef.current = false;
       setIsStamping(false);
@@ -1806,7 +1811,6 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
 
     if (!isDrawingRef.current) return;
     isDrawingRef.current = false;
-    setIsDrawing(false);
 
     const ctx = getCanvasContext();
     if (ctx && canvas && lastPosRef.current && midPosRef.current) {
@@ -1820,13 +1824,60 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       );
       const cleanState = ctx.getImageData(0, 0, canvas.width, canvas.height);
       setSavedCanvasData(cleanState);
-      pushToHistory(canvas.toDataURL());
+      // Non-blocking history push to eliminate pause between pen strokes
+      setTimeout(() => {
+        if (canvasRef.current) {
+          pushToHistory(canvasRef.current.toDataURL());
+        }
+      }, 0);
     }
 
     drawingPointerIdRef.current = null;
     isStylusRef.current = false;
     lastPosRef.current = null;
     midPosRef.current = null;
+  };
+
+  // Dedicated pointer cancel handler to guarantee no strokes cut off or get stuck in drawing state
+  const handlePointerCancel = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size < 2) {
+      initialPinchDistanceRef.current = null;
+      initialPinchMidpointRef.current = null;
+    }
+    if (activePointersRef.current.size === 0) {
+      wasGesturingRef.current = false;
+    }
+
+    if (isDrawingRef.current && (drawingPointerIdRef.current === null || drawingPointerIdRef.current === e.pointerId)) {
+      const canvas = canvasRef.current;
+      const ctx = getCanvasContext();
+      if (ctx && canvas && lastPosRef.current && midPosRef.current) {
+        drawCurveSegment(
+          midPosRef.current.x, midPosRef.current.y,
+          lastPosRef.current.x, lastPosRef.current.y,
+          lastPosRef.current.x, lastPosRef.current.y,
+          ctx,
+          canvas.width,
+          canvas.height
+        );
+        const cleanState = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        setSavedCanvasData(cleanState);
+        setTimeout(() => {
+          if (canvasRef.current) pushToHistory(canvasRef.current.toDataURL());
+        }, 0);
+      }
+      isDrawingRef.current = false;
+      drawingPointerIdRef.current = null;
+      isStylusRef.current = false;
+      lastPosRef.current = null;
+      midPosRef.current = null;
+    }
+
+    if (isStamping) {
+      setIsStamping(false);
+      setPointerPos(null);
+    }
   };
 
   const handlePointerLeave = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -2563,11 +2614,14 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerLeave}
-            onPointerCancel={handlePointerLeave}
-            className="absolute inset-0 w-full h-full z-20 touch-none"
+            onPointerCancel={handlePointerCancel}
+            onLostPointerCapture={handlePointerCancel}
+            className="absolute inset-0 w-full h-full z-20 touch-none select-none"
             style={{
               pointerEvents: tool === 'transform' ? 'none' : 'auto',
-              background: 'transparent'
+              background: 'transparent',
+              touchAction: 'none',
+              WebkitUserSelect: 'none'
             }}
           />
 

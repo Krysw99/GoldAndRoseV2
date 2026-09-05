@@ -134,6 +134,59 @@ export const PURITY_OPTIONS: Record<MaterialType, number[]> = {
   platinum: [0.999, 0.950, 0.900, 0.850, 0.500]
 };
 
+export interface KaratPreset {
+  id: string;
+  label: string;
+  shortLabel: string;
+  purity: number; // percentage (e.g. 58.33 for 14K)
+  karat?: number;
+}
+
+export const GOLD_KARAT_PRESETS: KaratPreset[] = [
+  { id: '24k', label: '24K (99.9% Pure Gold)', shortLabel: '24K Gold', purity: 99.9, karat: 24 },
+  { id: '23k', label: '23K (95.83% Gold)', shortLabel: '23K Gold', purity: 95.83, karat: 23 },
+  { id: '22k', label: '22K (91.67% Gold)', shortLabel: '22K Gold', purity: 91.67, karat: 22 },
+  { id: '21k', label: '21K (87.50% Gold)', shortLabel: '21K Gold', purity: 87.5, karat: 21 },
+  { id: '20k', label: '20K (83.33% Gold)', shortLabel: '20K Gold', purity: 83.33, karat: 20 },
+  { id: '19k', label: '19K (79.17% Gold)', shortLabel: '19K Gold', purity: 79.17, karat: 19 },
+  { id: '18k', label: '18K (75.00% Gold)', shortLabel: '18K Gold', purity: 75.0, karat: 18 },
+  { id: '17k', label: '17K (70.83% Gold)', shortLabel: '17K Gold', purity: 70.83, karat: 17 },
+  { id: '16k', label: '16K (66.67% Gold)', shortLabel: '16K Gold', purity: 66.67, karat: 16 },
+  { id: '15k', label: '15K (62.50% Gold)', shortLabel: '15K Gold', purity: 62.5, karat: 15 },
+  { id: '14k', label: '14K (58.33% Gold)', shortLabel: '14K Gold', purity: 58.33, karat: 14 },
+  { id: '13k', label: '13K (54.17% Gold)', shortLabel: '13K Gold', purity: 54.17, karat: 13 },
+  { id: '12k', label: '12K (50.00% Gold)', shortLabel: '12K Gold', purity: 50.0, karat: 12 },
+  { id: '11k', label: '11K (45.83% Gold)', shortLabel: '11K Gold', purity: 45.83, karat: 11 },
+  { id: '10k', label: '10K (41.67% Gold)', shortLabel: '10K Gold', purity: 41.67, karat: 10 },
+  { id: '9k', label: '9K (37.50% Gold)', shortLabel: '9K Gold', purity: 37.5, karat: 9 },
+  { id: '8k', label: '8K (33.33% Gold)', shortLabel: '8K Gold', purity: 33.33, karat: 8 },
+  { id: '7k', label: '7K (29.17% Gold)', shortLabel: '7K Gold', purity: 29.17, karat: 7 },
+  { id: '6k', label: '6K (25.00% Gold)', shortLabel: '6K Gold', purity: 25.0, karat: 6 },
+  { id: '5k', label: '5K (20.83% Gold)', shortLabel: '5K Gold', purity: 20.83, karat: 5 },
+  { id: '4k', label: '4K (16.67% Gold)', shortLabel: '4K Gold', purity: 16.67, karat: 4 },
+  { id: '3k', label: '3K (12.50% Gold)', shortLabel: '3K Gold', purity: 12.5, karat: 3 },
+  { id: '2k', label: '2K (8.33% Gold)', shortLabel: '2K Gold', purity: 8.33, karat: 2 }
+];
+
+export const SILVER_PRESETS: KaratPreset[] = [
+  { id: '999', label: 'Fine Silver .999 (99.9%)', shortLabel: 'Fine Silver .999', purity: 99.9 },
+  { id: '958', label: 'Britannia Silver .958 (95.8%)', shortLabel: 'Britannia .958', purity: 95.8 },
+  { id: '925', label: 'Sterling Silver .925 (92.5%)', shortLabel: 'Sterling Silver 925', purity: 92.5 },
+  { id: '900', label: 'Coin Silver .900 (90.0%)', shortLabel: 'Coin Silver .900', purity: 90.0 },
+  { id: '835', label: 'European Silver .835 (83.5%)', shortLabel: '.835 Silver', purity: 83.5 },
+  { id: '800', label: 'German Silver .800 (80.0%)', shortLabel: '.800 Silver', purity: 80.0 },
+  { id: '500', label: '500 Silver (50.0%)', shortLabel: '.500 Silver', purity: 50.0 }
+];
+
+export const PLATINUM_PRESETS: KaratPreset[] = [
+  { id: '999', label: 'Pure Platinum .999 (99.9%)', shortLabel: 'Pure Platinum .999', purity: 99.9 },
+  { id: '950', label: 'Platinum 950 (95.0%)', shortLabel: 'Pt 950 Platinum', purity: 95.0 },
+  { id: '900', label: 'Platinum 900 (90.0%)', shortLabel: 'Pt 900 Platinum', purity: 90.0 },
+  { id: '850', label: 'Platinum 850 (85.0%)', shortLabel: 'Pt 850 Platinum', purity: 85.0 },
+  { id: '800', label: 'Platinum 800 (80.0%)', shortLabel: 'Pt 800 Platinum', purity: 80.0 },
+  { id: '500', label: 'Platinum 500 (50.0%)', shortLabel: 'Pt 500 Platinum', purity: 50.0 }
+];
+
 export const DEFAULT_SETTINGS = {
   settingFeeCenterPerCt: 250,
   settingFeeMeleePerSt: 15,

@@ -6,8 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Camera, Shield, DollarSign, Scale, ArrowRight, Printer, Edit2, RefreshCw, X, Image as ImageIcon } from 'lucide-react';
 import { ScrapItem, MaterialType, ScrapTransaction } from '../types';
-import { PURITY_OPTIONS, TROY_ONCE_GRAMS } from '../constants';
-import { calculateScrapItemValue, calculateScrapTotal } from '../utils';
+import { PURITY_OPTIONS, TROY_ONCE_GRAMS, GOLD_KARAT_PRESETS, SILVER_PRESETS, PLATINUM_PRESETS, KaratPreset } from '../constants';
+import { calculateScrapItemValue, calculateScrapTotal, formatPhoneNumber } from '../utils';
 import { printElement } from '../utils/printHelper';
 import SignaturePad from './SignaturePad';
 import PhotoEditorModal from './PhotoEditorModal';
@@ -79,7 +79,7 @@ export default function ScrapCalculator({
   const [overrideInputValue, setOverrideInputValue] = useState<string>('');
 
   const [items, setItems] = useState<ScrapItem[]>([
-    { weight: '', material: 'gold', purity: 58.33, rate: 85 }
+    { weight: '', material: 'gold', purity: 58.33, rate: 85, purityMode: 'karat', karatOption: '14k' }
   ]);
 
   // Local string state for Live Feed Anchors spot price inputs to allow deleting all digits cleanly
@@ -113,7 +113,7 @@ export default function ScrapCalculator({
   useEffect(() => {
     if (editingTransaction) {
       setCustomerName(editingTransaction.name || '');
-      setPhoneNumber(editingTransaction.phone || '');
+      setPhoneNumber(formatPhoneNumber(editingTransaction.phone || ''));
       setAddress(editingTransaction.address || '');
       setDriversLicense(editingTransaction.driversLicense || '');
       setEmployeeId(editingTransaction.employeeId || '');
@@ -129,9 +129,14 @@ export default function ScrapCalculator({
         } else if (typeof p === 'number' && p <= 1 && it.material !== 'gold') {
           p = parseFloat((p * 100).toFixed(1));
         }
-        return { ...it, purity: p };
+        return { 
+          ...it, 
+          purity: p,
+          purityMode: it.purityMode || 'karat',
+          karatOption: it.karatOption || (it.material === 'gold' ? `${Math.round((Number(p) / 100) * 24)}k` : undefined)
+        };
       });
-      setItems(normalizedItems.length > 0 ? normalizedItems : [{ weight: '', material: 'gold', purity: 58.33, rate: 85 }]);
+      setItems(normalizedItems.length > 0 ? normalizedItems : [{ weight: '', material: 'gold', purity: 58.33, rate: 85, purityMode: 'karat', karatOption: '14k' }]);
       
       const calcTotal = calculateScrapTotal(
         editingTransaction.items || [], 
@@ -209,14 +214,90 @@ export default function ScrapCalculator({
     };
   }, [dragMode, dragStart]);
 
+  const getPresetsForMaterial = (material: MaterialType): KaratPreset[] => {
+    if (material === 'silver') return SILVER_PRESETS;
+    if (material === 'platinum') return PLATINUM_PRESETS;
+    return GOLD_KARAT_PRESETS;
+  };
+
+  const getActivePresetId = (item: ScrapItem): string => {
+    const presets = getPresetsForMaterial(item.material);
+    if (item.karatOption && presets.some(p => p.id === item.karatOption)) {
+      return item.karatOption;
+    }
+    const num = Number(item.purity) || 0;
+    let closest = presets[0];
+    let minDiff = 9999;
+    for (const p of presets) {
+      const diff = Math.abs(p.purity - num);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = p;
+      }
+    }
+    return closest ? closest.id : presets[0].id;
+  };
+
+  const handleSelectPreset = (idx: number, presetId: string) => {
+    const item = items[idx];
+    const presets = getPresetsForMaterial(item.material);
+    const selected = presets.find(p => p.id === presetId);
+    if (selected) {
+      setItems(prev => prev.map((it, i) => {
+        if (i !== idx) return it;
+        return {
+          ...it,
+          karatOption: selected.id,
+          purity: selected.purity
+        };
+      }));
+    }
+  };
+
+  const setRowPurityMode = (idx: number, mode: 'karat' | 'manual') => {
+    setItems(prev => prev.map((it, i) => {
+      if (i !== idx) return it;
+      if ((it.purityMode || 'karat') === mode) return it;
+
+      if (mode === 'karat') {
+        const presets = getPresetsForMaterial(it.material);
+        const presetId = it.karatOption && presets.some(p => p.id === it.karatOption)
+          ? it.karatOption
+          : getActivePresetId(it);
+        const selected = presets.find(p => p.id === presetId) || presets[0];
+        return {
+          ...it,
+          purityMode: 'karat',
+          karatOption: selected.id,
+          purity: selected.purity
+        };
+      } else {
+        return {
+          ...it,
+          purityMode: 'manual'
+        };
+      }
+    }));
+  };
+
   // Handle adding rows
   const addRow = () => {
-    setItems(prev => [...prev, { weight: '', material: 'gold', purity: 58.33, rate: 85 }]);
+    setItems(prev => [
+      ...prev,
+      {
+        weight: '',
+        material: 'gold',
+        purity: 58.33,
+        rate: 85,
+        purityMode: 'karat',
+        karatOption: '14k'
+      }
+    ]);
   };
 
   const removeRow = (idx: number) => {
     if (items.length <= 1) {
-      setItems([{ weight: '', material: 'gold', purity: 58.33, rate: 85 }]);
+      setItems([{ weight: '', material: 'gold', purity: 58.33, rate: 85, purityMode: 'karat', karatOption: '14k' }]);
     } else {
       setItems(prev => prev.filter((_, i) => i !== idx));
     }
@@ -228,10 +309,24 @@ export default function ScrapCalculator({
       
       const updated = { ...item, [field]: value };
       
-      // If material changes, set sensible default purity percentage
+      // If material changes, set sensible default purity percentage, karatOption, and buyback rate
       if (field === 'material') {
         const mat = value as MaterialType;
-        updated.purity = mat === 'gold' ? 58.33 : (mat === 'silver' ? 92.5 : 95.0);
+        if (mat === 'gold') {
+          updated.purity = 58.33;
+          updated.karatOption = '14k';
+          if (item.rate === 70 || !item.rate) {
+            updated.rate = 85;
+          }
+        } else if (mat === 'silver') {
+          updated.purity = 92.5;
+          updated.karatOption = '925';
+          updated.rate = 70;
+        } else {
+          updated.purity = 95.0;
+          updated.karatOption = '950';
+          updated.rate = 70;
+        }
       }
       
       return updated;
@@ -635,10 +730,10 @@ export default function ScrapCalculator({
           />
           <input
             type="tel"
-            placeholder="Phone Number"
-            className="border p-3 rounded-xl text-sm shadow-sm"
+            placeholder="Phone (000-000-0000)"
+            className="border p-3 rounded-xl text-sm shadow-sm font-mono font-medium"
             value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
+            onChange={(e) => setPhoneNumber(formatPhoneNumber(e.target.value))}
           />
           <input
             type="text"
@@ -678,11 +773,26 @@ export default function ScrapCalculator({
 
       {/* 4. Items List Rows */}
       <div className="bg-brand-100/50 p-4 rounded-2xl border border-brand-200 space-y-3">
+        {/* Section Header */}
+        <div className="flex justify-between items-center pb-1 border-b border-brand-200/70">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black uppercase tracking-wider text-brand-900">
+              Precious Metal Lots
+            </span>
+            <span className="text-[9px] font-mono font-bold bg-brand-200/80 text-brand-800 px-2 py-0.5 rounded-full">
+              {items.length} {items.length === 1 ? 'lot' : 'lots'}
+            </span>
+          </div>
+          <span className="text-[10px] text-brand-500 font-medium hidden sm:inline">
+            Choose <span className="font-bold font-mono text-brand-800">K</span> (5K–24K presets) or <span className="font-bold font-mono text-brand-800">%</span> (manual purity) per lot
+          </span>
+        </div>
+
         {/* Desktop Header Row */}
-        <div className="hidden md:grid grid-cols-[1fr_1.1fr_1.1fr_1.1fr_1.2fr_36px] gap-3 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-brand-600 border-b border-brand-200 items-center">
+        <div className="hidden md:grid grid-cols-[1fr_1.1fr_1.35fr_1.1fr_1.2fr_36px] gap-3 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-brand-600 border-b border-brand-200 items-center">
           <div className="text-center">Mass (g)</div>
           <div className="text-center">Metal</div>
-          <div className="text-center">Metal Percentage</div>
+          <div className="text-center">Karat / Purity</div>
           <div className="text-center">Buy Back Percentage</div>
           <div className="text-right pr-2">Total Payout</div>
           <div></div>
@@ -690,11 +800,12 @@ export default function ScrapCalculator({
 
         {items.map((item, idx) => {
           const rowValue = calculateScrapItemValue(item, spotPrices);
+          const isKarat = (item.purityMode || 'karat') === 'karat';
 
           return (
             <div
               key={idx}
-              className="grid grid-cols-1 md:grid-cols-[1fr_1.1fr_1.1fr_1.1fr_1.2fr_36px] gap-3 items-center bg-white p-3 rounded-xl border border-brand-200/80 shadow-sm hover:border-brand-300 transition-colors"
+              className="grid grid-cols-1 md:grid-cols-[1fr_1.1fr_1.35fr_1.1fr_1.2fr_36px] gap-3 items-center bg-white p-3 rounded-xl border border-brand-200/80 shadow-sm hover:border-brand-300 transition-colors"
             >
               {/* Mass (g) */}
               <div className="flex flex-col">
@@ -727,23 +838,70 @@ export default function ScrapCalculator({
                 </select>
               </div>
 
-              {/* Metal Percentage */}
+              {/* Metal Purity (Karat dropdown vs Manual % with 2 little icons: K and %) */}
               <div className="flex flex-col">
-                <label className="text-[9px] font-bold text-brand-500 uppercase md:hidden mb-0.5">Metal Percentage</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    max="100"
-                    placeholder="e.g. 55.9"
-                    className="w-full border border-brand-200 p-2.5 pr-7 rounded-xl text-sm font-bold font-mono text-center bg-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-sm no-spinner transition-all"
-                    value={item.purity !== undefined && item.purity !== null ? item.purity : ''}
-                    onChange={(e) => {
-                      updateItem(idx, 'purity', e.target.value);
-                    }}
-                  />
-                  <span className="absolute right-2.5 top-2.5 text-xs font-bold text-brand-400 pointer-events-none">%</span>
+                <label className="text-[9px] font-bold text-brand-500 uppercase md:hidden mb-0.5">
+                  {isKarat ? 'Karat / Alloy' : 'Metal Percentage'}
+                </label>
+
+                <div className="flex items-center bg-white border border-brand-200 rounded-xl p-1 shadow-sm focus-within:ring-2 focus-within:ring-brand-500/20 focus-within:border-brand-500 transition-all min-h-[42px]">
+                  {isKarat ? (
+                    <select
+                      className="w-full bg-transparent text-xs font-bold text-brand-950 focus:outline-none cursor-pointer py-1.5 px-2 text-center"
+                      value={getActivePresetId(item)}
+                      onChange={(e) => handleSelectPreset(idx, e.target.value)}
+                    >
+                      {getPresetsForMaterial(item.material).map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="w-full flex items-center px-1">
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        max="100"
+                        placeholder="e.g. 55.9"
+                        className="w-full bg-transparent text-sm font-bold font-mono text-center text-brand-950 focus:outline-none no-spinner py-1"
+                        value={item.purity !== undefined && item.purity !== null ? item.purity : ''}
+                        onChange={(e) => {
+                          updateItem(idx, 'purity', e.target.value);
+                        }}
+                      />
+                      <span className="text-xs font-bold text-brand-400 select-none pr-1 pointer-events-none">%</span>
+                    </div>
+                  )}
+
+                  {/* 2 little icons: K symbol and % symbol */}
+                  <div className="flex items-center gap-0.5 bg-brand-100/90 p-0.5 rounded-lg border border-brand-200 shrink-0 ml-1">
+                    <button
+                      type="button"
+                      title="Karat presets (5K–24K)"
+                      onClick={() => setRowPurityMode(idx, 'karat')}
+                      className={`w-6 h-6 flex items-center justify-center rounded-md text-[11px] font-black transition-all cursor-pointer select-none ${
+                        isKarat
+                          ? 'bg-brand-900 text-brand-gold shadow-xs scale-105'
+                          : 'text-brand-500 hover:text-brand-950 hover:bg-white/70'
+                      }`}
+                    >
+                      K
+                    </button>
+                    <button
+                      type="button"
+                      title="Manual percentage mode (%)"
+                      onClick={() => setRowPurityMode(idx, 'manual')}
+                      className={`w-6 h-6 flex items-center justify-center rounded-md text-[11px] font-black transition-all cursor-pointer select-none ${
+                        !isKarat
+                          ? 'bg-brand-900 text-brand-gold shadow-xs scale-105'
+                          : 'text-brand-500 hover:text-brand-950 hover:bg-white/70'
+                      }`}
+                    >
+                      %
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -979,7 +1137,13 @@ export default function ScrapCalculator({
                 const numPurity = Number(it.purity) || 0;
                 const pStr = `${it.purity}%`;
                 let karatLabel = '';
-                if (it.material === 'gold') {
+                if (it.purityMode === 'karat' && it.karatOption) {
+                  const presets = getPresetsForMaterial(it.material);
+                  const found = presets.find(p => p.id === it.karatOption);
+                  karatLabel = found ? found.shortLabel : `${it.karatOption.toUpperCase()} ${it.material.toUpperCase()}`;
+                } else if (it.purityMode === 'manual') {
+                  karatLabel = `Custom ${it.material ? it.material.toUpperCase() : 'Lot'} (${it.purity}%)`;
+                } else if (it.material === 'gold') {
                   const kVal = Math.round((numPurity / 100) * 24);
                   karatLabel = `${kVal}K Gold`;
                 } else if (it.material === 'silver') {
@@ -1017,28 +1181,28 @@ export default function ScrapCalculator({
 
         {/* 5. Verified Compliance Photographs (Thumbnails adjusted for 1-page fit) */}
         {(scrapImage || goldImage) && (
-          <div className="border border-brand-200 rounded-lg p-2 bg-brand-50/30 space-y-1">
+          <div className="border border-brand-200 rounded-lg p-1.5 bg-brand-50/30 space-y-1">
             <p className="text-[7.5px] uppercase font-black text-brand-500 tracking-wider">
               Verification Proof & Compliance Attachments
             </p>
-            <div className={`grid ${scrapImage && goldImage ? 'grid-cols-2' : 'grid-cols-1 max-w-xs mx-auto'} gap-2`}>
+            <div className="flex items-center justify-center gap-3">
               {scrapImage && (
-                <div className="bg-white p-1 rounded border border-brand-200 flex flex-col items-center">
-                  <span className="text-[7px] font-bold uppercase text-brand-500 mb-0.5">Verified ID / Photo</span>
+                <div className="bg-white p-1 rounded border border-brand-200 flex flex-col items-center flex-1 max-w-[200px]">
+                  <span className="text-[6.5px] font-bold uppercase text-brand-500 mb-0.5">Verified ID / Photo</span>
                   <img 
                     src={scrapImage} 
                     alt="Compliance ID" 
-                    className="h-20 max-h-20 w-full object-contain rounded bg-slate-50"
+                    className="h-12 max-h-12 w-auto object-contain rounded bg-slate-50"
                   />
                 </div>
               )}
               {goldImage && (
-                <div className="bg-white p-1 rounded border border-amber-200 flex flex-col items-center">
-                  <span className="text-[7px] font-bold uppercase text-amber-800 mb-0.5">Metal Lot Photograph</span>
+                <div className="bg-white p-1 rounded border border-amber-200 flex flex-col items-center flex-1 max-w-[200px]">
+                  <span className="text-[6.5px] font-bold uppercase text-amber-800 mb-0.5">Metal Lot Photograph</span>
                   <img 
                     src={goldImage} 
                     alt="Metal lot scanned" 
-                    className="h-20 max-h-20 w-full object-contain rounded bg-amber-50/20"
+                    className="h-12 max-h-12 w-auto object-contain rounded bg-amber-50/20"
                   />
                 </div>
               )}
@@ -1047,25 +1211,25 @@ export default function ScrapCalculator({
         )}
 
         {/* 6. Legal Terms & Signatures */}
-        <div className="border-t border-brand-200 pt-2 space-y-2">
-          <p className="text-[7.5px] text-brand-500 italic leading-relaxed text-center">
+        <div className="border-t border-brand-200 pt-1.5 space-y-1.5">
+          <p className="text-[7px] text-brand-500 italic leading-relaxed text-center">
             I certify and declare that I am 18 years of age or older, the sole legal owner of the precious metal items listed above, and possess full right and authority to sell them to Gold & Rose Jewellery Corp. All buyout transactions are absolute, final, and non-refundable.
           </p>
 
           <div className="grid grid-cols-2 gap-4 items-end pt-1">
             <div className="text-center flex flex-col items-center">
               {customerSignature ? (
-                <div className="h-10 w-36 flex items-center justify-center relative overflow-hidden mb-0.5">
+                <div className="h-8 w-32 flex items-center justify-center relative overflow-hidden mb-0.5">
                   <img 
                     src={customerSignature} 
                     alt="Client signature" 
-                    className="max-h-10 max-w-full object-contain filter brightness-95" 
+                    className="max-h-8 max-w-full object-contain filter brightness-95" 
                   />
                 </div>
               ) : (
-                <div className="h-10"></div>
+                <div className="h-8"></div>
               )}
-              <div className="w-full max-w-[170px] border-b border-brand-400"></div>
+              <div className="w-full max-w-[150px] border-b border-brand-400"></div>
               <p className="text-[7.5px] uppercase font-bold tracking-wider text-brand-700 mt-0.5">
                 Client Authorization Signature
               </p>
@@ -1075,10 +1239,10 @@ export default function ScrapCalculator({
             </div>
 
             <div className="text-center flex flex-col items-center">
-              <div className="h-10 flex items-center justify-center">
+              <div className="h-8 flex items-center justify-center">
                 <span className="font-serif italic font-black text-brand-900 text-sm">James Lee</span>
               </div>
-              <div className="w-full max-w-[170px] border-b border-brand-400"></div>
+              <div className="w-full max-w-[150px] border-b border-brand-400"></div>
               <p className="text-[7.5px] uppercase font-bold tracking-wider text-brand-700 mt-0.5">
                 Authorized Buyer / Appraiser
               </p>

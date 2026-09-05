@@ -124,6 +124,7 @@ export interface QuoteSession {
   cName: string;
   cPhone: string;
   cEmail: string;
+  employeeId?: string;
   jobNum: string;
   jobDesc: string;
   applyTax: boolean;
@@ -145,6 +146,8 @@ export interface ScrapItem {
   material: MaterialType;
   purity: number | string; // direct percentage (e.g. 58.33 for 58.33%, 55.9 for 55.9%)
   rate: number | string; // rate percentage, e.g. 85 for 85%
+  purityMode?: 'karat' | 'manual'; // 'karat' (preset dropdown) or 'manual' (numeric percentage)
+  karatOption?: string; // e.g. '14k', '24k', '925', '950', etc.
 }
 
 export interface ScrapTransaction {
@@ -177,6 +180,7 @@ export interface QuoteTransaction {
   timestamp?: number;
   name: string;
   phone: string;
+  employeeId?: string;
   summary: string;
   total: string;
   fullData: QuoteSession;

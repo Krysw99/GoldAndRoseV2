@@ -200,6 +200,7 @@ export function getEmptyQuoteSession(): QuoteSession {
     cName: '',
     cPhone: '',
     cEmail: '',
+    employeeId: '',
     jobNum: '',
     jobDesc: '',
     applyTax: false,
@@ -1148,3 +1149,27 @@ export function getDemoQuoteSession(): QuoteSession {
     referencePhoto: null
   };
 }
+
+/**
+ * Formats a phone number into the standard North American format: 000-000-0000
+ */
+export function formatPhoneNumber(value: string | undefined | null): string {
+  if (!value) return '';
+  let digits = String(value).replace(/\D/g, '');
+  if (!digits) return '';
+
+  // If 11 digits starting with 1 (country code), strip leading 1 for standard 10-digit format
+  if (digits.length === 11 && digits.startsWith('1')) {
+    digits = digits.slice(1);
+  }
+
+  const limited = digits.slice(0, 10);
+  if (limited.length <= 3) {
+    return limited;
+  }
+  if (limited.length <= 6) {
+    return `${limited.slice(0, 3)}-${limited.slice(3)}`;
+  }
+  return `${limited.slice(0, 3)}-${limited.slice(3, 6)}-${limited.slice(6, 10)}`;
+}
+

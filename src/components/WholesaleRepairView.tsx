@@ -14,7 +14,7 @@ import {
   AppSettings, WholesaleSettings, RepairPricingSettings, ScrapTransaction, QuoteTransaction
 } from '../types';
 import { playClickSound } from '../utils/audio';
-import { calculateRingCost, genId } from '../utils';
+import { calculateRingCost, genId, formatPhoneNumber } from '../utils';
 import SignaturePad from './SignaturePad';
 import { printElement } from '../utils/printHelper';
 import WholesaleRepairInvoicePrint from './WholesaleRepairInvoicePrint';
@@ -112,7 +112,7 @@ export default function WholesaleRepairView({
       ...prev,
       scrapCredit: parseFloat(amt.toFixed(2)),
       cName: prev.cName ? prev.cName : (tx.name || ''),
-      cPhone: prev.cPhone ? prev.cPhone : (tx.phone || '')
+      cPhone: prev.cPhone ? prev.cPhone : formatPhoneNumber(tx.phone || '')
     }));
     setShowScrapLinkModal(false);
     setScrapSearchQuery('');
@@ -129,7 +129,7 @@ export default function WholesaleRepairView({
           ...prev,
           scrapCredit: parseFloat(amt.toFixed(2)),
           cName: prev.cName ? prev.cName : (latest.name || ''),
-          cPhone: prev.cPhone ? prev.cPhone : (latest.phone || '')
+          cPhone: prev.cPhone ? prev.cPhone : formatPhoneNumber(latest.phone || '')
         }));
         alert(`Linked latest scrap buyback credit of $${amt.toFixed(2)} CAD (${latest.name || 'Client'})!`);
         return;
@@ -741,7 +741,7 @@ export default function WholesaleRepairView({
           </div>
 
           {/* Client Metadata Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div>
               <label className="text-[9px] font-black text-brand-500 uppercase tracking-wider font-mono block mb-1">Wholesale Client / Store Name</label>
               <input
@@ -755,11 +755,12 @@ export default function WholesaleRepairView({
             <div>
               <label className="text-[9px] font-black text-brand-500 uppercase tracking-wider font-mono block mb-1">Client Contact Phone</label>
               <input
-                type="text"
-                placeholder="e.g. (604) 555-0199"
-                className="w-full bg-brand-50/40 border border-brand-200 px-3 py-2.5 rounded-xl text-xs font-bold focus:bg-white transition-all outline-none"
+                type="tel"
+                placeholder="000-000-0000"
+                autoComplete="tel"
+                className="w-full bg-brand-50/40 border border-brand-200 px-3 py-2.5 rounded-xl text-xs font-bold font-mono focus:bg-white transition-all outline-none"
                 value={session.cPhone}
-                onChange={(e) => onChangeSession(prev => ({ ...prev, cPhone: e.target.value }))}
+                onChange={(e) => onChangeSession(prev => ({ ...prev, cPhone: formatPhoneNumber(e.target.value) }))}
               />
             </div>
             <div>
@@ -770,6 +771,16 @@ export default function WholesaleRepairView({
                 className="w-full bg-brand-50/40 border border-brand-200 px-3 py-2.5 rounded-xl text-xs font-bold focus:bg-white transition-all outline-none"
                 value={session.cEmail}
                 onChange={(e) => onChangeSession(prev => ({ ...prev, cEmail: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-[9px] font-black text-brand-500 uppercase tracking-wider font-mono block mb-1">Employee ID / Staff Rep</label>
+              <input
+                type="text"
+                placeholder="e.g. EMP-01"
+                className="w-full bg-brand-50/40 border border-brand-200 px-3 py-2.5 rounded-xl text-xs font-mono font-bold focus:bg-white transition-all outline-none"
+                value={session.employeeId || ''}
+                onChange={(e) => onChangeSession(prev => ({ ...prev, employeeId: e.target.value }))}
               />
             </div>
             <div className="grid grid-cols-2 gap-2">

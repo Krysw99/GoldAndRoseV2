@@ -20,7 +20,7 @@ import {
 } from '../constants';
 import { 
   getEmptyRing, getTennisEstimates, calculateBandWeight, 
-  calculateRingCost, calculateRawCost, hasRingData, compressImage
+  calculateRingCost, calculateRawCost, hasRingData, compressImage, formatPhoneNumber
 } from '../utils';
 import { printElement } from '../utils/printHelper';
 import { playClickSound } from '../utils/audio';
@@ -1728,7 +1728,7 @@ export default function QuoteCalculator({
       {!isWholesale ? (
         <div className="bg-[#f8fafc] rounded-2xl border border-slate-200/60 p-5 shadow-sm print:hidden">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4">Client Intake</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
             <div>
               <label className="text-[10px] font-bold text-slate-500 mb-1 block">CLIENT NAME *</label>
               <input
@@ -1746,11 +1746,11 @@ export default function QuoteCalculator({
               <label className="text-[10px] font-bold text-slate-500 mb-1 block">PHONE</label>
               <input
                 type="tel"
-                placeholder="604-555-5555"
+                placeholder="000-000-0000"
                 autoComplete="tel"
-                className="w-full bg-white border border-slate-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-slate-400"
+                className="w-full bg-white border border-slate-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-slate-400 font-mono"
                 value={session.cPhone}
-                onChange={(e) => onChangeSession(prev => ({ ...prev, cPhone: e.target.value }))}
+                onChange={(e) => onChangeSession(prev => ({ ...prev, cPhone: formatPhoneNumber(e.target.value) }))}
               />
             </div>
             <div>
@@ -1767,10 +1767,23 @@ export default function QuoteCalculator({
               />
             </div>
             <div>
+              <label className="text-[10px] font-bold text-slate-500 mb-1 block">EMPLOYEE ID / REP</label>
+              <input
+                type="text"
+                placeholder="e.g. EMP-01"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                className="w-full bg-white border border-slate-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-slate-400 font-mono"
+                value={session.employeeId || ''}
+                onChange={(e) => onChangeSession(prev => ({ ...prev, employeeId: e.target.value }))}
+              />
+            </div>
+            <div>
               <label className="text-[10px] font-bold text-slate-500 mb-1 block">PIECE DESCRIPTION</label>
               <input
                 type="text"
-                placeholder="e.g. 1.5ct Solitaire Engagement Ring"
+                placeholder="e.g. 1.5ct Solitaire Ring"
                 autoComplete="off"
                 autoCorrect="off"
                 spellCheck={false}
@@ -1802,17 +1815,7 @@ export default function QuoteCalculator({
                 onChange={(e) => onChangeSession(prev => ({ ...prev, jobNum: e.target.value }))}
               />
             </div>
-            <div className="md:col-span-3">
-              <label className="text-[10px] font-bold text-emerald-700 mb-1 block">ITEM DESCRIPTION</label>
-              <input
-                type="text"
-                placeholder="e.g. 14K Solitaire Ring with 4 Claws"
-                className="w-full bg-white border border-emerald-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-emerald-400"
-                value={session.jobDesc}
-                onChange={(e) => onChangeSession(prev => ({ ...prev, jobDesc: e.target.value }))}
-              />
-            </div>
-            <div className="md:col-span-3">
+            <div className="md:col-span-4">
               <label className="text-[10px] font-bold text-emerald-700 mb-1 block">WHOLESALE PROFILE</label>
               <select
                 className="w-full bg-white border border-emerald-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-emerald-400"
@@ -1835,7 +1838,7 @@ export default function QuoteCalculator({
                 ))}
               </select>
             </div>
-            <div className="md:col-span-2">
+            <div className="md:col-span-3">
               <label className="text-[10px] font-bold text-emerald-700 mb-1 block">CLIENT NAME</label>
               <input
                 type="text"
@@ -1848,15 +1851,38 @@ export default function QuoteCalculator({
                 onChange={(e) => onChangeSession(prev => ({ ...prev, cName: e.target.value }))}
               />
             </div>
-            <div className="md:col-span-2">
+            <div className="md:col-span-3">
               <label className="text-[10px] font-bold text-emerald-700 mb-1 block">PHONE</label>
               <input
                 type="tel"
-                placeholder="604-555-5555"
+                placeholder="000-000-0000"
                 autoComplete="tel"
-                className="w-full bg-white border border-emerald-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-emerald-400"
+                className="w-full bg-white border border-emerald-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-emerald-400 font-mono"
                 value={session.cPhone}
-                onChange={(e) => onChangeSession(prev => ({ ...prev, cPhone: e.target.value }))}
+                onChange={(e) => onChangeSession(prev => ({ ...prev, cPhone: formatPhoneNumber(e.target.value) }))}
+              />
+            </div>
+            <div className="md:col-span-8">
+              <label className="text-[10px] font-bold text-emerald-700 mb-1 block">ITEM DESCRIPTION</label>
+              <input
+                type="text"
+                placeholder="e.g. 14K Solitaire Ring with 4 Claws"
+                className="w-full bg-white border border-emerald-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-emerald-400"
+                value={session.jobDesc}
+                onChange={(e) => onChangeSession(prev => ({ ...prev, jobDesc: e.target.value }))}
+              />
+            </div>
+            <div className="md:col-span-4">
+              <label className="text-[10px] font-bold text-emerald-700 mb-1 block">EMPLOYEE ID / REP</label>
+              <input
+                type="text"
+                placeholder="e.g. EMP-01"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                className="w-full bg-white border border-emerald-200 p-3 rounded-xl text-xs font-bold shadow-sm outline-none focus:border-emerald-400 font-mono"
+                value={session.employeeId || ''}
+                onChange={(e) => onChangeSession(prev => ({ ...prev, employeeId: e.target.value }))}
               />
             </div>
           </div>
@@ -4007,7 +4033,7 @@ export default function QuoteCalculator({
             {/* SECTION 4: Piece Studio Notes */}
             <div className="space-y-4">
               <h3 className="text-[10px] font-black text-brand-400 uppercase tracking-wider block border-b border-brand-50 pb-1">4. Studio Notes</h3>
-              <div className="bg-brand-50/50 p-4 rounded-2xl border border-brand-100 flex flex-col gap-3">
+              <div className="bg-brand-50/50 p-4 rounded-2xl border border-brand-100 flex flex-col gap-3 overflow-visible h-auto max-h-none">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <label className="text-[10px] font-bold text-brand-700">Studio Notes</label>
@@ -4025,7 +4051,7 @@ export default function QuoteCalculator({
                     <Plus size={10} /> Add Note
                   </button>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 overflow-visible h-auto max-h-none">
                   {(!activeRing.designNotes || activeRing.designNotes.length === 0) ? (
                     <div className="text-[10px] text-slate-400 italic py-2.5 text-center bg-white/60 rounded-xl border border-dashed border-brand-200">
                       No studio notes added yet. Click "+ Add Note" to add bench instructions or specifications.
@@ -4177,6 +4203,7 @@ export default function QuoteCalculator({
                     <p className="text-sm font-bold text-brand-950 print:text-xs">{session.cName || 'Unnamed Customer'}</p>
                     {session.cPhone && <p className="text-xs text-brand-600 mt-0.5 print:text-[10px]">Phone: {session.cPhone}</p>}
                     {session.cEmail && <p className="text-xs text-brand-600 print:text-[10px]">Email: {session.cEmail}</p>}
+                    {session.employeeId && <p className="text-xs font-mono font-bold text-slate-600 mt-1 print:text-[9px]">Staff Rep / ID: {session.employeeId}</p>}
                   </div>
                   {session.jobDesc && (
                     <div>

@@ -474,6 +474,7 @@ export default function ClientInvoicePrint({
           <p className="text-sm font-bold text-brand-950 print:text-xs">{session.cName || 'Unnamed Customer'}</p>
           {session.cPhone && <p className="text-xs text-brand-600 mt-1 print:mt-0 print:text-[10px]">Phone: {session.cPhone}</p>}
           {session.cEmail && <p className="text-xs text-brand-600 print:text-[10px]">Email: {session.cEmail}</p>}
+          {session.employeeId && <p className="text-xs font-mono font-bold text-brand-700 print:text-[10px] mt-0.5">Staff Rep / ID: {session.employeeId}</p>}
         </div>
         {session.jobDesc && (
           <div>

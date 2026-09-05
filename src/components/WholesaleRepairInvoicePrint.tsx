@@ -101,6 +101,7 @@ export default function WholesaleRepairInvoicePrint({
           <h3 className="text-[9px] font-black text-gray-500 uppercase tracking-widest font-mono mb-1">Contact Details</h3>
           {session.cPhone && <p className="text-xs font-bold font-mono text-gray-800">{session.cPhone}</p>}
           {session.cEmail && <p className="text-xs font-bold text-gray-600">{session.cEmail}</p>}
+          {session.employeeId && <p className="text-[9px] font-mono font-bold text-gray-700 mt-0.5">Staff Rep / ID: {session.employeeId}</p>}
         </div>
       </div>
 

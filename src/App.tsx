@@ -15,7 +15,7 @@ import {
   ScrapItem, JewelryItem 
 } from './types';
 import { DEFAULT_SETTINGS, TROY_ONCE_GRAMS, FANCY_SHAPES, ROUND_MELEE } from './constants';
-import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeParseDate, genId, getTennisBaseGrams, calculateScrapItemValue } from './utils';
+import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeParseDate, genId, getTennisBaseGrams, calculateScrapItemValue, formatPhoneNumber } from './utils';
 
 // Modular Components
 import ScrapCalculator from './components/ScrapCalculator';
@@ -865,6 +865,7 @@ setIsCloudSynced(true);
       timestamp: existingTx ? (existingTx.timestamp || Date.now()) : Date.now(),
       name: nameToLog,
       phone: activeSession.cPhone,
+      employeeId: activeSession.employeeId || undefined,
       summary: sum,
       total: formattedTotal,
       fullData: sanitizedSession,
@@ -996,7 +997,7 @@ setIsCloudSynced(true);
         ...wholesaleSession,
         scrapCredit: payout,
         cName: wholesaleSession.cName || scrapTx.name || '',
-        cPhone: wholesaleSession.cPhone || scrapTx.phone || ''
+        cPhone: formatPhoneNumber(wholesaleSession.cPhone || scrapTx.phone || '')
       }, true);
       setActiveTab('wholesale');
       playClickSound('success');
@@ -1006,7 +1007,7 @@ setIsCloudSynced(true);
         ...retailSession,
         scrapCredit: payout,
         cName: retailSession.cName || scrapTx.name || '',
-        cPhone: retailSession.cPhone || scrapTx.phone || ''
+        cPhone: formatPhoneNumber(retailSession.cPhone || scrapTx.phone || '')
       }, true);
       setActiveTab('quote');
       playClickSound('success');
