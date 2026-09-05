@@ -1136,13 +1136,34 @@ export default function QuoteCalculator({
     }));
   };
 
-  // Price Override Modal State
+  // Price Override Modal State (supports both per-piece and session-level overrides)
   const [showPriceOverrideModal, setShowPriceOverrideModal] = useState(false);
+  const [overrideRingId, setOverrideRingId] = useState<string | null>(null);
   const [priceOverrideStr, setPriceOverrideStr] = useState('');
   const [priceOverrideIsInclusive, setPriceOverrideIsInclusive] = useState(false);
 
+  const handleOpenPiecePriceOverride = (ringId: string) => {
+    const targetRing = session.rings.find(r => r.id === ringId);
+    if (!targetRing) return;
+    setOverrideRingId(ringId);
+    const pc = totals.pieceCosts[ringId];
+    if (targetRing.overridePrice !== undefined && targetRing.overridePrice !== null) {
+      setPriceOverrideStr(String(targetRing.overridePrice));
+    } else {
+      setPriceOverrideStr(pc ? String(pc.calculatedFinalCost.toFixed(2)) : '0.00');
+    }
+    setPriceOverrideIsInclusive(false);
+    setShowPriceOverrideModal(true);
+  };
+
   const handleOpenPriceOverride = () => {
-    if (totals.isOverridden) {
+    // If currently viewing a specific piece tab, override that piece directly
+    if (activeRing && session.activeSubTab !== 'summary') {
+      handleOpenPiecePriceOverride(activeRing.id);
+      return;
+    }
+    setOverrideRingId(null);
+    if (totals.isOverridden && session.customGrandTotal !== null && session.customGrandTotal !== undefined) {
       setPriceOverrideStr(String(session.customGrandTotal));
       setPriceOverrideIsInclusive(!!session.customGrandTotalIsInclusive);
     } else {
@@ -1154,17 +1175,34 @@ export default function QuoteCalculator({
 
   const handleSavePriceOverride = () => {
     const val = parseFloat(priceOverrideStr);
-    if (isNaN(val) || priceOverrideStr.trim() === '') {
-      onChangeSession(prev => ({ ...prev, customGrandTotal: null, customGrandTotalIsInclusive: false }));
+    if (overrideRingId) {
+      const updatedVal = (isNaN(val) || priceOverrideStr.trim() === '') ? null : Math.max(0, val);
+      onChangeSession(prev => ({
+        ...prev,
+        rings: prev.rings.map(r => r.id === overrideRingId ? { ...r, overridePrice: updatedVal } : r)
+      }));
     } else {
-      onChangeSession(prev => ({ ...prev, customGrandTotal: val, customGrandTotalIsInclusive: priceOverrideIsInclusive }));
+      if (isNaN(val) || priceOverrideStr.trim() === '') {
+        onChangeSession(prev => ({ ...prev, customGrandTotal: null, customGrandTotalIsInclusive: false }));
+      } else {
+        onChangeSession(prev => ({ ...prev, customGrandTotal: val, customGrandTotalIsInclusive: priceOverrideIsInclusive }));
+      }
     }
     setShowPriceOverrideModal(false);
+    setOverrideRingId(null);
   };
 
   const handleClearPriceOverride = () => {
-    onChangeSession(prev => ({ ...prev, customGrandTotal: null, customGrandTotalIsInclusive: false }));
+    if (overrideRingId) {
+      onChangeSession(prev => ({
+        ...prev,
+        rings: prev.rings.map(r => r.id === overrideRingId ? { ...r, overridePrice: null } : r)
+      }));
+    } else {
+      onChangeSession(prev => ({ ...prev, customGrandTotal: null, customGrandTotalIsInclusive: false }));
+    }
     setShowPriceOverrideModal(false);
+    setOverrideRingId(null);
   };
 
   // Photo Crop & Annotate Editor State
@@ -1886,14 +1924,15 @@ export default function QuoteCalculator({
                     discDeduction: 0,
                     calculatedFinalCost: 0,
                     effectiveCost: 0,
-                    effectiveFinalCost: 0
+                    effectiveFinalCost: 0,
+                    isOverridden: false
                   };
                   const cost = pCost.cost;
                   const discVal = pCost.discVal;
                   const discDeduction = pCost.discDeduction;
                   const calculatedFinalCost = pCost.calculatedFinalCost;
                   const finalPieceCost = pCost.effectiveFinalCost;
-                  const isPieceOverridden = totals.isOverridden && Math.abs(finalPieceCost - calculatedFinalCost) > 0.01;
+                  const isPieceOverridden = pCost.isOverridden || (totals.isOverridden && Math.abs(finalPieceCost - calculatedFinalCost) > 0.01);
                   const rawCost = calculateRawCost(r, settings, spotPrices);
                   const showRawBreakdown = settings.showRawCostOnQuoteTab;
                   const isDiscountOpen = !!openDiscounts[r.id];
@@ -1919,7 +1958,17 @@ export default function QuoteCalculator({
                           </button>
                         </span>
                         <div className="flex flex-col items-end">
-                          <span className="font-bold text-[#f1c40f]">${finalPieceCost.toFixed(2)}</span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPiecePriceOverride(r.id)}
+                              className="p-1 rounded bg-slate-800/60 hover:bg-amber-400/20 text-slate-400 hover:text-amber-300 transition-all border border-slate-700/60 cursor-pointer"
+                              title={`Override Price for Piece ${ri + 1}`}
+                            >
+                              <Edit3 className="w-2.5 h-2.5" />
+                            </button>
+                            <span className="font-bold text-[#f1c40f]">${finalPieceCost.toFixed(2)}</span>
+                          </div>
                           {isPieceOverridden ? (
                             <span className="text-[9px] text-amber-300 font-mono flex items-center gap-1">
                               <span className="line-through text-slate-400 font-normal">${calculatedFinalCost.toFixed(2)}</span>
@@ -4128,10 +4177,11 @@ export default function QuoteCalculator({
                 isInteractive={true}
                 onChangeSession={onChangeSession}
                 onOpenPriceOverride={handleOpenPriceOverride}
+                onOpenPiecePriceOverride={handleOpenPiecePriceOverride}
                 enlargeImage={setEnlargeImage}
               />
             ) : (
-              <div id="quote-cad-specs-box" className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none print:space-y-3.5">
+              <div id="quote-cad-specs-box" className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:px-2 print:border-none print:shadow-none print:rounded-none print:space-y-3.5">
                 {/* CAD Specs Header */}
                 <div className="flex justify-between items-start border-b border-brand-200 pb-6 print:pb-3">
                   <div>
@@ -4239,7 +4289,7 @@ export default function QuoteCalculator({
                               </span>
                             </div>
 
-                            <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100 print:p-2 print:rounded-lg">
+                            <div className={`bg-slate-50/50 p-3 rounded-xl border border-slate-100 print:p-2 print:rounded-lg ${!isWholesale ? 'print:hidden' : ''}`}>
                               <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1 print:text-[8px]">Target Metal Weight</span>
                               <span className="font-mono font-bold text-brand-950 text-sm print:text-xs">
                                 {r.goldGrams || 'N/A'} grams
@@ -4943,8 +4993,19 @@ export default function QuoteCalculator({
 
       {/* Price Override Modal */}
       {showPriceOverrideModal && (() => {
+        const targetRing = overrideRingId ? session.rings.find(r => r.id === overrideRingId) : null;
+        const targetLabel = targetRing ? (
+          targetRing.category === 'mensBand' ? "Men's Band" :
+          targetRing.category === 'weddingBand' ? 'Wedding Band' :
+          targetRing.category === 'earrings' ? 'Earrings' :
+          targetRing.category === 'pendant' ? 'Pendant' :
+          `Piece ${session.rings.findIndex(r => r.id === overrideRingId) + 1}`
+        ) : null;
+        const targetPc = overrideRingId ? totals.pieceCosts[overrideRingId] : null;
+        const isTargetOverridden = targetRing ? (targetRing.overridePrice !== null && targetRing.overridePrice !== undefined) : totals.isOverridden;
+
         const modalVal = parseFloat(priceOverrideStr) || 0;
-        const modalTax = session.applyTax
+        const modalTax = (!targetRing && session.applyTax)
           ? (priceOverrideIsInclusive ? modalVal - (modalVal / 1.12) : modalVal * 0.12)
           : 0;
         const modalSubtotal = priceOverrideIsInclusive ? modalVal - modalTax : modalVal;
@@ -4959,24 +5020,32 @@ export default function QuoteCalculator({
                     <Edit3 className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-base text-slate-900">Override Final Quote Price</h3>
-                    <p className="text-xs text-slate-500 font-mono">Set a custom price for this quote session</p>
+                    <h3 className="font-bold text-base text-slate-900">
+                      {targetRing ? `Override ${targetLabel} Price` : 'Override Final Quote Price'}
+                    </h3>
+                    <p className="text-xs text-slate-500 font-mono">
+                      {targetRing ? `Set an individual piece price (does not affect other pieces)` : 'Set a custom price for this quote session'}
+                    </p>
                   </div>
                 </div>
-                <button onClick={() => setShowPriceOverrideModal(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <button onClick={() => setShowPriceOverrideModal(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs space-y-1">
                 <div className="flex justify-between text-slate-600">
-                  <span>Calculated System Valuation:</span>
-                  <span className="font-bold font-mono">${totals.calculatedGrandTotal.toFixed(2)} CAD</span>
+                  <span>{targetRing ? `Calculated ${targetLabel} Cost:` : 'Calculated System Valuation:'}</span>
+                  <span className="font-bold font-mono">
+                    ${targetRing ? (targetPc ? targetPc.calculatedFinalCost.toFixed(2) : '0.00') : totals.calculatedGrandTotal.toFixed(2)} CAD
+                  </span>
                 </div>
-                {totals.isOverridden && (
+                {isTargetOverridden && (
                   <div className="flex justify-between text-amber-700 font-medium">
                     <span>Currently Overridden To:</span>
-                    <span className="font-bold font-mono">${totals.grandTotal.toFixed(2)} CAD</span>
+                    <span className="font-bold font-mono">
+                      ${targetRing ? Number(targetRing.overridePrice).toFixed(2) : totals.grandTotal.toFixed(2)} CAD
+                    </span>
                   </div>
                 )}
               </div>
@@ -4984,7 +5053,7 @@ export default function QuoteCalculator({
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Custom Override Price ($ CAD)
+                    {targetRing ? `${targetLabel} Override Price ($ CAD)` : 'Custom Override Price ($ CAD)'}
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
@@ -5001,7 +5070,7 @@ export default function QuoteCalculator({
                 </div>
 
                 {/* Tax Option Radio Selection */}
-                {session.applyTax && (
+                {!targetRing && session.applyTax && (
                   <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 space-y-2 text-xs">
                     <span className="block font-bold text-slate-800 text-[11px] uppercase tracking-wider">Tax Mode (12% BC Taxes & GST)</span>
                     <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700 hover:text-slate-900">
@@ -5028,26 +5097,43 @@ export default function QuoteCalculator({
                 )}
 
                 {/* Live Output Breakdown Preview */}
-                <div className="bg-slate-900 text-white rounded-xl p-3 text-xs space-y-1 font-mono border border-slate-800">
-                  <div className="flex justify-between text-slate-400">
-                    <span>Base Subtotal Valuation:</span>
-                    <span>${modalSubtotal.toFixed(2)} CAD</span>
-                  </div>
-                  {session.applyTax && (
-                    <div className="flex justify-between text-amber-300">
-                      <span>BC Taxes & GST (12%):</span>
-                      <span>+${modalTax.toFixed(2)} CAD</span>
+                {!targetRing ? (
+                  <div className="bg-slate-900 text-white rounded-xl p-3 text-xs space-y-1 font-mono border border-slate-800">
+                    <div className="flex justify-between text-slate-400">
+                      <span>Base Subtotal Valuation:</span>
+                      <span>${modalSubtotal.toFixed(2)} CAD</span>
                     </div>
-                  )}
-                  <div className="border-t border-slate-700 my-1 pt-1 flex justify-between font-bold text-sm text-amber-400">
-                    <span>FINAL BALANCE DUE:</span>
-                    <span>${modalFinal.toFixed(2)} CAD</span>
+                    {session.applyTax && (
+                      <div className="flex justify-between text-amber-300">
+                        <span>BC Taxes & GST (12%):</span>
+                        <span>+${modalTax.toFixed(2)} CAD</span>
+                      </div>
+                    )}
+                    <div className="border-t border-slate-700 my-1 pt-1 flex justify-between font-bold text-sm text-amber-400">
+                      <span>FINAL BALANCE DUE:</span>
+                      <span>${modalFinal.toFixed(2)} CAD</span>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="bg-slate-900 text-white rounded-xl p-3 text-xs space-y-1 font-mono border border-slate-800">
+                    <div className="flex justify-between text-slate-400">
+                      <span>Target Piece:</span>
+                      <span className="text-white font-bold">{targetLabel}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>Calculated Cost:</span>
+                      <span>${(targetPc ? targetPc.calculatedFinalCost : 0).toFixed(2)} CAD</span>
+                    </div>
+                    <div className="border-t border-slate-700 my-1 pt-1 flex justify-between font-bold text-sm text-amber-400">
+                      <span>OVERRIDDEN PIECE PRICE:</span>
+                      <span>${modalVal.toFixed(2)} CAD</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-2">
-                {totals.isOverridden ? (
+                {isTargetOverridden ? (
                   <button
                     type="button"
                     onClick={handleClearPriceOverride}

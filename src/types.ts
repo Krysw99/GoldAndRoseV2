@@ -117,6 +117,7 @@ export interface JewelryItem {
   showCenterStone?: boolean;
   repairs?: RepairSelection[];
   repairNotes?: string;
+  overridePrice?: number | null;
 }
 
 export interface QuoteSession {

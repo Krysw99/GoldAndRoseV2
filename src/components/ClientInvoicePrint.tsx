@@ -14,6 +14,7 @@ interface ClientInvoicePrintProps {
   isInteractive?: boolean;
   onChangeSession?: (updater: (prev: QuoteSession) => QuoteSession) => void;
   onOpenPriceOverride?: () => void;
+  onOpenPiecePriceOverride?: (ringId: string) => void;
   enlargeImage?: (url: string) => void;
 }
 
@@ -27,6 +28,7 @@ export default function ClientInvoicePrint({
   isInteractive = false,
   onChangeSession,
   onOpenPriceOverride,
+  onOpenPiecePriceOverride,
   enlargeImage
 }: ClientInvoicePrintProps) {
   const effectiveDate = dateStr || new Date().toLocaleDateString();
@@ -378,7 +380,7 @@ export default function ClientInvoicePrint({
   };
 
   return (
-    <div id={containerId} className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:border-none print:shadow-none print:rounded-none print:space-y-3.5 text-left font-sans text-brand-800 max-w-4xl mx-auto">
+    <div id={containerId} className="bg-white p-8 rounded-[2rem] border border-brand-200 shadow-xl space-y-6 print:p-0 print:px-2 print:border-none print:shadow-none print:rounded-none print:space-y-3.5 text-left font-sans text-brand-800 max-w-4xl mx-auto">
       {/* Invoice Header */}
       <div className="flex justify-between items-start border-b border-brand-200 pb-6 print:pb-3">
         <div>
@@ -546,34 +548,46 @@ export default function ClientInvoicePrint({
                       {r.designNotes && r.designNotes.map((n, ni) => <span key={ni} className="block text-[9px] text-brand-500 leading-tight print:text-[7.5px]">• {n.text}</span>)}
                     </td>
                     <td className="p-2.5 pr-3.5 text-right font-mono font-bold text-brand-950 text-xs print:p-1.5 print:pr-2.5 print:text-[9.5px]">
-                      {discVal > 0 ? (
-                        <div className="flex flex-col items-end">
-                          <span className="text-[9.5px] text-slate-400/90 line-through font-normal print:text-[7.5px]">
-                            ${cost.toFixed(2)}
-                          </span>
-                          <span className="text-[8.5px] text-red-600 font-extrabold font-sans print:text-[7px]">
-                            -{r.discountType === '%' ? `${discVal}%` : `$${discVal.toFixed(2)}`}
-                          </span>
-                          <span className="text-brand-950 font-bold">${finalPieceCost.toFixed(2)}</span>
-                          {isOverriddenPiece && (
+                      <div className="flex items-center justify-end gap-1.5">
+                        {isInteractive && onOpenPiecePriceOverride && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenPiecePriceOverride(r.id)}
+                            className="p-1 rounded bg-slate-100 hover:bg-amber-100 text-slate-500 hover:text-amber-700 transition-all border border-slate-200 print:hidden cursor-pointer shrink-0"
+                            title="Override this piece price"
+                          >
+                            <Edit3 className="w-2.5 h-2.5" />
+                          </button>
+                        )}
+                        {discVal > 0 ? (
+                          <div className="flex flex-col items-end">
+                            <span className="text-[9.5px] text-slate-400/90 line-through font-normal print:text-[7.5px]">
+                              ${cost.toFixed(2)}
+                            </span>
+                            <span className="text-[8.5px] text-red-600 font-extrabold font-sans print:text-[7px]">
+                              -{r.discountType === '%' ? `${discVal}%` : `$${discVal.toFixed(2)}`}
+                            </span>
+                            <span className="text-brand-950 font-bold">${finalPieceCost.toFixed(2)}</span>
+                            {isOverriddenPiece && (
+                              <span className="text-[7.5px] text-amber-700 font-sans font-bold print:hidden">
+                                (Overridden)
+                              </span>
+                            )}
+                          </div>
+                        ) : isOverriddenPiece ? (
+                          <div className="flex flex-col items-end">
+                            <span className="text-[9.5px] text-slate-400/90 line-through font-normal print:text-[7.5px]">
+                              ${cost.toFixed(2)}
+                            </span>
+                            <span className="text-brand-950 font-bold">${finalPieceCost.toFixed(2)}</span>
                             <span className="text-[7.5px] text-amber-700 font-sans font-bold print:hidden">
                               (Overridden)
                             </span>
-                          )}
-                        </div>
-                      ) : isOverriddenPiece ? (
-                        <div className="flex flex-col items-end">
-                          <span className="text-[9.5px] text-slate-400/90 line-through font-normal print:text-[7.5px]">
-                            ${cost.toFixed(2)}
-                          </span>
-                          <span className="text-brand-950 font-bold">${finalPieceCost.toFixed(2)}</span>
-                          <span className="text-[7.5px] text-amber-700 font-sans font-bold print:hidden">
-                            (Overridden)
-                          </span>
-                        </div>
-                      ) : (
-                        <span>${finalPieceCost.toFixed(2)}</span>
-                      )}
+                          </div>
+                        ) : (
+                          <span>${finalPieceCost.toFixed(2)}</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

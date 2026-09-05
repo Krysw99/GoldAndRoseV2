@@ -49,7 +49,7 @@ export function printElement(elementId: string) {
           /* Optimized high-fidelity single-page print styles */
           @page {
             size: letter portrait;
-            margin: 7mm 14mm;
+            margin: 8mm 18mm;
           }
           body, html {
             background: #ffffff !important;
@@ -57,6 +57,9 @@ export function printElement(elementId: string) {
             padding: 0 !important;
             margin: 0 !important;
             box-sizing: border-box !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow-x: hidden !important;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;

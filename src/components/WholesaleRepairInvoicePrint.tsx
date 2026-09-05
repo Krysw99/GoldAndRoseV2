@@ -65,7 +65,7 @@ export default function WholesaleRepairInvoicePrint({
   const grandTotal = isOverridden ? (session.customGrandTotal as number) : calculatedGrandTotal;
 
   return (
-    <div id={containerId} className="bg-white text-black p-8 max-w-4xl mx-auto font-sans text-xs space-y-6 text-left">
+    <div id={containerId} className="bg-white text-black p-8 max-w-4xl mx-auto font-sans text-xs space-y-6 text-left print:p-0 print:px-2 print:max-w-full">
       {/* Print Header */}
       <div className="flex justify-between items-start border-b-2 border-black pb-5">
         <div>

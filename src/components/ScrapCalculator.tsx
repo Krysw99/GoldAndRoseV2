@@ -730,7 +730,7 @@ export default function ScrapCalculator({
           />
           <input
             type="tel"
-            placeholder="Phone (000-000-0000)"
+            placeholder="000-000-0000"
             className="border p-3 rounded-xl text-sm shadow-sm font-mono font-medium"
             value={phoneNumber}
             onChange={(e) => setPhoneNumber(formatPhoneNumber(e.target.value))}
@@ -1021,7 +1021,7 @@ export default function ScrapCalculator({
     </div>
 
     {/* Print-only container: Guaranteed 1-Page Layout */}
-    <div id="scrap-receipt-box" className="hidden print:block bg-white text-brand-900 text-left font-sans w-full max-w-2xl mx-auto p-2 print:p-0 print:max-h-[1020px] print:overflow-hidden break-inside-avoid">
+    <div id="scrap-receipt-box" className="hidden print:block bg-white text-brand-900 text-left font-sans w-full max-w-2xl mx-auto p-2 print:p-0 print:px-2 print:max-h-[1020px] print:overflow-hidden break-inside-avoid">
       <div className="border border-brand-200 rounded-xl p-4 print:p-3.5 bg-white shadow-none space-y-3">
         {/* 1. Header with Brand & Receipt Metadata */}
         <div className="flex justify-between items-start border-b border-brand-900 pb-2.5">

@@ -46,7 +46,7 @@ body {
 @media print {
   @page {
     size: letter portrait;
-    margin: 7mm 14mm;
+    margin: 8mm 18mm;
   }
 
   /* Disable all transitions, animations, and transforms to prevent Safari/iPadOS print engine delays */
