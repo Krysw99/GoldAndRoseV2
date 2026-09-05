@@ -1173,3 +1173,305 @@ export function formatPhoneNumber(value: string | undefined | null): string {
   return `${limited.slice(0, 3)}-${limited.slice(3, 6)}-${limited.slice(6, 10)}`;
 }
 
+export interface SessionPieceCost {
+  cost: number;
+  discVal: number;
+  discDeduction: number;
+  calculatedFinalCost: number;
+  effectiveCost: number;
+  effectiveFinalCost: number;
+}
+
+export interface CompiledSessionCost {
+  grossTotal: number;
+  totalDiscount: number;
+  postDiscountTotal: number;
+  scrapCredit: number;
+  subtotal: number;
+  tax: number;
+  calculatedGrandTotal: number;
+  isOverridden: boolean;
+  grandTotal: number;
+  targetPiecesTotal: number;
+  pieceCosts: Record<string, SessionPieceCost>;
+}
+
+/**
+ * Calculates complete session totals and individual piece costs,
+ * respecting manual price overrides across retail and wholesale quotes.
+ */
+export function compileSessionCost(
+  session: QuoteSession,
+  settings: AppSettings,
+  spotPrices: { gold: number; silver: number; platinum: number },
+  isWholesale: boolean = false
+): CompiledSessionCost {
+  const rings = session.rings || [];
+  
+  let rawGrossTotal = 0;
+  let rawTotalDiscount = 0;
+  const pieceCalculations: Array<{
+    ring: JewelryItem;
+    index: number;
+    hasData: boolean;
+    cost: number;
+    discVal: number;
+    discDeduction: number;
+    calculatedFinalCost: number;
+  }> = [];
+
+  rings.forEach((r, idx) => {
+    const hasData = hasRingData(r);
+    if (!hasData) {
+      pieceCalculations.push({
+        ring: r,
+        index: idx,
+        hasData: false,
+        cost: 0,
+        discVal: 0,
+        discDeduction: 0,
+        calculatedFinalCost: 0
+      });
+      return;
+    }
+
+    const cost = calculateRingCost(
+      r,
+      settings,
+      spotPrices,
+      isWholesale ? 'wholesale' : 'retail',
+      session.overridePrices,
+      isWholesale ? session.wholesaleProfileId : undefined
+    );
+    const discVal = parseFloat(r.discount) || 0;
+    const discDeduction = r.discountType === '%' ? cost * (discVal / 100) : discVal;
+    const calculatedFinalCost = Math.max(0, cost - discDeduction);
+
+    rawGrossTotal += cost;
+    rawTotalDiscount += discDeduction;
+
+    pieceCalculations.push({
+      ring: r,
+      index: idx,
+      hasData: true,
+      cost,
+      discVal,
+      discDeduction,
+      calculatedFinalCost
+    });
+  });
+
+  const postDiscountTotal = rawGrossTotal - rawTotalDiscount;
+  const scrapCredit = Number(session.scrapCredit) || 0;
+  const netBeforeTax = postDiscountTotal - scrapCredit;
+  const taxableSubtotal = Math.max(0, netBeforeTax);
+  const calculatedTax = session.applyTax ? taxableSubtotal * 0.12 : 0;
+  const calculatedGrandTotal = netBeforeTax + calculatedTax;
+
+  const isOverridden = typeof session.customGrandTotal === 'number' && !isNaN(session.customGrandTotal) && session.customGrandTotal !== null;
+
+  let subtotal = netBeforeTax;
+  let tax = 0;
+  let grandTotal = calculatedGrandTotal;
+
+  if (isOverridden) {
+    const customVal = session.customGrandTotal as number;
+    if (session.customGrandTotalIsInclusive) {
+      if (session.applyTax) {
+        grandTotal = customVal;
+        subtotal = customVal / 1.12;
+        tax = customVal - subtotal;
+      } else {
+        grandTotal = customVal;
+        subtotal = customVal;
+        tax = 0;
+      }
+    } else {
+      subtotal = customVal;
+      tax = session.applyTax ? Math.max(0, customVal) * 0.12 : 0;
+      grandTotal = subtotal + tax;
+    }
+  } else {
+    subtotal = netBeforeTax;
+    tax = session.applyTax ? Math.max(0, netBeforeTax) * 0.12 : 0;
+    grandTotal = netBeforeTax + tax;
+  }
+
+  const targetPiecesTotal = Math.max(0, subtotal + scrapCredit);
+  const pieceCosts: Record<string, SessionPieceCost> = {};
+
+  if (!isOverridden) {
+    pieceCalculations.forEach(item => {
+      const pc: SessionPieceCost = {
+        cost: item.cost,
+        discVal: item.discVal,
+        discDeduction: item.discDeduction,
+        calculatedFinalCost: item.calculatedFinalCost,
+        effectiveCost: item.cost,
+        effectiveFinalCost: item.calculatedFinalCost
+      };
+      pieceCosts[item.ring.id] = pc;
+      pieceCosts[String(item.index)] = pc;
+    });
+
+    return {
+      grossTotal: rawGrossTotal,
+      totalDiscount: rawTotalDiscount,
+      postDiscountTotal,
+      scrapCredit,
+      subtotal,
+      tax,
+      calculatedGrandTotal,
+      isOverridden: false,
+      grandTotal,
+      targetPiecesTotal,
+      pieceCosts
+    };
+  }
+
+  // Handle Price Overridden State
+  const validDataItems = pieceCalculations.filter(d => d.hasData);
+
+  if (validDataItems.length === 0) {
+    pieceCalculations.forEach(item => {
+      const pc: SessionPieceCost = {
+        cost: 0,
+        discVal: 0,
+        discDeduction: 0,
+        calculatedFinalCost: 0,
+        effectiveCost: 0,
+        effectiveFinalCost: 0
+      };
+      pieceCosts[item.ring.id] = pc;
+      pieceCosts[String(item.index)] = pc;
+    });
+
+    return {
+      grossTotal: targetPiecesTotal,
+      totalDiscount: 0,
+      postDiscountTotal: targetPiecesTotal,
+      scrapCredit,
+      subtotal,
+      tax,
+      calculatedGrandTotal,
+      isOverridden: true,
+      grandTotal,
+      targetPiecesTotal,
+      pieceCosts
+    };
+  }
+
+  if (validDataItems.length === 1) {
+    const item = validDataItems[0];
+    const effectiveFinalCost = targetPiecesTotal;
+    const effectiveCost = effectiveFinalCost + item.discDeduction;
+
+    pieceCalculations.forEach(d => {
+      if (d.hasData) {
+        const pc: SessionPieceCost = {
+          cost: d.cost,
+          discVal: d.discVal,
+          discDeduction: d.discDeduction,
+          calculatedFinalCost: d.calculatedFinalCost,
+          effectiveCost,
+          effectiveFinalCost
+        };
+        pieceCosts[d.ring.id] = pc;
+        pieceCosts[String(d.index)] = pc;
+      } else {
+        const pc: SessionPieceCost = {
+          cost: 0,
+          discVal: 0,
+          discDeduction: 0,
+          calculatedFinalCost: 0,
+          effectiveCost: 0,
+          effectiveFinalCost: 0
+        };
+        pieceCosts[d.ring.id] = pc;
+        pieceCosts[String(d.index)] = pc;
+      }
+    });
+
+    return {
+      grossTotal: effectiveCost,
+      totalDiscount: item.discDeduction,
+      postDiscountTotal: targetPiecesTotal,
+      scrapCredit,
+      subtotal,
+      tax,
+      calculatedGrandTotal,
+      isOverridden: true,
+      grandTotal,
+      targetPiecesTotal,
+      pieceCosts
+    };
+  }
+
+  // Multiple valid pieces: proportionally allocate targetPiecesTotal based on original post-discount costs
+  const validPostDiscountSum = validDataItems.reduce((acc, d) => acc + d.calculatedFinalCost, 0);
+  let runningAllocated = 0;
+
+  validDataItems.forEach((item, vi) => {
+    const isLast = vi === validDataItems.length - 1;
+    let effectiveFinalCost = 0;
+
+    if (validPostDiscountSum > 0) {
+      const ratio = targetPiecesTotal / validPostDiscountSum;
+      if (!isLast) {
+        effectiveFinalCost = Math.round(item.calculatedFinalCost * ratio * 100) / 100;
+        runningAllocated += effectiveFinalCost;
+      } else {
+        effectiveFinalCost = Math.max(0, Math.round((targetPiecesTotal - runningAllocated) * 100) / 100);
+      }
+    } else {
+      const equalShare = Math.round((targetPiecesTotal / validDataItems.length) * 100) / 100;
+      if (!isLast) {
+        effectiveFinalCost = equalShare;
+        runningAllocated += equalShare;
+      } else {
+        effectiveFinalCost = Math.max(0, Math.round((targetPiecesTotal - runningAllocated) * 100) / 100);
+      }
+    }
+
+    const effectiveCost = effectiveFinalCost + item.discDeduction;
+    const pc: SessionPieceCost = {
+      cost: item.cost,
+      discVal: item.discVal,
+      discDeduction: item.discDeduction,
+      calculatedFinalCost: item.calculatedFinalCost,
+      effectiveCost,
+      effectiveFinalCost
+    };
+    pieceCosts[item.ring.id] = pc;
+    pieceCosts[String(item.index)] = pc;
+  });
+
+  // Invalid items
+  pieceCalculations.filter(d => !d.hasData).forEach(item => {
+    const pc: SessionPieceCost = {
+      cost: 0,
+      discVal: 0,
+      discDeduction: 0,
+      calculatedFinalCost: 0,
+      effectiveCost: 0,
+      effectiveFinalCost: 0
+    };
+    pieceCosts[item.ring.id] = pc;
+    pieceCosts[String(item.index)] = pc;
+  });
+
+  return {
+    grossTotal: targetPiecesTotal + rawTotalDiscount,
+    totalDiscount: rawTotalDiscount,
+    postDiscountTotal: targetPiecesTotal,
+    scrapCredit,
+    subtotal,
+    tax,
+    calculatedGrandTotal,
+    isOverridden: true,
+    grandTotal,
+    targetPiecesTotal,
+    pieceCosts
+  };
+}
+

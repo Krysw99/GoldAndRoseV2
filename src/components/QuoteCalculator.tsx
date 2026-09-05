@@ -20,7 +20,8 @@ import {
 } from '../constants';
 import { 
   getEmptyRing, getTennisEstimates, calculateBandWeight, 
-  calculateRingCost, calculateRawCost, hasRingData, compressImage, formatPhoneNumber
+  calculateRingCost, calculateRawCost, hasRingData, compressImage, formatPhoneNumber,
+  compileSessionCost
 } from '../utils';
 import { printElement } from '../utils/printHelper';
 import { playClickSound } from '../utils/audio';
@@ -1497,70 +1498,8 @@ export default function QuoteCalculator({
     }
   };
 
-  // Session Totals Compile
-  const compileSessionCost = () => {
-    let grossTotal = 0;
-    let totalDiscount = 0;
-    
-    session.rings.forEach(r => {
-      if (!hasRingData(r)) return;
-      const cost = calculateRingCost(r, settings, spotPrices, isWholesale ? 'wholesale' : 'retail', session.overridePrices, isWholesale ? session.wholesaleProfileId : undefined);
-      grossTotal += cost;
-      
-      const val = parseFloat(r.discount) || 0;
-      totalDiscount += r.discountType === '%' ? cost * (val / 100) : val;
-    });
-
-    const postDiscountTotal = grossTotal - totalDiscount;
-    const scrapCredit = Number(session.scrapCredit) || 0;
-    const netBeforeTax = postDiscountTotal - scrapCredit;
-    const taxableSubtotal = Math.max(0, netBeforeTax);
-    const calculatedTax = session.applyTax ? taxableSubtotal * 0.12 : 0;
-    const calculatedGrandTotal = netBeforeTax + calculatedTax;
-
-    const isOverridden = typeof session.customGrandTotal === 'number' && !isNaN(session.customGrandTotal) && session.customGrandTotal !== null;
-    
-    let subtotal = netBeforeTax;
-    let tax = 0;
-    let grandTotal = calculatedGrandTotal;
-
-    if (isOverridden) {
-      const customVal = session.customGrandTotal as number;
-      if (session.customGrandTotalIsInclusive) {
-        if (session.applyTax) {
-          grandTotal = customVal;
-          subtotal = customVal / 1.12;
-          tax = customVal - subtotal;
-        } else {
-          grandTotal = customVal;
-          subtotal = customVal;
-          tax = 0;
-        }
-      } else {
-        subtotal = customVal;
-        tax = session.applyTax ? Math.max(0, customVal) * 0.12 : 0;
-        grandTotal = subtotal + tax;
-      }
-    } else {
-      subtotal = netBeforeTax;
-      tax = session.applyTax ? Math.max(0, netBeforeTax) * 0.12 : 0;
-      grandTotal = netBeforeTax + tax;
-    }
-
-    return {
-      grossTotal,
-      totalDiscount,
-      postDiscountTotal,
-      scrapCredit,
-      subtotal,
-      tax,
-      calculatedGrandTotal,
-      isOverridden,
-      grandTotal
-    };
-  };
-
-  const totals = compileSessionCost();
+  // Session Totals & Piece Breakdown Compile
+  const totals = compileSessionCost(session, settings, spotPrices, isWholesale);
 
   const handleSaveAndPrint = async () => {
     playClickSound('click');
@@ -1941,10 +1880,20 @@ export default function QuoteCalculator({
               <div className="space-y-1.5 font-mono text-[11px] sm:text-xs">
                 {session.rings.map((r, ri) => {
                   if (!hasRingData(r)) return null;
-                  const cost = calculateRingCost(r, settings, spotPrices, 'retail');
-                  const discVal = parseFloat(r.discount) || 0;
-                  const discDeduction = r.discountType === '%' ? cost * (discVal / 100) : discVal;
-                  const finalPieceCost = Math.max(0, cost - discDeduction);
+                  const pCost = totals.pieceCosts[r.id] || totals.pieceCosts[String(ri)] || {
+                    cost: calculateRingCost(r, settings, spotPrices, 'retail'),
+                    discVal: parseFloat(r.discount) || 0,
+                    discDeduction: 0,
+                    calculatedFinalCost: 0,
+                    effectiveCost: 0,
+                    effectiveFinalCost: 0
+                  };
+                  const cost = pCost.cost;
+                  const discVal = pCost.discVal;
+                  const discDeduction = pCost.discDeduction;
+                  const calculatedFinalCost = pCost.calculatedFinalCost;
+                  const finalPieceCost = pCost.effectiveFinalCost;
+                  const isPieceOverridden = totals.isOverridden && Math.abs(finalPieceCost - calculatedFinalCost) > 0.01;
                   const rawCost = calculateRawCost(r, settings, spotPrices);
                   const showRawBreakdown = settings.showRawCostOnQuoteTab;
                   const isDiscountOpen = !!openDiscounts[r.id];
@@ -1971,11 +1920,16 @@ export default function QuoteCalculator({
                         </span>
                         <div className="flex flex-col items-end">
                           <span className="font-bold text-[#f1c40f]">${finalPieceCost.toFixed(2)}</span>
-                          {discVal > 0 && (
+                          {isPieceOverridden ? (
+                            <span className="text-[9px] text-amber-300 font-mono flex items-center gap-1">
+                              <span className="line-through text-slate-400 font-normal">${calculatedFinalCost.toFixed(2)}</span>
+                              <span className="font-bold">(Overridden)</span>
+                            </span>
+                          ) : discVal > 0 ? (
                             <span className="text-[9px] text-red-400 font-bold font-mono">
                               (Disc. -{r.discountType === '%' ? `${discVal}%` : `$${discVal}`})
                             </span>
-                          )}
+                          ) : null}
                         </div>
                       </div>
 

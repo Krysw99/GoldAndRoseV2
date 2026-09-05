@@ -15,7 +15,7 @@ import {
   ScrapItem, JewelryItem 
 } from './types';
 import { DEFAULT_SETTINGS, TROY_ONCE_GRAMS, FANCY_SHAPES, ROUND_MELEE } from './constants';
-import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeParseDate, genId, getTennisBaseGrams, calculateScrapItemValue, formatPhoneNumber } from './utils';
+import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeParseDate, genId, getTennisBaseGrams, calculateScrapItemValue, formatPhoneNumber, compileSessionCost } from './utils';
 
 // Modular Components
 import ScrapCalculator from './components/ScrapCalculator';
@@ -815,36 +815,9 @@ setIsCloudSynced(true);
     const l: Record<string, string> = { customRing: 'Ring', weddingBand: 'Band', mensBand: "Men's", pendant: 'Pend', tennisBracelet: 'Tennis', earrings: 'Earrings' };
     const sum = activeSession.rings.map(r => `${l[r.category] || 'Item'}: ${r.goldGrams || 'Est'}g`).join(' | ') || (isWholesale ? "Wholesale Contract" : "Retail Consultation");
 
-    // Recalculate accurate final sum
-    let gT = 0;
-    let tD = 0;
-    activeSession.rings.forEach(r => {
-      const cost = calculateRingCost(r, settings, spotPrices, isWholesale ? 'wholesale' : 'retail', activeSession.overridePrices, isWholesale ? activeSession.wholesaleProfileId : undefined);
-      gT += cost;
-      const val = parseFloat(r.discount) || 0;
-      tD += r.discountType === '%' ? cost * (val / 100) : val;
-    });
-
-    // Subtotal subtraction scrap
-    const postDiscountTotal = gT - tD;
-    const scrapCred = Number(activeSession.scrapCredit) || 0;
-    const netBeforeTax = postDiscountTotal - scrapCred;
-    const taxableSubtotal = Math.max(0, netBeforeTax);
-    const tax = activeSession.applyTax ? taxableSubtotal * 0.12 : 0;
-    const calculatedGrandTotal = netBeforeTax + tax;
-
-    const isOverridden = typeof activeSession.customGrandTotal === 'number' && !isNaN(activeSession.customGrandTotal) && activeSession.customGrandTotal !== null;
-    let finalInvoiceAmount = calculatedGrandTotal;
-
-    if (isOverridden) {
-      const customVal = activeSession.customGrandTotal as number;
-      if (activeSession.customGrandTotalIsInclusive) {
-        finalInvoiceAmount = customVal;
-      } else {
-        const taxVal = activeSession.applyTax ? Math.max(0, customVal) * 0.12 : 0;
-        finalInvoiceAmount = customVal + taxVal;
-      }
-    }
+    // Recalculate accurate final sum using compileSessionCost
+    const totals = compileSessionCost(activeSession, settings, spotPrices, isWholesale);
+    const finalInvoiceAmount = totals.grandTotal;
 
     const formattedTotal = finalInvoiceAmount < 0 
       ? `-$${Math.abs(finalInvoiceAmount).toFixed(2)}` 

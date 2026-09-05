@@ -44,10 +44,16 @@ body {
 
 /* Print Optimization for High-Quality Brand Colors and Layouts */
 @media print {
+  @page {
+    size: letter portrait;
+    margin: 7mm 14mm;
+  }
+
   /* Disable all transitions, animations, and transforms to prevent Safari/iPadOS print engine delays */
   *,
   *::before,
   *::after {
+    box-sizing: border-box !important;
     animation: none !important;
     transition: none !important;
     transform: none !important;
@@ -80,6 +86,19 @@ body {
     padding: 0 !important;
     margin: 0 !important;
     font-size: 10pt !important;
+    box-sizing: border-box !important;
+  }
+
+  .print-container,
+  #scrap-receipt-box,
+  #ledger-invoice-box,
+  #wholesale-repair-invoice-print,
+  #quote-client-invoice-box,
+  #quote-cad-specs-box {
+    box-sizing: border-box !important;
+    max-width: 100% !important;
+    padding-left: 2mm !important;
+    padding-right: 2mm !important;
   }
 
   /* Map brand colors to high-contrast black, white, and greyscale */

@@ -1,6 +1,6 @@
 import React from 'react';
 import { QuoteSession, AppSettings } from '../types';
-import { calculateRingCost, hasRingData, getTennisEstimates } from '../utils';
+import { calculateRingCost, hasRingData, getTennisEstimates, compileSessionCost } from '../utils';
 import { FANCY_SHAPES, ROUND_MELEE } from '../constants';
 import { Edit3 } from 'lucide-react';
 
@@ -31,77 +31,8 @@ export default function ClientInvoicePrint({
 }: ClientInvoicePrintProps) {
   const effectiveDate = dateStr || new Date().toLocaleDateString();
 
-  // Session Totals Compile
-  const compileSessionCost = () => {
-    let grossTotal = 0;
-    let totalDiscount = 0;
-    
-    (session.rings || []).forEach(r => {
-      if (!hasRingData(r)) return;
-      const cost = calculateRingCost(
-        r,
-        settings,
-        spotPrices,
-        isWholesale ? 'wholesale' : 'retail',
-        session.overridePrices,
-        isWholesale ? session.wholesaleProfileId : undefined
-      );
-      grossTotal += cost;
-      
-      const val = parseFloat(r.discount) || 0;
-      totalDiscount += r.discountType === '%' ? cost * (val / 100) : val;
-    });
-
-    const postDiscountTotal = grossTotal - totalDiscount;
-    const scrapCredit = Number(session.scrapCredit) || 0;
-    const netBeforeTax = postDiscountTotal - scrapCredit;
-    const taxableSubtotal = Math.max(0, netBeforeTax);
-    const calculatedTax = session.applyTax ? taxableSubtotal * 0.12 : 0;
-    const calculatedGrandTotal = netBeforeTax + calculatedTax;
-
-    const isOverridden = typeof session.customGrandTotal === 'number' && !isNaN(session.customGrandTotal) && session.customGrandTotal !== null;
-    
-    let subtotal = netBeforeTax;
-    let tax = 0;
-    let grandTotal = calculatedGrandTotal;
-
-    if (isOverridden) {
-      const customVal = session.customGrandTotal as number;
-      if (session.customGrandTotalIsInclusive) {
-        if (session.applyTax) {
-          grandTotal = customVal;
-          subtotal = customVal / 1.12;
-          tax = customVal - subtotal;
-        } else {
-          grandTotal = customVal;
-          subtotal = customVal;
-          tax = 0;
-        }
-      } else {
-        subtotal = customVal;
-        tax = session.applyTax ? Math.max(0, customVal) * 0.12 : 0;
-        grandTotal = subtotal + tax;
-      }
-    } else {
-      subtotal = netBeforeTax;
-      tax = session.applyTax ? Math.max(0, netBeforeTax) * 0.12 : 0;
-      grandTotal = netBeforeTax + tax;
-    }
-
-    return {
-      grossTotal,
-      totalDiscount,
-      postDiscountTotal,
-      scrapCredit,
-      subtotal,
-      tax,
-      calculatedGrandTotal,
-      isOverridden,
-      grandTotal
-    };
-  };
-
-  const totals = compileSessionCost();
+  // Session Totals & Piece Breakdown Compile
+  const totals = compileSessionCost(session, settings, spotPrices, isWholesale);
 
   const getConsolidatedStones = () => {
     const list: Array<{
@@ -502,17 +433,26 @@ export default function ClientInvoicePrint({
             </thead>
             <tbody className="divide-y divide-brand-100">
               {(session.rings || []).filter(r => hasRingData(r)).map((r, ri) => {
-                const cost = calculateRingCost(
-                  r,
-                  settings,
-                  spotPrices,
-                  isWholesale ? 'wholesale' : 'retail',
-                  session.overridePrices,
-                  isWholesale ? session.wholesaleProfileId : undefined
-                );
-                const discVal = parseFloat(r.discount) || 0;
-                const discDeduction = r.discountType === '%' ? cost * (discVal / 100) : discVal;
-                const finalPieceCost = Math.max(0, cost - discDeduction);
+                const pCost = totals.pieceCosts[r.id] || totals.pieceCosts[String(ri)] || {
+                  cost: calculateRingCost(
+                    r,
+                    settings,
+                    spotPrices,
+                    isWholesale ? 'wholesale' : 'retail',
+                    session.overridePrices,
+                    isWholesale ? session.wholesaleProfileId : undefined
+                  ),
+                  discVal: parseFloat(r.discount) || 0,
+                  discDeduction: 0,
+                  calculatedFinalCost: 0,
+                  effectiveCost: 0,
+                  effectiveFinalCost: 0
+                };
+                const cost = pCost.cost;
+                const discVal = pCost.discVal;
+                const calculatedFinalCost = pCost.calculatedFinalCost;
+                const finalPieceCost = pCost.effectiveFinalCost;
+                const isOverriddenPiece = totals.isOverridden && Math.abs(finalPieceCost - calculatedFinalCost) > 0.01;
                 const w = (session.wholesaleProfileId && settings.wholesaleProfiles?.find(p => p.id === session.wholesaleProfileId)?.settings) || settings.wholesale;
 
                 return (
@@ -522,7 +462,9 @@ export default function ClientInvoicePrint({
                     </td>
                     <td className="p-2.5 print:p-1.5">
                       <span className="font-semibold block text-[11px] print:text-[9px]">{r.goldKarat ? `${r.goldKarat}K` : ''} {r.metalColor} {r.material}</span>
-                      <span className="text-[9.5px] text-brand-500 font-mono print:text-[8px]">{r.goldGrams || '0.0'}g</span>
+                      {isWholesale && (
+                        <span className="text-[9.5px] text-brand-500 font-mono print:text-[8px]">{r.goldGrams || '0.0'}g</span>
+                      )}
                     </td>
                     <td className="p-2.5 space-y-0.5 print:p-1.5 print:space-y-0.5">
                       {r.centerStones && r.centerStones.length > 0 ? (
@@ -613,6 +555,21 @@ export default function ClientInvoicePrint({
                             -{r.discountType === '%' ? `${discVal}%` : `$${discVal.toFixed(2)}`}
                           </span>
                           <span className="text-brand-950 font-bold">${finalPieceCost.toFixed(2)}</span>
+                          {isOverriddenPiece && (
+                            <span className="text-[7.5px] text-amber-700 font-sans font-bold print:hidden">
+                              (Overridden)
+                            </span>
+                          )}
+                        </div>
+                      ) : isOverriddenPiece ? (
+                        <div className="flex flex-col items-end">
+                          <span className="text-[9.5px] text-slate-400/90 line-through font-normal print:text-[7.5px]">
+                            ${cost.toFixed(2)}
+                          </span>
+                          <span className="text-brand-950 font-bold">${finalPieceCost.toFixed(2)}</span>
+                          <span className="text-[7.5px] text-amber-700 font-sans font-bold print:hidden">
+                            (Overridden)
+                          </span>
                         </div>
                       ) : (
                         <span>${finalPieceCost.toFixed(2)}</span>
