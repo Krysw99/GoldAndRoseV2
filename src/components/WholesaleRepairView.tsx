@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Trash2, Camera, Check, Printer, Coins, FileText, Sparkles, 
   X, Edit2, Save, Undo, Image as ImageIcon, PenTool, Lock, Unlock, HelpCircle, CheckCircle, AlertCircle,
-  Crop, Search, Calculator
+  Crop, Search, Calculator, ShieldCheck
 } from 'lucide-react';
 import { 
   QuoteSession, JewelryItem, RepairSelection, AddonItem, 
@@ -19,6 +19,8 @@ import SignaturePad from './SignaturePad';
 import { printElement } from '../utils/printHelper';
 import WholesaleRepairInvoicePrint from './WholesaleRepairInvoicePrint';
 import PhotoEditorModal from './PhotoEditorModal';
+import RefundPolicyModal from './RefundPolicyModal';
+import { DEFAULT_RETAIL_REPAIR_PRICING, DEFAULT_WHOLESALE_REPAIR_PRICING } from '../constants';
 
 interface WholesaleRepairViewProps {
   session: QuoteSession;
@@ -31,6 +33,7 @@ interface WholesaleRepairViewProps {
   onTriggerPrint: (printFn: () => void) => void;
   isIframe: boolean;
   embedMode?: boolean;
+  isWholesale?: boolean;
 }
 
 // All standard operations with their display parameters and categories
@@ -79,7 +82,8 @@ export default function WholesaleRepairView({
   scrapTransactions,
   onTriggerPrint,
   isIframe,
-  embedMode = false
+  embedMode = false,
+  isWholesale = true
 }: WholesaleRepairViewProps) {
 
   // Local active wholesale profile state
@@ -87,10 +91,12 @@ export default function WholesaleRepairView({
   const [unlockedPriceIds, setUnlockedPriceIds] = useState<Record<string, boolean>>({});
   const [heavyPolishPrice, setHeavyPolishPrice] = useState<number>(0);
   const [selectedPlatingColors, setSelectedPlatingColors] = useState<Record<string, boolean>>({});
+  const [enlargeImage, setEnlargeImage] = useState<string | null>(null);
 
   // Scrap Ledger Linking Modal State
   const [showScrapLinkModal, setShowScrapLinkModal] = useState(false);
   const [scrapSearchQuery, setScrapSearchQuery] = useState('');
+  const [showRefundPolicyModal, setShowRefundPolicyModal] = useState(false);
 
   const getScrapTransactionsList = (): ScrapTransaction[] => {
     if (scrapTransactions && scrapTransactions.length > 0) {
@@ -159,8 +165,41 @@ export default function WholesaleRepairView({
     setPhotoEditorIdx(null);
   };
 
-  // Fetch the current repair pricing object based on selected profile or master settings
+  // Fetch the current repair pricing object based on selected profile, master settings, or retail rates
   const getActiveRepairPricing = (): RepairPricingSettings => {
+    if (isWholesale === false) {
+      const retailPricing = (settings.retailRepairPricing || DEFAULT_RETAIL_REPAIR_PRICING) as any;
+      const def = DEFAULT_RETAIL_REPAIR_PRICING;
+      return {
+        resizeUp14kThin_base: retailPricing.resizeUp14kThin_base ?? def.resizeUp14kThin_base,
+        resizeUp14kThin_extra: retailPricing.resizeUp14kThin_extra ?? def.resizeUp14kThin_extra,
+        resizeUp14kThick_base: retailPricing.resizeUp14kThick_base ?? def.resizeUp14kThick_base,
+        resizeUp14kThick_extra: retailPricing.resizeUp14kThick_extra ?? def.resizeUp14kThick_extra,
+        resizeUp18k_base: retailPricing.resizeUp18k_base ?? def.resizeUp18k_base,
+        resizeUp18k_extra: retailPricing.resizeUp18k_extra ?? def.resizeUp18k_extra,
+        resizeUp22k_base: retailPricing.resizeUp22k_base ?? def.resizeUp22k_base,
+        resizeUp22k_extra: retailPricing.resizeUp22k_extra ?? def.resizeUp22k_extra,
+        resizeDownFlat: retailPricing.resizeDownFlat ?? def.resizeDownFlat,
+        stretchRing: retailPricing.stretchRing ?? def.stretchRing,
+        resetMelee: retailPricing.resetMelee ?? def.resetMelee,
+        resetCenter: retailPricing.resetCenter ?? def.resetCenter,
+        laserEngravingSimple: retailPricing.laserEngravingSimple ?? def.laserEngravingSimple,
+        laserEngravingAdvanced: retailPricing.laserEngravingAdvanced ?? def.laserEngravingAdvanced,
+        prongRetip: retailPricing.prongRetip ?? def.prongRetip,
+        replatingBase: retailPricing.replatingBase ?? def.replatingBase,
+        replatingOptionRhodium: retailPricing.replatingOptionRhodium ?? def.replatingOptionRhodium,
+        replatingOption14kYellow: retailPricing.replatingOption14kYellow ?? def.replatingOption14kYellow,
+        replatingOption24k: retailPricing.replatingOption24k ?? def.replatingOption24k,
+        replatingOptionBlackRuthenium: retailPricing.replatingOptionBlackRuthenium ?? def.replatingOptionBlackRuthenium,
+        replatingOptionNickel: retailPricing.replatingOptionNickel ?? def.replatingOptionNickel,
+        replatingOptionRose: retailPricing.replatingOptionRose ?? def.replatingOptionRose,
+        laserChainRepair: retailPricing.laserChainRepair ?? def.laserChainRepair,
+        simplePolishCleanup: retailPricing.simplePolishCleanup ?? def.simplePolishCleanup,
+        heavyCleanupPolishMin: retailPricing.heavyCleanupPolishMin ?? def.heavyCleanupPolishMin,
+        heavyCleanupPolishMax: retailPricing.heavyCleanupPolishMax ?? def.heavyCleanupPolishMax,
+      };
+    }
+
     let activeWholesale: any;
     if (profileId) {
       const p = (settings.wholesaleProfiles || []).find(prof => prof.id === profileId);
@@ -171,7 +210,7 @@ export default function WholesaleRepairView({
     }
     
     // Ensure default fallback values are loaded if keys are missing
-    const defaultPricing = (settings.wholesale.repairPricing || {}) as any;
+    const defaultPricing = (settings.wholesale.repairPricing || DEFAULT_WHOLESALE_REPAIR_PRICING) as any;
     return {
       resizeUp14kThin_base: activeWholesale.repairPricing?.resizeUp14kThin_base ?? defaultPricing.resizeUp14kThin_base ?? 50,
       resizeUp14kThin_extra: activeWholesale.repairPricing?.resizeUp14kThin_extra ?? defaultPricing.resizeUp14kThin_extra ?? 70,
@@ -699,9 +738,11 @@ export default function WholesaleRepairView({
             <div>
               <h2 className="font-serif text-lg font-black italic text-brand-900 flex items-center gap-2">
                 <Sparkles className="text-brand-gold animate-pulse shrink-0" size={18} />
-                Wholesale Repair & Job Sheet
+                {isWholesale === false ? 'Retail Customer Repair & Job Sheet' : 'Wholesale Repair & Job Sheet'}
               </h2>
-              <p className="text-[10px] text-brand-400 font-bold uppercase tracking-widest mt-0.5 font-mono">Bespoke Jewelry Restoration & Sizing Workspace</p>
+              <p className="text-[10px] text-brand-400 font-bold uppercase tracking-widest mt-0.5 font-mono">
+                {isWholesale === false ? 'Client Repair Intake & Restoration Workspace (Retail Rates)' : 'Bespoke Jewelry Restoration & Sizing Workspace'}
+              </p>
             </div>
 
             {/* Wholesale Profiles dropdown & Scrap Ledger Link */}
@@ -724,36 +765,42 @@ export default function WholesaleRepairView({
                 )}
               </button>
 
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] font-black text-brand-500 uppercase tracking-wider font-mono">Profile:</span>
-                <select
-                  className="bg-brand-50 border border-brand-200 px-3 py-1.5 rounded-xl text-xs font-black outline-none w-full sm:w-48 cursor-pointer text-brand-800"
-                  value={profileId}
-                  onChange={(e) => handleProfileChange(e.target.value)}
-                >
-                  <option value="">Default Wholesale Pricing</option>
-                  {(settings.wholesaleProfiles || []).map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
+              {isWholesale !== false && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-black text-brand-500 uppercase tracking-wider font-mono">Profile:</span>
+                  <select
+                    className="bg-brand-50 border border-brand-200 px-3 py-1.5 rounded-xl text-xs font-black outline-none w-full sm:w-48 cursor-pointer text-brand-800"
+                    value={profileId}
+                    onChange={(e) => handleProfileChange(e.target.value)}
+                  >
+                    <option value="">Default Wholesale Pricing</option>
+                    {(settings.wholesaleProfiles || []).map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Client Metadata Grid */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div>
-              <label className="text-[9px] font-black text-brand-500 uppercase tracking-wider font-mono block mb-1">Wholesale Client / Store Name</label>
+              <label className="text-[9px] font-black text-brand-500 uppercase tracking-wider font-mono block mb-1">
+                {isWholesale === false ? 'Customer Name' : 'Wholesale Client / Store Name'}
+              </label>
               <input
                 type="text"
-                placeholder="e.g. Burnaby Fine Jewellers"
+                placeholder={isWholesale === false ? "e.g. John Doe" : "e.g. Burnaby Fine Jewellers"}
                 className="w-full bg-brand-50/40 border border-brand-200 px-3 py-2.5 rounded-xl text-xs font-bold focus:bg-white transition-all outline-none"
                 value={session.cName}
                 onChange={(e) => onChangeSession(prev => ({ ...prev, cName: e.target.value }))}
               />
             </div>
             <div>
-              <label className="text-[9px] font-black text-brand-500 uppercase tracking-wider font-mono block mb-1">Client Contact Phone</label>
+              <label className="text-[9px] font-black text-brand-500 uppercase tracking-wider font-mono block mb-1">
+                {isWholesale === false ? 'Customer Phone' : 'Client Contact Phone'}
+              </label>
               <input
                 type="tel"
                 placeholder="000-000-0000"
@@ -764,10 +811,12 @@ export default function WholesaleRepairView({
               />
             </div>
             <div>
-              <label className="text-[9px] font-black text-brand-500 uppercase tracking-wider font-mono block mb-1">Client Email Address</label>
+              <label className="text-[9px] font-black text-brand-500 uppercase tracking-wider font-mono block mb-1">
+                {isWholesale === false ? 'Customer Email' : 'Client Email Address'}
+              </label>
               <input
                 type="email"
-                placeholder="e.g. repairs@burnabyjewellers.ca"
+                placeholder={isWholesale === false ? "e.g. client@example.com" : "e.g. repairs@burnabyjewellers.ca"}
                 className="w-full bg-brand-50/40 border border-brand-200 px-3 py-2.5 rounded-xl text-xs font-bold focus:bg-white transition-all outline-none"
                 value={session.cEmail}
                 onChange={(e) => onChangeSession(prev => ({ ...prev, cEmail: e.target.value }))}
@@ -1008,339 +1057,249 @@ export default function WholesaleRepairView({
 
       </div>
 
-      {/* SECTION 3: ADDONS TABLE, SKETCHES & NOTES GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        
-        {/* LEFT COLUMN: ACTIVE SUMMARY & OVERRIDES & ADDONS TABLE (8 cols) */}
-        <div className="lg:col-span-8 bg-white p-5 rounded-3xl border border-brand-100 shadow-sm space-y-5">
-          <div className="border-b border-brand-50 pb-2">
-            <h3 className="text-xs font-black text-brand-900 uppercase tracking-widest font-mono flex items-center gap-1.5">
-              <Coins size={13} className="text-brand-gold animate-bounce" />
-              Active Repair Job Breakdown & Price Adjustment
-            </h3>
+      {/* SECTION 3: CUSTOM BENCH & COMPONENT CHARGES (MOVED ROW ABOVE) */}
+      <div className="bg-white p-5 rounded-3xl border border-brand-100 shadow-sm space-y-3">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-brand-50 pb-2.5">
+          <div>
+            <h4 className="text-xs font-black text-brand-900 uppercase tracking-widest font-mono flex items-center gap-1.5">
+              <Plus size={13} className="text-brand-gold" />
+              Custom Bench & Component Charges
+            </h4>
+            <p className="text-[10px] text-brand-400 mt-0.5">
+              Add individual bench charges, custom parts, finding materials, or additional goldsmith bench time.
+            </p>
           </div>
-
-          {currentRepairs.length === 0 ? (
-            <div className="p-8 border-2 border-dashed border-brand-100 rounded-3xl text-center bg-brand-50/5">
-              <AlertCircle size={32} className="text-brand-300 mx-auto mb-2 animate-pulse" />
-              <p className="text-xs text-brand-400 font-bold uppercase tracking-wider">No standard repair operations checked yet</p>
-              <p className="text-[10px] text-brand-400 mt-1">Check boxes in the cards above to assemble your repair job sheet</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-2xl border border-brand-100 shadow-inner bg-slate-50/45">
-              <table className="w-full text-left border-collapse text-xs font-sans">
-                <thead>
-                  <tr className="bg-brand-900 text-white font-mono uppercase tracking-wider text-[9px] border-b border-brand-900">
-                    <th className="p-3">Operation Task</th>
-                    <th className="p-3 text-center">Parameters</th>
-                    <th className="p-3 text-right">Standard Fee</th>
-                    <th className="p-3 text-center">Override</th>
-                    <th className="p-3 text-right">Line Total</th>
-                    <th className="p-3 text-center print:hidden">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-brand-100">
-                  {currentRepairs.map((rep) => {
-                    const isOverridden = unlockedPriceIds[rep.id];
-                    return (
-                      <tr key={rep.id} className="hover:bg-brand-50/30 transition-colors">
-                        <td className="p-3 font-semibold text-brand-800">
-                          {rep.name}
-                          {rep.option && <span className="block text-[8px] font-mono text-brand-500 font-normal mt-0.5">Option: {rep.option}</span>}
-                        </td>
-                        <td className="p-3 text-center font-mono font-bold text-brand-600">
-                          {rep.id.startsWith('resizeUp') ? (
-                            <span>+{rep.extraQty || 0} sz</span>
-                          ) : rep.qty > 0 ? (
-                            <span>{rep.qty}x</span>
-                          ) : (
-                            <span className="text-[10px] font-bold text-brand-400 uppercase">Flat</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-right font-mono font-medium text-brand-500">
-                          {isOverridden ? (
-                            <span className="line-through text-brand-300">${calculateStandardPriceForOp(rep.id, rep.qty, rep.extraQty || 0, rep.id === 'replating' ? selectedPlatingColors : {}, rep.id === 'heavyCleanupPolish' ? rep.qty : 0).toFixed(2)}</span>
-                          ) : (
-                            <span>${rep.price.toFixed(2)}</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleTogglePriceOverrideLock(rep.id)}
-                            className={`p-1.5 rounded-lg border transition-all inline-flex items-center justify-center cursor-pointer ${isOverridden ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-slate-50 text-slate-400 border-slate-200 hover:text-slate-600'}`}
-                            title={isOverridden ? "Lock standard pricing (Reset manual override)" : "Unlock custom manual price override input"}
-                          >
-                            {isOverridden ? <Unlock size={12} className="animate-wiggle" /> : <Lock size={12} />}
-                          </button>
-                        </td>
-                        <td className="p-3 text-right font-mono font-bold text-brand-900">
-                          {isOverridden ? (
-                            <div className="relative inline-block w-20">
-                              <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] text-amber-500 font-black">$</span>
-                              <input
-                                type="number"
-                                className="w-full bg-amber-50 border border-amber-200 text-right pl-3.5 pr-1 py-0.5 rounded text-xs font-black font-mono text-amber-700 outline-none"
-                                value={rep.customPrice ?? rep.price}
-                                onChange={(e) => handleUpdateRepairField(rep.id, { customPrice: parseFloat(e.target.value) || 0 })}
-                              />
-                            </div>
-                          ) : (
-                            <span>${rep.price.toFixed(2)}</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-center print:hidden">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleRepair(REPAIR_OPERATIONS.find(o => o.id === rep.id)!, false)}
-                            className="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* CUSTOM BENCH ADDONS SECTION */}
-          <div className="pt-3 border-t border-brand-100">
-            <div className="flex justify-between items-center mb-3">
-              <h4 className="text-[10px] font-black text-brand-700 uppercase tracking-wider font-mono flex items-center gap-1">
-                <Plus size={12} className="text-brand-gold animate-bounce" />
-                Custom Bench & Component Charges
-              </h4>
-              <button
-                type="button"
-                onClick={handleAddCustomAddon}
-                className="bg-brand-900 hover:bg-brand-850 text-brand-gold border border-brand-850 font-black px-3 py-1.5 rounded-xl text-[10px] uppercase tracking-wider flex items-center gap-1 transition-all shadow-sm cursor-pointer"
-              >
-                <Plus size={11} /> Add Bench Charge
-              </button>
-            </div>
-
-            {currentAddons.length === 0 ? (
-              <p className="text-[10px] text-brand-400 italic">No custom component charges added. Click button to add raw materials, finding parts, or custom welding hours.</p>
-            ) : (
-              <div className="space-y-2">
-                {currentAddons.map((add, index) => (
-                  <div key={index} className="flex gap-2.5 items-center bg-slate-50 p-2.5 rounded-2xl border border-brand-100 animate-fadeIn">
-                    <div className="flex-1">
-                      <input
-                        type="text"
-                        placeholder="e.g. Supply & solder heavy duty lobster clasp finding"
-                        className="w-full bg-white border border-brand-200 px-3 py-1.5 rounded-xl text-xs font-bold outline-none font-sans"
-                        value={add.desc}
-                        onChange={(e) => handleUpdateAddon(index, { desc: e.target.value })}
-                      />
-                    </div>
-                    <div className="relative w-28 shrink-0">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-400">$</span>
-                      <input
-                        type="number"
-                        placeholder="0.00"
-                        className="w-full bg-white border border-brand-200 text-right pl-6 pr-2.5 py-1.5 rounded-xl text-xs font-mono font-bold outline-none"
-                        value={add.fee}
-                        onChange={(e) => handleUpdateAddon(index, { fee: e.target.value })}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveAddon(index)}
-                      className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg cursor-pointer shrink-0"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={handleAddCustomAddon}
+            className="bg-brand-900 hover:bg-brand-850 text-brand-gold border border-brand-850 font-black px-3.5 py-1.5 rounded-xl text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-sm cursor-pointer shrink-0"
+          >
+            <Plus size={12} /> Add Bench Charge
+          </button>
         </div>
 
-        {/* RIGHT COLUMN: MEDIA, NOTES & SKETCHES GALLERY (4 cols) */}
-        <div className="lg:col-span-4 bg-white p-5 rounded-3xl border border-brand-100 shadow-sm space-y-4">
-          
-          {/* SKETCHES GALLERY */}
-          <div>
-            <div className="flex justify-between items-center border-b border-brand-50 pb-1.5 mb-2.5">
-              <h4 className="text-[10px] font-black text-brand-800 uppercase tracking-wider font-mono flex items-center gap-1">
-                <PenTool size={11} className="text-brand-gold" />
-                Job Sketches
-              </h4>
-              <button
-                type="button"
-                onClick={() => { playClickSound('click'); onLaunchSketch('sketch'); }}
-                className="text-[9px] text-brand-gold hover:text-brand-900 font-bold underline font-sans cursor-pointer"
-              >
-                + Draw Sketch
-              </button>
-            </div>
-
-            {(!activeItem.referenceSketches || activeItem.referenceSketches.length === 0) ? (
-              <div 
-                onClick={() => { playClickSound('click'); onLaunchSketch('sketch'); }}
-                className="p-6 border border-dashed border-brand-100 rounded-2xl text-center bg-brand-50/5 hover:bg-brand-50/15 transition-all cursor-pointer group"
-              >
-                <PenTool size={18} className="text-brand-300 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                <span className="text-[9px] text-brand-400 font-bold uppercase tracking-wider">Draw Bench Sketch</span>
+        {currentAddons.length === 0 ? (
+          <div className="p-4 border border-dashed border-brand-200/80 rounded-2xl text-center bg-brand-50/20">
+            <p className="text-[11px] text-brand-400 font-medium italic">
+              No custom component charges added yet. Click "+ Add Bench Charge" to include raw findings, replacement stones, or custom welding.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {currentAddons.map((add, index) => (
+              <div key={index} className="flex gap-2.5 items-center bg-slate-50/80 p-2.5 rounded-2xl border border-brand-100 animate-fadeIn">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    placeholder="e.g. Supply & solder heavy duty lobster clasp finding"
+                    className="w-full bg-white border border-brand-200 px-3 py-1.5 rounded-xl text-xs font-bold outline-none font-sans"
+                    value={add.desc}
+                    onChange={(e) => handleUpdateAddon(index, { desc: e.target.value })}
+                  />
+                </div>
+                <div className="relative w-32 shrink-0">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-400">$</span>
+                  <input
+                    type="number"
+                    placeholder="0.00"
+                    className="w-full bg-white border border-brand-200 text-right pl-7 pr-3 py-1.5 rounded-xl text-xs font-mono font-bold outline-none"
+                    value={add.fee}
+                    onChange={(e) => handleUpdateAddon(index, { fee: e.target.value })}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveAddon(index)}
+                  className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg cursor-pointer shrink-0 transition-colors"
+                  title="Remove charge"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
-             ) : (
-              <div className="grid grid-cols-3 gap-2.5">
-                {(activeItem.referenceSketches || []).map((sk, sIdx) => (
-                  <div key={sIdx} className="flex flex-col gap-1.5 items-center">
-                    <div className="w-full aspect-square bg-slate-50 rounded-xl border border-brand-150 overflow-hidden shadow-inner flex items-center justify-center">
-                      <img src={sk} alt={`Sketch ${sIdx+1}`} className="w-full h-full object-contain pointer-events-none" />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* SECTION 4: SKETCHES & INTAKE PHOTOS (RETAIL TAB DESIGN & AREA) */}
+      <div className="bg-white p-4 rounded-3xl border border-brand-100 shadow-sm space-y-4">
+        <h3 className="text-[10px] font-black text-brand-800 uppercase tracking-widest border-b border-brand-100 pb-2 flex items-center gap-1.5 justify-center">
+          <Camera size={12} className="text-brand-gold" />
+          Job Sketches & Intake Photos
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Column 1: Sketches */}
+          <div className="space-y-3">
+            <div className="flex justify-between items-center border-b border-brand-50 pb-1">
+              <span className="text-[9px] font-black uppercase text-brand-600 tracking-wider">
+                Interactive Sketches ({(activeItem.referenceSketches || []).length})
+              </span>
+            </div>
+            
+            <div className="flex flex-wrap gap-2 min-h-[76px] bg-brand-50/20 p-2 rounded-2xl border border-dashed border-brand-200 items-center justify-start">
+              {(!activeItem.referenceSketches || activeItem.referenceSketches.length === 0) ? (
+                <div className="w-full flex flex-col items-center justify-center py-2 text-center">
+                  <Sparkles size={14} className="text-brand-300" />
+                  <span className="text-[8px] text-brand-400 mt-1">No sketches drawn yet</span>
+                </div>
+              ) : (
+                (activeItem.referenceSketches || []).map((sketchUrl, sIdx) => (
+                  <div key={sIdx} className="flex flex-col items-center gap-1">
+                    <div
+                      onClick={() => setEnlargeImage(sketchUrl)}
+                      className="border border-brand-150 bg-white rounded-xl p-0.5 w-16 h-16 flex items-center justify-center shadow-sm cursor-pointer overflow-hidden transition-all hover:scale-105"
+                      title="Click to enlarge"
+                    >
+                      <img src={sketchUrl} alt={`Sketch ${sIdx + 1}`} className="w-full h-full object-cover rounded-lg" />
                     </div>
-                    <div className="flex items-center gap-1.5 justify-center w-full">
+                    <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => { playClickSound('click'); onLaunchSketch('sketch', sIdx); }}
-                        className="bg-white hover:bg-brand-50 border border-brand-200 text-brand-800 p-1 rounded-md cursor-pointer flex items-center justify-center shadow-sm w-8 h-8"
-                        title="Edit sketch"
+                        onClick={() => onLaunchSketch('sketch', sIdx)}
+                        className="p-1 bg-white border border-brand-200 text-brand-900 rounded-md hover:bg-brand-50 transition-colors shadow-sm cursor-pointer"
+                        title="Edit Sketch"
                       >
-                        <Edit2 size={12} />
+                        <Sparkles size={10} className="text-brand-gold" />
                       </button>
                       <button
                         type="button"
                         onClick={() => {
                           playClickSound('delete');
-                          const updated = (activeItem.referenceSketches || []).filter((_, idx) => idx !== sIdx);
+                          const updated = (activeItem.referenceSketches || []).filter((_, i) => i !== sIdx);
                           updateItemFields({ referenceSketches: updated });
                         }}
-                        className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 p-1 rounded-md cursor-pointer flex items-center justify-center shadow-sm w-8 h-8"
-                        title="Delete sketch"
+                        className="p-1 bg-red-50 border border-red-200 text-red-600 rounded-md hover:bg-red-100 hover:text-red-700 transition-colors shadow-sm cursor-pointer"
+                        title="Delete"
                       >
-                        <Trash2 size={12} />
+                        <Trash2 size={10} />
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* PHOTOS GALLERY */}
-          <div>
-            <div className="flex justify-between items-center border-b border-brand-50 pb-1.5 mb-2.5">
-              <h4 className="text-[10px] font-black text-brand-800 uppercase tracking-wider font-mono flex items-center gap-1">
-                <Camera size={11} className="text-brand-gold" />
-                Intake Photos
-              </h4>
-              <div className="flex items-center gap-2">
-                {/* Hidden File Picker */}
-                <input
-                  type="file"
-                  id={`wholesale-photo-picker-${activeItem.id}`}
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = (ev) => {
-                      const result = ev.target?.result as string;
-                      setPhotoEditorSrc(result);
-                      setPhotoEditorIdx(null);
-                    };
-                    reader.readAsDataURL(file);
-                    e.target.value = '';
-                  }}
-                />
-                <label
-                  htmlFor={`wholesale-photo-picker-${activeItem.id}`}
-                  className="text-[9px] text-brand-gold hover:text-brand-900 font-bold underline font-sans cursor-pointer flex items-center gap-1"
-                >
-                  <Plus size={10} /> + Snap / Upload
-                </label>
-                <button
-                  type="button"
-                  onClick={handleAddMockPhoto}
-                  className="text-[8px] text-brand-400 hover:text-brand-600 font-bold font-sans cursor-pointer"
-                  title="Insert sample photo"
-                >
-                  (Sample)
-                </button>
-              </div>
+                ))
+              )}
             </div>
 
-            {(!activeItem.referencePhotos || activeItem.referencePhotos.length === 0) ? (
-              <label 
-                htmlFor={`wholesale-photo-picker-${activeItem.id}`}
-                className="p-6 border border-dashed border-brand-100 rounded-2xl text-center bg-brand-50/5 hover:bg-brand-50/15 transition-all cursor-pointer group block"
+            <button
+              type="button"
+              onClick={() => onLaunchSketch('sketch', (activeItem.referenceSketches || []).length)}
+              className="w-full py-1.5 px-2 bg-brand-50 hover:bg-brand-100 text-brand-900 hover:text-brand-950 rounded-xl border border-brand-200 hover:border-brand-300 font-bold text-[10px] tracking-wide shadow-sm transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
+            >
+              <Plus size={10} className="text-brand-gold" />
+              + Interactive Sketch
+            </button>
+          </div>
+
+          {/* Column 2: Photos */}
+          <div className="space-y-3">
+            <div className="flex justify-between items-center border-b border-brand-50 pb-1">
+              <span className="text-[9px] font-black uppercase text-brand-600 tracking-wider">
+                Intake Photos ({(activeItem.referencePhotos || []).length})
+              </span>
+              <button
+                type="button"
+                onClick={handleAddMockPhoto}
+                className="text-[8px] text-brand-400 hover:text-brand-600 font-bold font-sans cursor-pointer"
+                title="Insert sample photo"
               >
-                <Camera size={18} className="text-brand-300 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                <span className="text-[9px] text-brand-400 font-bold uppercase tracking-wider block">Snap / Upload Intake Photo</span>
-                <span className="text-[8px] text-brand-300 italic block mt-0.5">Includes instant cropping & bench markup drawing</span>
-              </label>
-            ) : (
-              <div className="grid grid-cols-3 gap-2.5">
-                {(activeItem.referencePhotos || []).map((ph, pIdx) => (
-                  <div key={pIdx} className="flex flex-col gap-1.5 items-center">
-                    <div 
-                      onClick={() => {
-                        setPhotoEditorSrc(ph);
-                        setPhotoEditorIdx(pIdx);
-                      }}
-                      className="w-full aspect-square bg-slate-50 rounded-xl border border-brand-150 overflow-hidden shadow-inner flex items-center justify-center cursor-pointer relative group"
-                      title="Click to Crop or Draw"
+                (Sample)
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 min-h-[76px] bg-brand-50/20 p-2 rounded-2xl border border-dashed border-brand-200 items-center justify-start">
+              {(!activeItem.referencePhotos || activeItem.referencePhotos.length === 0) ? (
+                <div className="w-full flex flex-col items-center justify-center py-2 text-center">
+                  <Camera size={14} className="text-brand-300" />
+                  <span className="text-[8px] text-brand-400 mt-1">No photos imported</span>
+                </div>
+              ) : (
+                (activeItem.referencePhotos || []).map((photoUrl, pIdx) => (
+                  <div key={pIdx} className="flex flex-col items-center gap-1">
+                    <div
+                      onClick={() => setEnlargeImage(photoUrl)}
+                      className="border border-brand-150 bg-white rounded-xl p-0.5 w-16 h-16 flex items-center justify-center shadow-sm cursor-pointer overflow-hidden transition-all hover:scale-105 relative group"
+                      title="Click to enlarge"
                     >
-                      <img src={ph} alt={`Intake ${pIdx+1}`} className="w-full h-full object-cover pointer-events-none" referrerPolicy="no-referrer" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      <img src={photoUrl} alt={`Photo ${pIdx + 1}`} className="w-full h-full object-cover rounded-lg" referrerPolicy="no-referrer" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
                         <Crop size={14} className="text-white" />
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 w-full">
+                    <div className="flex items-center gap-1">
                       <button
                         type="button"
                         onClick={() => {
-                          setPhotoEditorSrc(ph);
+                          setPhotoEditorSrc(photoUrl);
                           setPhotoEditorIdx(pIdx);
                         }}
-                        className="bg-white hover:bg-brand-50 border border-brand-200 text-brand-800 p-1 rounded-md cursor-pointer flex items-center justify-center shadow-sm flex-1 h-7"
-                        title="Crop or Draw on photo"
+                        className="p-1 bg-white border border-brand-200 text-brand-900 rounded-md hover:bg-brand-50 transition-colors shadow-sm cursor-pointer flex items-center gap-0.5"
+                        title="Crop or Draw on Photo"
                       >
-                        <Crop size={11} className="text-brand-gold mr-1" />
-                        <span className="text-[9px] font-bold">Edit</span>
+                        <Crop size={10} className="text-brand-gold" />
                       </button>
                       <button
                         type="button"
                         onClick={() => {
                           playClickSound('delete');
-                          const updated = (activeItem.referencePhotos || []).filter((_, idx) => idx !== pIdx);
+                          const updated = (activeItem.referencePhotos || []).filter((_, i) => i !== pIdx);
                           updateItemFields({ referencePhotos: updated });
                         }}
-                        className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 p-1 rounded-md cursor-pointer flex items-center justify-center shadow-sm w-7 h-7"
-                        title="Delete photo"
+                        className="p-1 bg-red-50 border border-red-200 text-red-600 rounded-md hover:bg-red-100 hover:text-red-700 transition-colors shadow-sm cursor-pointer"
+                        title="Delete"
                       >
-                        <Trash2 size={11} />
+                        <Trash2 size={10} />
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                ))
+              )}
+            </div>
 
-          {/* BENCH HAND-NOTES */}
-          <div>
-            <h4 className="text-[10px] font-black text-brand-800 uppercase tracking-wider font-mono flex items-center gap-1 border-b border-brand-50 pb-1.5 mb-2">
-              <FileText size={11} className="text-brand-gold" />
-              Special Bench Instructions
-            </h4>
-            <textarea
-              rows={4}
-              placeholder="e.g. Laser weld under-gallery first, ensure setting is clean. Thin micro-pave claws require delicate rhodium coating."
-              className="w-full bg-brand-50/20 border border-brand-200 p-3 rounded-2xl text-xs font-medium focus:bg-white transition-all outline-none leading-relaxed"
-              value={activeItem.repairNotes || ''}
-              onChange={(e) => updateItemFields({ repairNotes: e.target.value })}
+            {/* Hidden File Input for Camera & Gallery selection */}
+            <input
+              type="file"
+              id={`wholesale-photo-picker-${activeItem.id}`}
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  const result = ev.target?.result as string;
+                  setPhotoEditorSrc(result);
+                  setPhotoEditorIdx(null); // new photo
+                };
+                reader.readAsDataURL(file);
+                e.target.value = '';
+              }}
             />
+
+            <label
+              htmlFor={`wholesale-photo-picker-${activeItem.id}`}
+              className="w-full py-1.5 px-2 bg-brand-50 hover:bg-brand-100 text-brand-900 hover:text-brand-950 rounded-xl border border-brand-200 hover:border-brand-300 font-bold text-[10px] tracking-wide shadow-sm transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
+            >
+              <Plus size={10} className="text-brand-gold" />
+              + Photo (Crop / Draw)
+            </label>
           </div>
         </div>
+        <p className="text-[8px] text-brand-400 italic text-center">Tap buttons above to draw a custom sketch or snap/import an iPad photo directly</p>
+      </div>
 
+      {/* SPECIAL BENCH INSTRUCTIONS */}
+      <div className="bg-white p-5 rounded-3xl border border-brand-100 shadow-sm space-y-2">
+        <h4 className="text-[10px] font-black text-brand-800 uppercase tracking-wider font-mono flex items-center gap-1 border-b border-brand-50 pb-1.5 mb-2">
+          <FileText size={11} className="text-brand-gold" />
+          Special Bench Instructions
+        </h4>
+        <textarea
+          rows={3}
+          placeholder="e.g. Laser weld under-gallery first, ensure setting is clean. Thin micro-pave claws require delicate rhodium coating."
+          className="w-full bg-brand-50/20 border border-brand-200 p-3 rounded-2xl text-xs font-medium focus:bg-white transition-all outline-none leading-relaxed"
+          value={activeItem.repairNotes || ''}
+          onChange={(e) => updateItemFields({ repairNotes: e.target.value })}
+        />
       </div>
 
       {/* SECTION 4: BILLING ESTIMATES & SIGNATURE CONTROL BAR */}
@@ -1489,18 +1448,30 @@ export default function WholesaleRepairView({
 
         {/* SIGNATURE PAD (5 cols) */}
         <div className="md:col-span-5 flex flex-col gap-2">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-wrap justify-between items-center gap-1.5">
             <span className="text-[10px] font-black text-brand-700 uppercase tracking-wider font-mono">Wholesale Client Sign-Off</span>
-            {session.signatureImg && (
-              <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 text-[8px] px-1.5 py-0.5 rounded-md font-mono font-black uppercase">
-                Signed
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowRefundPolicyModal(true)}
+                className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-800 hover:text-amber-950 uppercase tracking-wider bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+                title="View 50% Deposit & Studio Cancellation Policy"
+              >
+                <ShieldCheck size={11} className="text-amber-600" />
+                <span>Refund Policy</span>
+              </button>
+              {session.signatureImg && (
+                <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 text-[8px] px-1.5 py-0.5 rounded-md font-mono font-black uppercase">
+                  Signed
+                </span>
+              )}
+            </div>
           </div>
           <SignaturePad
             initialSignature={session.signatureImg}
             onSave={(sig) => onChangeSession(prev => ({ ...prev, signatureImg: sig }))}
             onClear={() => onChangeSession(prev => ({ ...prev, signatureImg: null }))}
+            onOpenPolicy={() => setShowRefundPolicyModal(true)}
           />
         </div>
 
@@ -1865,6 +1836,38 @@ export default function WholesaleRepairView({
           </div>
         </div>
       )}
+
+      {/* Enlarge Image Modal */}
+      {enlargeImage && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setEnlargeImage(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] bg-white p-2 rounded-2xl shadow-2xl flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+            <img 
+              src={enlargeImage} 
+              alt="Enlarged Reference" 
+              className="max-h-[80vh] w-auto object-contain rounded-xl"
+              referrerPolicy="no-referrer"
+            />
+            <button 
+              type="button"
+              onClick={() => setEnlargeImage(null)}
+              className="mt-2 text-xs font-black uppercase text-brand-700 bg-brand-100 hover:bg-brand-200 px-4 py-1.5 rounded-full cursor-pointer"
+            >
+              Close Preview
+            </button>
+          </div>
+        </div>
+      )}
+
+      <RefundPolicyModal
+        isOpen={showRefundPolicyModal}
+        onClose={() => setShowRefundPolicyModal(false)}
+        settings={settings}
+        clientName={session.cName}
+        quoteRef={session.id}
+      />
 
     </div>
   );

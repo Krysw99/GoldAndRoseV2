@@ -4,13 +4,14 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Camera, Shield, DollarSign, Scale, ArrowRight, Printer, Edit2, RefreshCw, X, Image as ImageIcon } from 'lucide-react';
+import { Plus, Trash2, Camera, Shield, DollarSign, Scale, ArrowRight, Printer, Edit2, RefreshCw, X, Image as ImageIcon, ShieldCheck } from 'lucide-react';
 import { ScrapItem, MaterialType, ScrapTransaction } from '../types';
 import { PURITY_OPTIONS, TROY_ONCE_GRAMS, GOLD_KARAT_PRESETS, SILVER_PRESETS, PLATINUM_PRESETS, KaratPreset } from '../constants';
 import { calculateScrapItemValue, calculateScrapTotal, formatPhoneNumber } from '../utils';
 import { printElement } from '../utils/printHelper';
 import SignaturePad from './SignaturePad';
 import PhotoEditorModal from './PhotoEditorModal';
+import RefundPolicyModal from './RefundPolicyModal';
 
 interface ScrapCalculatorProps {
   spotPrices: { gold: number; silver: number; platinum: number };
@@ -62,6 +63,7 @@ export default function ScrapCalculator({
   const [goldEditorSrc, setGoldEditorSrc] = useState<string | null>(null);
   const [isGoldEditorOpen, setIsGoldEditorOpen] = useState(false);
   const [customerSignature, setCustomerSignature] = useState<string | null>(null);
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
   
   // Crop & Lightbox States
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
@@ -121,6 +123,25 @@ export default function ScrapCalculator({
       setScrapImage(editingTransaction.image || null);
       setGoldImage(editingTransaction.goldImage || null);
       setCustomerSignature(editingTransaction.signature || null);
+
+      if (editingTransaction.spotPrices) {
+        const g = Number(editingTransaction.spotPrices.gold);
+        const s = Number(editingTransaction.spotPrices.silver);
+        const p = Number(editingTransaction.spotPrices.platinum);
+        if ((!isNaN(g) && g > 0) || (!isNaN(s) && s > 0) || (!isNaN(p) && p > 0)) {
+          const effective = {
+            gold: !isNaN(g) && g > 0 ? g : spotPrices.gold,
+            silver: !isNaN(s) && s > 0 ? s : spotPrices.silver,
+            platinum: !isNaN(p) && p > 0 ? p : spotPrices.platinum,
+          };
+          onUpdateSpotPrices(effective);
+          setLocalSpotInputs({
+            gold: String(effective.gold),
+            silver: String(effective.silver),
+            platinum: String(effective.platinum),
+          });
+        }
+      }
       
       const normalizedItems = (editingTransaction.items && editingTransaction.items.length > 0 ? editingTransaction.items : []).map(it => {
         let p = it.purity;
@@ -510,7 +531,19 @@ export default function ScrapCalculator({
             <span className="p-2 rounded-xl bg-amber-100 text-amber-800 font-bold text-xs uppercase font-mono">ADJUSTING MODE</span>
             <div>
               <p className="text-xs font-bold text-brand-900">Adjusting Scrap Buyback Record</p>
-              <p className="text-[10px] text-brand-500 font-mono">Transaction ID: {editingTransaction.id} (Original Date: {editingTransaction.date})</p>
+              <div className="flex items-center gap-2 flex-wrap text-[10px] text-brand-600 font-mono">
+                <span>TX ID: {editingTransaction.id}</span>
+                <span>•</span>
+                <span>Date: {editingTransaction.date}</span>
+                {editingTransaction.spotPrices && (
+                  <>
+                    <span>•</span>
+                    <span className="text-amber-800 font-bold bg-amber-100/80 px-1.5 py-0.5 rounded border border-amber-200">
+                      Original Spot: AU ${editingTransaction.spotPrices.gold || spotPrices.gold} | AG ${editingTransaction.spotPrices.silver || spotPrices.silver} | PT ${editingTransaction.spotPrices.platinum || spotPrices.platinum}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
           <button
@@ -959,9 +992,20 @@ export default function ScrapCalculator({
 
       {/* 5. Customer Signature */}
       <div className="bg-brand-50 p-5 rounded-2xl border border-brand-200 space-y-3">
-        <h3 className="text-xs font-bold text-brand-600 uppercase tracking-widest pl-1">
-          Customer Signature Authorization
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-xs font-bold text-brand-600 uppercase tracking-widest pl-1">
+            Customer Signature Authorization
+          </h3>
+          <button
+            type="button"
+            onClick={() => setShowPolicyModal(true)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300/80 shadow-xs transition-all cursor-pointer"
+            title="View 50% Deposit & Studio Cancellation Policy"
+          >
+            <ShieldCheck size={12} className="text-amber-600 shrink-0" />
+            <span>Studio Policy & Terms</span>
+          </button>
+        </div>
         <p className="text-[10px] text-brand-500 pl-1">
           By signing below, the customer certifies that they are the legal owner of the items listed above and authorize this payout transaction.
         </p>
@@ -969,6 +1013,7 @@ export default function ScrapCalculator({
           initialSignature={customerSignature}
           onSave={(dataUrl) => setCustomerSignature(dataUrl)}
           onClear={() => setCustomerSignature(null)}
+          onOpenPolicy={() => setShowPolicyModal(true)}
         />
       </div>
 
@@ -1575,6 +1620,12 @@ export default function ScrapCalculator({
         }}
       />
     )}
+
+    <RefundPolicyModal
+      isOpen={showPolicyModal}
+      onClose={() => setShowPolicyModal(false)}
+      clientName={customerName}
+    />
   </>
   );
 }

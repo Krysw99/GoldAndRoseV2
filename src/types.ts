@@ -186,6 +186,11 @@ export interface QuoteTransaction {
   total: string;
   fullData: QuoteSession;
   isWholesale: boolean;
+  spotPrices?: {
+    gold: number;
+    silver: number;
+    platinum: number;
+  };
   syncPending?: boolean;
 }
 
@@ -305,6 +310,8 @@ export interface AppSettings {
   cubanMultipliers?: CubanMultiplierRange[];
   tennisDiamondPricePerCt?: number;
   tennisMultipliers?: TennisMultiplierRange[];
+  
+  retailRepairPricing?: RepairPricingSettings;
   
   wholesale: WholesaleSettings;
   wholesaleProfiles?: WholesaleProfile[];

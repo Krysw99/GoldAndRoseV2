@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { QuoteSession, AppSettings, JewelryItem } from '../types';
+import { ShieldCheck } from 'lucide-react';
+import RefundPolicyModal from './RefundPolicyModal';
 
 interface WholesaleRepairInvoicePrintProps {
   session: QuoteSession;
@@ -14,6 +16,7 @@ export default function WholesaleRepairInvoicePrint({
   containerId = "wholesale-repair-invoice-print",
   dateStr
 }: WholesaleRepairInvoicePrintProps) {
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
   const effectiveDate = dateStr || new Date().toLocaleDateString();
 
   const profileId = session.wholesaleProfileId || '';
@@ -221,7 +224,18 @@ export default function WholesaleRepairInvoicePrint({
       <div className="border-t-2 border-black pt-5 mt-4 grid grid-cols-2 gap-6 items-end">
         {/* Signature Block */}
         <div className="space-y-2">
-          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider font-mono">Wholesale Client Signature Authorization</p>
+          <div className="flex items-center justify-between gap-1">
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider font-mono">Wholesale Client Signature Authorization</p>
+            <button
+              type="button"
+              onClick={() => setShowPolicyModal(true)}
+              className="print:hidden inline-flex items-center gap-1 text-[9px] font-bold text-amber-800 hover:text-amber-950 uppercase tracking-wider bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+              title="View 50% Deposit & Studio Cancellation Policy"
+            >
+              <ShieldCheck size={11} className="text-amber-600" />
+              <span>Refund Policy</span>
+            </button>
+          </div>
           {session.signatureImg ? (
             <div className="border border-gray-250 p-2.5 rounded-xl bg-gray-50 h-28 flex items-center justify-center">
               <img src={session.signatureImg} alt="Authorization signature" className="max-h-full object-contain" />
@@ -231,7 +245,7 @@ export default function WholesaleRepairInvoicePrint({
               Signature absent (Pending visual approval)
             </div>
           )}
-          <p className="text-[9px] text-gray-400 leading-tight">By signing above, client stores acknowledge and approve the wholesale estimates and warranty parameters.</p>
+          <p className="text-[9px] text-gray-400 leading-tight">By signing above, client stores acknowledge and approve the wholesale estimates, deposit terms, and warranty parameters.</p>
         </div>
 
         {/* Print Totals */}
@@ -284,6 +298,14 @@ export default function WholesaleRepairInvoicePrint({
           </div>
         </div>
       </div>
+
+      <RefundPolicyModal
+        isOpen={showPolicyModal}
+        onClose={() => setShowPolicyModal(false)}
+        settings={settings}
+        clientName={session.cName}
+        quoteRef={session.id}
+      />
     </div>
   );
 }

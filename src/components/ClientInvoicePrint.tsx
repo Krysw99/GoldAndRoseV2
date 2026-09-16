@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { QuoteSession, AppSettings } from '../types';
 import { calculateRingCost, hasRingData, getTennisEstimates, compileSessionCost } from '../utils';
 import { FANCY_SHAPES, ROUND_MELEE } from '../constants';
-import { Edit3 } from 'lucide-react';
+import { Edit3, X, ShieldCheck } from 'lucide-react';
+import RefundPolicyModal from './RefundPolicyModal';
 
 interface ClientInvoicePrintProps {
   session: QuoteSession;
@@ -31,6 +32,7 @@ export default function ClientInvoicePrint({
   onOpenPiecePriceOverride,
   enlargeImage
 }: ClientInvoicePrintProps) {
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
   const effectiveDate = dateStr || new Date().toLocaleDateString();
 
   // Session Totals & Piece Breakdown Compile
@@ -434,7 +436,7 @@ export default function ClientInvoicePrint({
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-100">
-              {(session.rings || []).filter(r => hasRingData(r)).map((r, ri) => {
+              {(session.rings || []).filter(r => hasRingData(r) || (typeof r.overridePrice === 'number' && !isNaN(r.overridePrice) && r.overridePrice !== null)).map((r, ri) => {
                 const pCost = totals.pieceCosts[r.id] || totals.pieceCosts[String(ri)] || {
                   cost: calculateRingCost(
                     r,
@@ -454,7 +456,7 @@ export default function ClientInvoicePrint({
                 const discVal = pCost.discVal;
                 const calculatedFinalCost = pCost.calculatedFinalCost;
                 const finalPieceCost = pCost.effectiveFinalCost;
-                const isOverriddenPiece = totals.isOverridden && Math.abs(finalPieceCost - calculatedFinalCost) > 0.01;
+                const isOverriddenPiece = typeof r.overridePrice === 'number' && !isNaN(r.overridePrice) && r.overridePrice !== null;
                 const w = (session.wholesaleProfileId && settings.wholesaleProfiles?.find(p => p.id === session.wholesaleProfileId)?.settings) || settings.wholesale;
 
                 return (
@@ -549,15 +551,40 @@ export default function ClientInvoicePrint({
                     </td>
                     <td className="p-2.5 pr-3.5 text-right font-mono font-bold text-brand-950 text-xs print:p-1.5 print:pr-2.5 print:text-[9.5px]">
                       <div className="flex items-center justify-end gap-1.5">
-                        {isInteractive && onOpenPiecePriceOverride && (
-                          <button
-                            type="button"
-                            onClick={() => onOpenPiecePriceOverride(r.id)}
-                            className="p-1 rounded bg-slate-100 hover:bg-amber-100 text-slate-500 hover:text-amber-700 transition-all border border-slate-200 print:hidden cursor-pointer shrink-0"
-                            title="Override this piece price"
-                          >
-                            <Edit3 className="w-2.5 h-2.5" />
-                          </button>
+                        {isInteractive && (
+                          <div className="flex items-center gap-1 print:hidden">
+                            {onOpenPiecePriceOverride && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenPiecePriceOverride(r.id)}
+                                className={`p-1 rounded transition-all border cursor-pointer shrink-0 ${
+                                  isOverriddenPiece 
+                                    ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300' 
+                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 border-slate-200'
+                                }`}
+                                title={isOverriddenPiece ? "Edit this piece price override" : "Override this piece price"}
+                              >
+                                <Edit3 className="w-2.5 h-2.5" />
+                              </button>
+                            )}
+                            {isOverriddenPiece && onChangeSession && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onChangeSession(prev => ({
+                                    ...prev,
+                                    customGrandTotal: null,
+                                    customGrandTotalIsInclusive: false,
+                                    rings: prev.rings.map(item => item.id === r.id ? { ...item, overridePrice: null } : item)
+                                  }));
+                                }}
+                                className="p-1 rounded bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-800 transition-all border border-red-200 cursor-pointer shrink-0"
+                                title="Cancel override (restore original calculated price)"
+                              >
+                                <X className="w-2.5 h-2.5" />
+                              </button>
+                            )}
+                          </div>
                         )}
                         {discVal > 0 ? (
                           <div className="flex flex-col items-end">
@@ -846,9 +873,28 @@ export default function ClientInvoicePrint({
             <span>{totals.grandTotal < 0 ? 'CLIENT PAYOUT / CREDIT DUE:' : 'FINAL BALANCE DUE:'}</span>
             <div className="flex items-center gap-1.5">
               {totals.isOverridden && (
-                <span className="text-[9px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded font-mono font-bold print:hidden">
-                  (Overridden)
-                </span>
+                <div className="flex items-center gap-1 print:hidden">
+                  <span className="text-[9px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded font-mono font-bold">
+                    ({session.rings.filter(r => typeof r.overridePrice === 'number' && !isNaN(r.overridePrice) && r.overridePrice !== null).length} Overridden)
+                  </span>
+                  {isInteractive && onChangeSession && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChangeSession(prev => ({
+                          ...prev,
+                          customGrandTotal: null,
+                          customGrandTotalIsInclusive: false,
+                          rings: prev.rings.map(r => ({ ...r, overridePrice: null }))
+                        }));
+                      }}
+                      className="text-[9px] text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 border border-red-200 px-1.5 py-0.5 rounded font-sans font-bold cursor-pointer"
+                      title="Reset all piece overrides back to calculated prices"
+                    >
+                      Reset Overrides
+                    </button>
+                  )}
+                </div>
               )}
               <span className={`text-lg font-black print:text-sm ${totals.grandTotal < 0 ? 'text-green-700' : totals.isOverridden ? 'text-amber-700' : 'text-brand-900'}`}>
                 {totals.grandTotal < 0 ? `-$${Math.abs(totals.grandTotal).toFixed(2)}` : `$${totals.grandTotal.toFixed(2)}`}
@@ -870,20 +916,46 @@ export default function ClientInvoicePrint({
 
       {/* Authorisation Sign-off block inside PDF */}
       <div className="border-t border-brand-200 pt-6 print:pt-3">
-        <h4 className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-2 print:mb-1 print:text-[8px]">Agreement Authorization Signature</h4>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2 print:mb-1">
+          <h4 className="text-[10px] font-black text-brand-500 uppercase tracking-widest print:text-[8px]">
+            Agreement Authorization Signature
+          </h4>
+          <button
+            type="button"
+            onClick={() => setShowPolicyModal(true)}
+            className="print:hidden inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-brand-100 hover:bg-brand-200 text-brand-900 border border-brand-300 shadow-xs transition-all cursor-pointer"
+            title="View 50% Deposit, Cancellation & Refund Policy"
+          >
+            <ShieldCheck size={12} className="text-amber-600 shrink-0" />
+            <span>Refund & Cancellation Policy</span>
+          </button>
+        </div>
         <div className="flex flex-col sm:flex-row justify-between items-center bg-brand-50/50 p-4 rounded-2xl border border-brand-200 gap-4 print:p-2.5 print:rounded-xl print:gap-2">
-          <p className="text-[11px] text-brand-600 italic leading-relaxed max-w-md print:text-[9px] print:leading-snug">
-            "I hereby authorize Gold & Rose Jewellery Corp to proceed with CAD engineering models and wax prints for the custom styles breakdown above."
-          </p>
+          <div className="space-y-1 max-w-md">
+            <p className="text-[11px] text-brand-600 italic leading-relaxed print:text-[9px] print:leading-snug">
+              "I hereby authorize Gold & Rose Jewellery Corp to proceed with CAD engineering models and wax prints for the custom styles breakdown above."
+            </p>
+            <p className="text-[9px] text-brand-400 leading-tight print:text-[7.5px]">
+              Custom orders require a 50% deposit. In case of cancellation, deposit covers accrued CAD ($100+), wax prints ($30/ea), casting ($50+), alloy ($20/g), bench labor ($40/hr), metal at spot, & non-returnable gemstone orders.
+            </p>
+          </div>
           {session.signatureImg ? (
-            <div className="bg-white border rounded-xl p-1.5 shadow-sm print:p-1 print:rounded-lg">
+            <div className="bg-white border rounded-xl p-1.5 shadow-sm print:p-1 print:rounded-lg shrink-0">
               <img src={session.signatureImg} alt="Client Authorization Signature" className="h-12 w-44 object-contain print:h-8 print:w-32" />
             </div>
           ) : (
-            <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider bg-red-50 border border-red-200 px-3 py-2 rounded-xl print:px-2 print:py-1 print:text-[8px] print:rounded-lg">Pending Client Signature</span>
+            <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider bg-red-50 border border-red-200 px-3 py-2 rounded-xl print:px-2 print:py-1 print:text-[8px] print:rounded-lg shrink-0">Pending Client Signature</span>
           )}
         </div>
       </div>
+
+      <RefundPolicyModal
+        isOpen={showPolicyModal}
+        onClose={() => setShowPolicyModal(false)}
+        settings={settings}
+        clientName={session.cName}
+        quoteRef={session.id}
+      />
     </div>
   );
 }

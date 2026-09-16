@@ -385,48 +385,194 @@ export function safeParseDate(dateStr: string): number {
   }
 }
 
+const inMemoryCache = new Map<string, any>();
+
+export function safeGetLocalStorage<T = any>(key: string): T | null {
+  try {
+    const item = localStorage.getItem(key);
+    if (item !== null) return JSON.parse(item);
+  } catch {
+    // ignore
+  }
+  try {
+    const item = sessionStorage.getItem(key);
+    if (item !== null) return JSON.parse(item);
+  } catch {
+    // ignore
+  }
+  return inMemoryCache.has(key) ? inMemoryCache.get(key) : null;
+}
+
+/**
+ * Prunes heavy image caches from other ledger keys to free up space in localStorage.
+ */
+function evictOldLocalStorageCaches(): void {
+  const ledgerKeys = ['gr_quote_ledger', 'gr_wholesale_ledger', 'gr_scrap_ledger'];
+  
+  for (const lKey of ledgerKeys) {
+    try {
+      const raw = localStorage.getItem(lKey);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed) || parsed.length === 0) continue;
+
+      // Keep at most 10 items in localStorage cache
+      const trimmed = parsed.slice(0, 10).map((item, idx) => {
+        // Only keep full images on the 1 most recent item
+        if (idx === 0) return item;
+        if (item && item.fullData && Array.isArray(item.fullData.rings)) {
+          return {
+            ...item,
+            fullData: {
+              ...item.fullData,
+              rings: item.fullData.rings.map((r: any) => ({
+                ...r,
+                referencePhoto: null,
+                referencePhotos: [],
+                referenceSketch: null,
+                referenceSketches: []
+              }))
+            }
+          };
+        }
+        if (item && ('image' in item || 'signature' in item || 'goldImage' in item)) {
+          return {
+            ...item,
+            image: null,
+            goldImage: null,
+            signature: null
+          };
+        }
+        return item;
+      });
+
+      localStorage.setItem(lKey, JSON.stringify(trimmed));
+    } catch {
+      // If still failing, drop old ledger key from localStorage (state & Firestore have it)
+      try {
+        localStorage.removeItem(lKey);
+      } catch {}
+    }
+  }
+}
+
+/**
+ * Creates a lightweight copy of session data by reducing heavy base64 images if needed.
+ */
+function sanitizeSessionForStorage(session: any): any {
+  if (!session || typeof session !== 'object') return session;
+  if (!Array.isArray(session.rings)) return session;
+
+  return {
+    ...session,
+    rings: session.rings.map((r: any) => {
+      const photos = Array.isArray(r.referencePhotos) ? r.referencePhotos : (r.referencePhoto ? [r.referencePhoto] : []);
+      const sketches = Array.isArray(r.referenceSketches) ? r.referenceSketches : (r.referenceSketch ? [r.referenceSketch] : []);
+      
+      // Limit to 2 photos and 2 sketches per ring, and truncate oversized raw base64 data (> 300KB)
+      const cleanPhotos = photos.slice(0, 2).map((p: string) => (typeof p === 'string' && p.length > 300000 ? p.slice(0, 100000) : p));
+      const cleanSketches = sketches.slice(0, 2).map((s: string) => (typeof s === 'string' && s.length > 300000 ? s.slice(0, 100000) : s));
+
+      return {
+        ...r,
+        referencePhoto: cleanPhotos[0] || null,
+        referencePhotos: cleanPhotos,
+        referenceSketch: cleanSketches[0] || null,
+        referenceSketches: cleanSketches
+      };
+    })
+  };
+}
+
 export function safeSetLocalStorage(key: string, data: any): void {
+  // Always update in-memory cache as immediate fallback
+  inMemoryCache.set(key, data);
+
+  // Also write to sessionStorage as reliable session backup
+  try {
+    sessionStorage.setItem(key, JSON.stringify(data));
+  } catch {}
+
+  // 1. Direct attempt to write to localStorage
   try {
     localStorage.setItem(key, JSON.stringify(data));
-  } catch (e) {
-    console.warn(`[safeSetLocalStorage] Quota exceeded for key: ${key}. Attempting optimized cache reduction...`, e);
-    try {
-      if (Array.isArray(data)) {
-        // Keep the 15 most recent items with full images, and prune older ones for local storage only
-        const stripped = data.map((item, idx) => {
-          if (idx < 15) return item;
-          if (item && item.fullData && Array.isArray(item.fullData.rings)) {
-            return {
-              ...item,
-              fullData: {
-                ...item.fullData,
-                rings: item.fullData.rings.map((r: any) => ({
-                  ...r,
-                  referencePhoto: null,
-                  referencePhotos: [],
-                  referenceSketch: null,
-                  referenceSketches: []
-                }))
-              }
-            };
-          }
-          if (item && ('image' in item || 'signature' in item)) {
-            return {
-              ...item,
-              image: null,
-              signature: null
-            };
-          }
-          return item;
-        });
-        localStorage.setItem(key, JSON.stringify(stripped));
-      } else {
-        // If it's a single session object, save without failing
-        localStorage.setItem(key, JSON.stringify(data));
-      }
-    } catch (err) {
-      console.error("Local storage fallback saving failed:", err);
+    return;
+  } catch {
+    // Quota exceeded
+  }
+
+  // 2. Free up cache from other ledgers in localStorage and retry
+  try {
+    evictOldLocalStorageCaches();
+    localStorage.setItem(key, JSON.stringify(data));
+    return;
+  } catch {
+    // Still out of quota
+  }
+
+  // 3. Compress / sanitize data if it's an array or a QuoteSession
+  try {
+    if (Array.isArray(data)) {
+      const stripped = data.slice(0, 10).map((item, idx) => {
+        if (idx === 0) return item;
+        if (item && item.fullData && Array.isArray(item.fullData.rings)) {
+          return {
+            ...item,
+            fullData: {
+              ...item.fullData,
+              rings: item.fullData.rings.map((r: any) => ({
+                ...r,
+                referencePhoto: null,
+                referencePhotos: [],
+                referenceSketch: null,
+                referenceSketches: []
+              }))
+            }
+          };
+        }
+        if (item && ('image' in item || 'signature' in item || 'goldImage' in item)) {
+          return {
+            ...item,
+            image: null,
+            goldImage: null,
+            signature: null
+          };
+        }
+        return item;
+      });
+      localStorage.setItem(key, JSON.stringify(stripped));
+      return;
+    } else if (data && typeof data === 'object' && Array.isArray(data.rings)) {
+      const sanitized = sanitizeSessionForStorage(data);
+      localStorage.setItem(key, JSON.stringify(sanitized));
+      return;
     }
+  } catch {
+    // Still out of quota
+  }
+
+  // 4. Final attempt: Remove old non-active caches and retry minimal session
+  try {
+    localStorage.removeItem('gr_quote_ledger');
+    localStorage.removeItem('gr_wholesale_ledger');
+    localStorage.removeItem('gr_scrap_ledger');
+    if (data && typeof data === 'object' && Array.isArray(data.rings)) {
+      const strippedSession = {
+        ...data,
+        rings: data.rings.map((r: any) => ({
+          ...r,
+          referencePhoto: null,
+          referencePhotos: [],
+          referenceSketch: null,
+          referenceSketches: []
+        }))
+      };
+      localStorage.setItem(key, JSON.stringify(strippedSession));
+    } else {
+      localStorage.setItem(key, JSON.stringify(data));
+    }
+  } catch {
+    // Quietly handled — data is preserved in React state, sessionStorage, and in-memory cache
   }
 }
 
@@ -601,7 +747,11 @@ export function calculateBandWeight(r: JewelryItem): string {
 }
 
 export function hasRingData(r: JewelryItem): boolean {
+  if (!r) return false;
   if (r.category === 'repair') {
+    return true;
+  }
+  if (typeof r.overridePrice === 'number' && !isNaN(r.overridePrice) && r.overridePrice !== null) {
     return true;
   }
   const isImgValid = (str: any) => typeof str === 'string' && str.trim().length > 15 && !str.includes('omitted') && (str.startsWith('data:') || str.startsWith('http') || str.startsWith('blob:') || str.startsWith('<svg'));
@@ -1225,23 +1375,6 @@ export function compileSessionCost(
   const pieceCosts: Record<string, SessionPieceCost> = {};
 
   rings.forEach((r, idx) => {
-    const hasData = hasRingData(r);
-    if (!hasData) {
-      const emptyPc: SessionPieceCost = {
-        cost: 0,
-        discVal: 0,
-        discDeduction: 0,
-        calculatedFinalCost: 0,
-        effectiveCost: 0,
-        effectiveFinalCost: 0,
-        isOverridden: false,
-        overridePrice: null
-      };
-      pieceCosts[r.id] = emptyPc;
-      pieceCosts[String(idx)] = emptyPc;
-      return;
-    }
-
     const cost = calculateRingCost(
       r,
       settings,
@@ -1289,14 +1422,16 @@ export function compileSessionCost(
   const calculatedGrandTotal = (calculatedPostDiscountTotal - scrapCredit) + (session.applyTax ? Math.max(0, calculatedPostDiscountTotal - scrapCredit) * 0.12 : 0);
 
   const hasAnyPieceOverride = rings.some(r => typeof r.overridePrice === 'number' && !isNaN(r.overridePrice) && r.overridePrice !== null);
-  const hasSessionOverride = typeof session.customGrandTotal === 'number' && !isNaN(session.customGrandTotal) && session.customGrandTotal !== null;
+  // In retail custom quote mode, overrides are strictly on a per-piece basis.
+  // Session-wide customGrandTotal is only used for wholesale single repair tickets.
+  const hasSessionOverride = isWholesale && typeof session.customGrandTotal === 'number' && !isNaN(session.customGrandTotal) && session.customGrandTotal !== null;
   const isOverridden = hasAnyPieceOverride || hasSessionOverride;
 
   let subtotal = netBeforeTax;
   let tax = calculatedTax;
   let grandTotal = netBeforeTax + calculatedTax;
 
-  // If a session-level grand total override exists (e.g. from Finalize invoice total override)
+  // If a session-level grand total override exists (only for wholesale repair ticket mode)
   if (hasSessionOverride) {
     const customVal = session.customGrandTotal as number;
     if (session.customGrandTotalIsInclusive) {

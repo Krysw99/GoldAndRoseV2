@@ -10,7 +10,7 @@ import {
   Building, ShoppingBag, Globe, Plus, Edit, RefreshCw, Check, Cloud, Coins
 } from 'lucide-react';
 import { AppSettings, RepairPricingSettings, ScrapTransaction, QuoteTransaction } from '../types';
-import { ROUND_MELEE, FANCY_SHAPES } from '../constants';
+import { ROUND_MELEE, FANCY_SHAPES, DEFAULT_RETAIL_REPAIR_PRICING, DEFAULT_WHOLESALE_REPAIR_PRICING } from '../constants';
 import { saveDocument } from '../firebase';
 
 interface SettingsViewProps {
@@ -71,7 +71,8 @@ export default function SettingsView({
       { minWidth: 1.0, maxWidth: 1.9, multiplier: 1.6 },
       { minWidth: 2.0, maxWidth: 4.0, multiplier: 1.4 }
     ],
-    tennisDiamondPricePerCt: settings.tennisDiamondPricePerCt !== undefined ? settings.tennisDiamondPricePerCt : 600
+    tennisDiamondPricePerCt: settings.tennisDiamondPricePerCt !== undefined ? settings.tennisDiamondPricePerCt : 600,
+    retailRepairPricing: settings.retailRepairPricing || DEFAULT_RETAIL_REPAIR_PRICING
   }));
 
   // Database Purge Options
@@ -135,34 +136,8 @@ export default function SettingsView({
     ? (localSettings.wholesaleProfiles?.find(p => p.id === selectedProfileId)?.settings || localSettings.wholesale)
     : localSettings.wholesale;
 
-  const currentRepairPricing: RepairPricingSettings = currentWholesaleSettings.repairPricing || {
-    resizeUp14kThin_base: 50,
-    resizeUp14kThin_extra: 70,
-    resizeUp14kThick_base: 60,
-    resizeUp14kThick_extra: 80,
-    resizeUp18k_base: 80,
-    resizeUp18k_extra: 100,
-    resizeUp22k_base: 100,
-    resizeUp22k_extra: 120,
-    resizeDownFlat: 40,
-    stretchRing: 25,
-    resetMelee: 5,
-    resetCenter: 35,
-    laserEngravingSimple: 30,
-    laserEngravingAdvanced: 40,
-    prongRetip: 30,
-    replatingBase: 50,
-    replatingOptionRhodium: 0,
-    replatingOption14kYellow: 0,
-    replatingOption24k: 0,
-    replatingOptionBlackRuthenium: 0,
-    replatingOptionNickel: 0,
-    replatingOptionRose: 0,
-    laserChainRepair: 20,
-    simplePolishCleanup: 20,
-    heavyCleanupPolishMin: 50,
-    heavyCleanupPolishMax: 150
-  };
+  const currentRepairPricing: RepairPricingSettings = currentWholesaleSettings.repairPricing || DEFAULT_WHOLESALE_REPAIR_PRICING;
+  const currentRetailRepairPricing: RepairPricingSettings = localSettings.retailRepairPricing || DEFAULT_RETAIL_REPAIR_PRICING;
 
   const handleAddProfile = () => {
     const name = prompt("Enter a name for the new wholesale client profile:");
@@ -504,6 +479,17 @@ export default function SettingsView({
         }
       }));
     }
+  };
+
+  const handleRetailRepairSetting = (field: keyof RepairPricingSettings, valueStr: any) => {
+    const updatedPricing = {
+      ...currentRetailRepairPricing,
+      [field]: valueStr
+    };
+    setLocalSettings(prev => ({
+      ...prev,
+      retailRepairPricing: updatedPricing
+    }));
   };
 
   const handleWholesaleMeleeRate = (size: string, valueStr: any) => {
@@ -1610,6 +1596,332 @@ export default function SettingsView({
                     No ranges configured. Add a range or use defaults.
                   </p>
                 )}
+              </div>
+            </div>
+
+            {/* Retail Customer Repair Rates */}
+            <div className="bg-gradient-to-br from-amber-50/40 to-amber-100/20 p-5 rounded-2xl border border-amber-200/80 space-y-4 shadow-xs">
+              <div className="flex items-center justify-between border-b border-amber-200/60 pb-2.5 flex-wrap gap-2">
+                <div>
+                  <h4 className="text-xs font-black text-amber-950 uppercase tracking-widest flex items-center gap-1.5">
+                    <Wrench size={14} className="text-amber-600" />
+                    Retail Customer Repair Rates ($ CAD)
+                  </h4>
+                  <p className="text-[11px] text-amber-900/80 mt-0.5">
+                    Configure customer-facing retail repair prices for ring sizing, stone resetting, engraving, plating, and bench repair operations.
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold bg-amber-200/80 text-amber-950 border border-amber-300 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  Retail Repair Rates
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* CARD 1: Ring Resizing & Stretching */}
+                <div className="bg-white p-4 rounded-xl border border-amber-200/80 space-y-3 shadow-xs">
+                  <h5 className="text-[10px] font-black text-amber-950 uppercase tracking-wider border-b border-amber-100 pb-1.5 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                    Ring Resizing & Sizing Down
+                  </h5>
+                  
+                  <div className="space-y-2">
+                    <div className="p-2 bg-amber-50/30 rounded-lg border border-amber-100/80 space-y-1.5">
+                      <span className="text-[9px] font-bold text-amber-900 uppercase tracking-wider block">Resize Up 14k (Thin/Std)</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[8px] font-semibold text-slate-500 block mb-0.5">Base Price ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-slate-300 px-2 py-1 rounded-md text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                            value={currentRetailRepairPricing.resizeUp14kThin_base}
+                            onChange={(e) => handleRetailRepairSetting('resizeUp14kThin_base', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] font-semibold text-slate-500 block mb-0.5">Per Size ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-slate-300 px-2 py-1 rounded-md text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                            value={currentRetailRepairPricing.resizeUp14kThin_extra}
+                            onChange={(e) => handleRetailRepairSetting('resizeUp14kThin_extra', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-2 bg-amber-50/30 rounded-lg border border-amber-100/80 space-y-1.5">
+                      <span className="text-[9px] font-bold text-amber-900 uppercase tracking-wider block">Resize Up 14k (Thick/Wide)</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[8px] font-semibold text-slate-500 block mb-0.5">Base Price ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-slate-300 px-2 py-1 rounded-md text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                            value={currentRetailRepairPricing.resizeUp14kThick_base}
+                            onChange={(e) => handleRetailRepairSetting('resizeUp14kThick_base', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] font-semibold text-slate-500 block mb-0.5">Per Size ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-slate-300 px-2 py-1 rounded-md text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                            value={currentRetailRepairPricing.resizeUp14kThick_extra}
+                            onChange={(e) => handleRetailRepairSetting('resizeUp14kThick_extra', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-2 bg-amber-50/30 rounded-lg border border-amber-100/80 space-y-1.5">
+                      <span className="text-[9px] font-bold text-amber-900 uppercase tracking-wider block">Resize Up 18k Gold</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[8px] font-semibold text-slate-500 block mb-0.5">Base Price ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-slate-300 px-2 py-1 rounded-md text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                            value={currentRetailRepairPricing.resizeUp18k_base}
+                            onChange={(e) => handleRetailRepairSetting('resizeUp18k_base', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] font-semibold text-slate-500 block mb-0.5">Per Size ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-slate-300 px-2 py-1 rounded-md text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                            value={currentRetailRepairPricing.resizeUp18k_extra}
+                            onChange={(e) => handleRetailRepairSetting('resizeUp18k_extra', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-2 bg-amber-50/30 rounded-lg border border-amber-100/80 space-y-1.5">
+                      <span className="text-[9px] font-bold text-amber-900 uppercase tracking-wider block">Resize Up 22k Gold</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[8px] font-semibold text-slate-500 block mb-0.5">Base Price ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-slate-300 px-2 py-1 rounded-md text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                            value={currentRetailRepairPricing.resizeUp22k_base}
+                            onChange={(e) => handleRetailRepairSetting('resizeUp22k_base', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] font-semibold text-slate-500 block mb-0.5">Per Size ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-white border border-slate-300 px-2 py-1 rounded-md text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                            value={currentRetailRepairPricing.resizeUp22k_extra}
+                            onChange={(e) => handleRetailRepairSetting('resizeUp22k_extra', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <div>
+                        <label className="text-[9px] font-bold text-amber-900 block mb-1">Resize Down Flat ($)</label>
+                        <input
+                          type="number"
+                          className="w-full bg-white border border-slate-300 p-2 rounded-lg text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                          value={currentRetailRepairPricing.resizeDownFlat}
+                          onChange={(e) => handleRetailRepairSetting('resizeDownFlat', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-amber-900 block mb-1">Stretch Ring ($)</label>
+                        <input
+                          type="number"
+                          className="w-full bg-white border border-slate-300 p-2 rounded-lg text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                          value={currentRetailRepairPricing.stretchRing}
+                          onChange={(e) => handleRetailRepairSetting('stretchRing', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CARD 2: Stones, Prongs & Engraving */}
+                <div className="bg-white p-4 rounded-xl border border-amber-200/80 space-y-3 shadow-xs">
+                  <h5 className="text-[10px] font-black text-amber-950 uppercase tracking-wider border-b border-amber-100 pb-1.5 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    Stones, Prongs & Engraving
+                  </h5>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[9px] font-bold text-amber-900 block mb-1">Reset Melee (per stone) ($)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-amber-50/20 border border-slate-300 p-2 rounded-lg text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                        value={currentRetailRepairPricing.resetMelee}
+                        onChange={(e) => handleRetailRepairSetting('resetMelee', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-amber-900 block mb-1">Reset Center Stone ($)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-amber-50/20 border border-slate-300 p-2 rounded-lg text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                        value={currentRetailRepairPricing.resetCenter}
+                        onChange={(e) => handleRetailRepairSetting('resetCenter', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-amber-900 block mb-1">Prong Retip (per prong) ($)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-amber-50/20 border border-slate-300 p-2 rounded-lg text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                        value={currentRetailRepairPricing.prongRetip}
+                        onChange={(e) => handleRetailRepairSetting('prongRetip', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-amber-900 block mb-1">Laser Engraving (Simple) ($)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-amber-50/20 border border-slate-300 p-2 rounded-lg text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                        value={currentRetailRepairPricing.laserEngravingSimple}
+                        onChange={(e) => handleRetailRepairSetting('laserEngravingSimple', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-amber-900 block mb-1">Laser Engraving (Advanced) ($)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-amber-50/20 border border-slate-300 p-2 rounded-lg text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                        value={currentRetailRepairPricing.laserEngravingAdvanced}
+                        onChange={(e) => handleRetailRepairSetting('laserEngravingAdvanced', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* CARD 3: Plating, Polish & Chain */}
+                <div className="bg-white p-4 rounded-xl border border-amber-200/80 space-y-3 shadow-xs">
+                  <h5 className="text-[10px] font-black text-amber-950 uppercase tracking-wider border-b border-amber-100 pb-1.5 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                    Plating, Polish & Laser Welding
+                  </h5>
+
+                  <div className="space-y-2">
+                    <div className="p-2 bg-amber-50/30 rounded-lg border border-amber-100/80 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-bold text-amber-900 uppercase tracking-wider block">Replating Base Price ($)</span>
+                        <input
+                          type="number"
+                          className="w-16 bg-white border border-slate-300 px-2 py-0.5 rounded text-xs font-bold font-mono text-right text-slate-900 focus:border-amber-500 outline-none"
+                          value={currentRetailRepairPricing.replatingBase}
+                          onChange={(e) => handleRetailRepairSetting('replatingBase', e.target.value)}
+                        />
+                      </div>
+                      
+                      <div className="border-t border-amber-200/60 pt-1.5 space-y-1">
+                        <span className="text-[8px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">Custom Plating Upcharges:</span>
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+                          <div className="flex justify-between items-center gap-1">
+                            <span className="text-[8px] font-medium text-slate-700">Rhodium</span>
+                            <input
+                              type="number"
+                              className="w-10 bg-white border border-slate-300 px-1 py-0.5 rounded text-[10px] font-bold font-mono text-right text-slate-900"
+                              value={currentRetailRepairPricing.replatingOptionRhodium}
+                              onChange={(e) => handleRetailRepairSetting('replatingOptionRhodium', e.target.value)}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center gap-1">
+                            <span className="text-[8px] font-medium text-slate-700">14k Yellow</span>
+                            <input
+                              type="number"
+                              className="w-10 bg-white border border-slate-300 px-1 py-0.5 rounded text-[10px] font-bold font-mono text-right text-slate-900"
+                              value={currentRetailRepairPricing.replatingOption14kYellow}
+                              onChange={(e) => handleRetailRepairSetting('replatingOption14kYellow', e.target.value)}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center gap-1">
+                            <span className="text-[8px] font-medium text-slate-700">24k Gold</span>
+                            <input
+                              type="number"
+                              className="w-10 bg-white border border-slate-300 px-1 py-0.5 rounded text-[10px] font-bold font-mono text-right text-slate-900"
+                              value={currentRetailRepairPricing.replatingOption24k}
+                              onChange={(e) => handleRetailRepairSetting('replatingOption24k', e.target.value)}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center gap-1">
+                            <span className="text-[8px] font-medium text-slate-700">Black Ruth.</span>
+                            <input
+                              type="number"
+                              className="w-10 bg-white border border-slate-300 px-1 py-0.5 rounded text-[10px] font-bold font-mono text-right text-slate-900"
+                              value={currentRetailRepairPricing.replatingOptionBlackRuthenium}
+                              onChange={(e) => handleRetailRepairSetting('replatingOptionBlackRuthenium', e.target.value)}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center gap-1">
+                            <span className="text-[8px] font-medium text-slate-700">Nickel</span>
+                            <input
+                              type="number"
+                              className="w-10 bg-white border border-slate-300 px-1 py-0.5 rounded text-[10px] font-bold font-mono text-right text-slate-900"
+                              value={currentRetailRepairPricing.replatingOptionNickel}
+                              onChange={(e) => handleRetailRepairSetting('replatingOptionNickel', e.target.value)}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center gap-1">
+                            <span className="text-[8px] font-medium text-slate-700">Rose</span>
+                            <input
+                              type="number"
+                              className="w-10 bg-white border border-slate-300 px-1 py-0.5 rounded text-[10px] font-bold font-mono text-right text-slate-900"
+                              value={currentRetailRepairPricing.replatingOptionRose}
+                              onChange={(e) => handleRetailRepairSetting('replatingOptionRose', e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] font-bold text-amber-900 block mb-1">Laser Chain Repair ($)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-amber-50/20 border border-slate-300 p-2 rounded-lg text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                        value={currentRetailRepairPricing.laserChainRepair}
+                        onChange={(e) => handleRetailRepairSetting('laserChainRepair', e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] font-bold text-amber-900 block mb-1">Simple Polish / Cleanup ($)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-amber-50/20 border border-slate-300 p-2 rounded-lg text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                        value={currentRetailRepairPricing.simplePolishCleanup}
+                        onChange={(e) => handleRetailRepairSetting('simplePolishCleanup', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] font-bold text-amber-900 block mb-1">Heavy Polish Min ($)</label>
+                        <input
+                          type="number"
+                          className="w-full bg-amber-50/20 border border-slate-300 p-2 rounded-lg text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                          value={currentRetailRepairPricing.heavyCleanupPolishMin}
+                          onChange={(e) => handleRetailRepairSetting('heavyCleanupPolishMin', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-amber-900 block mb-1">Heavy Polish Max ($)</label>
+                        <input
+                          type="number"
+                          className="w-full bg-amber-50/20 border border-slate-300 p-2 rounded-lg text-xs font-bold font-mono text-slate-900 focus:border-amber-500 outline-none"
+                          value={currentRetailRepairPricing.heavyCleanupPolishMax}
+                          onChange={(e) => handleRetailRepairSetting('heavyCleanupPolishMax', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

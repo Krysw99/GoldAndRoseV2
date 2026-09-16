@@ -15,7 +15,7 @@ import {
   ScrapItem, JewelryItem 
 } from './types';
 import { DEFAULT_SETTINGS, TROY_ONCE_GRAMS, FANCY_SHAPES, ROUND_MELEE } from './constants';
-import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeParseDate, genId, getTennisBaseGrams, calculateScrapItemValue, formatPhoneNumber, compileSessionCost } from './utils';
+import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeGetLocalStorage, safeParseDate, genId, getTennisBaseGrams, calculateScrapItemValue, formatPhoneNumber, compileSessionCost } from './utils';
 
 // Modular Components
 import ScrapCalculator from './components/ScrapCalculator';
@@ -110,13 +110,12 @@ export default function App() {
   // Active custom quote sessions
   const [retailSession, setRetailSession] = useState<QuoteSession>(() => {
     try {
-      const raw = localStorage.getItem('gr_active_retail_session');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.rings)) {
-          parsed.rings = parsed.rings.map(upgradeRingData);
-          return parsed;
-        }
+      const parsed = safeGetLocalStorage<any>('gr_active_retail_session');
+      if (parsed && Array.isArray(parsed.rings)) {
+        parsed.rings = parsed.rings.map(upgradeRingData);
+        parsed.customGrandTotal = null;
+        parsed.customGrandTotalIsInclusive = false;
+        return parsed;
       }
       return getEmptyQuoteSession();
     } catch {
@@ -125,13 +124,10 @@ export default function App() {
   });
   const [wholesaleSession, setWholesaleSession] = useState<QuoteSession>(() => {
     try {
-      const raw = localStorage.getItem('gr_active_wholesale_session');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.rings)) {
-          parsed.rings = parsed.rings.map(upgradeRingData);
-          return parsed;
-        }
+      const parsed = safeGetLocalStorage<any>('gr_active_wholesale_session');
+      if (parsed && Array.isArray(parsed.rings)) {
+        parsed.rings = parsed.rings.map(upgradeRingData);
+        return parsed;
       }
       return getEmptyQuoteSession();
     } catch {
@@ -714,7 +710,11 @@ setIsCloudSynced(true);
         driversLicense: data.driversLicense,
         employeeId: data.employeeId || '',
         stoneRemovalQty: data.stoneRemovalQty,
-        spotPrices: original ? original.spotPrices : { ...spotPrices },
+        spotPrices: {
+          gold: Number(spotPrices.gold) || (original?.spotPrices?.gold ?? 2350),
+          silver: Number(spotPrices.silver) || (original?.spotPrices?.silver ?? 30),
+          platinum: Number(spotPrices.platinum) || (original?.spotPrices?.platinum ?? 1050),
+        },
         items: data.items,
         summary: logStr,
         total: finalTotal,
@@ -726,7 +726,7 @@ setIsCloudSynced(true);
 
       setScrapTransactions(prev => {
         const updated = prev.map(t => t.id === existingId ? updatedTx : t);
-        localStorage.setItem('gr_scrap_ledger', JSON.stringify(updated));
+        safeSetLocalStorage('gr_scrap_ledger', updated);
         return updated;
       });
 
@@ -766,7 +766,7 @@ setIsCloudSynced(true);
 
       setScrapTransactions(prev => {
         const updated = [newTx, ...prev];
-        localStorage.setItem('gr_scrap_ledger', JSON.stringify(updated));
+        safeSetLocalStorage('gr_scrap_ledger', updated);
         return updated;
       });
 
@@ -832,6 +832,19 @@ setIsCloudSynced(true);
     const sanitizedSession = JSON.parse(JSON.stringify(activeSession));
     sanitizedSession.id = safeTxId;
 
+    const effectiveSpot = {
+      gold: Number(activeSession.overridePrices?.gold) > 0 
+        ? Number(activeSession.overridePrices?.gold) 
+        : (Number(spotPrices.gold) || 0),
+      silver: Number(activeSession.overridePrices?.silver) > 0 
+        ? Number(activeSession.overridePrices?.silver) 
+        : (Number(spotPrices.silver) || 0),
+      platinum: Number(activeSession.overridePrices?.platinum) > 0 
+        ? Number(activeSession.overridePrices?.platinum) 
+        : (Number(spotPrices.platinum) || 0),
+    };
+    sanitizedSession.overridePrices = effectiveSpot;
+
     const newTx: QuoteTransaction = {
       id: safeTxId,
       date: existingTx ? existingTx.date : new Date().toLocaleString(),
@@ -843,6 +856,7 @@ setIsCloudSynced(true);
       total: formattedTotal,
       fullData: sanitizedSession,
       isWholesale,
+      spotPrices: effectiveSpot,
       syncPending: true
     };
 
@@ -943,12 +957,42 @@ setIsCloudSynced(true);
       }
     }
 
+    // Restore original gold, silver, and platinum prices from when the job was entered
+    const loggedGold = Number(fullData.overridePrices?.gold ?? (item as any).spotPrices?.gold ?? 0);
+    const loggedSilver = Number(fullData.overridePrices?.silver ?? (item as any).spotPrices?.silver ?? 0);
+    const loggedPlatinum = Number(fullData.overridePrices?.platinum ?? (item as any).spotPrices?.platinum ?? 0);
+
+    const hasLoggedSpot = (loggedGold > 0) || (loggedSilver > 0) || (loggedPlatinum > 0);
+
+    if (hasLoggedSpot) {
+      const restoredSpot = {
+        gold: loggedGold > 0 ? loggedGold : spotPrices.gold,
+        silver: loggedSilver > 0 ? loggedSilver : spotPrices.silver,
+        platinum: loggedPlatinum > 0 ? loggedPlatinum : spotPrices.platinum,
+      };
+
+      // 1. Update the application's global spot prices
+      setSpotPrices(restoredSpot);
+      setLastUpdated(`Loaded from ${isWholesale ? 'Wholesale Job' : 'Quote'} (${item.date || 'Record'})`);
+
+      // 2. Ensure session overridePrices matches these exact prices
+      fullData.overridePrices = {
+        gold: restoredSpot.gold,
+        silver: restoredSpot.silver,
+        platinum: restoredSpot.platinum,
+      };
+    }
+
     if (isWholesale) {
       updateWholesaleSessionLocal(fullData, true);
       setActiveTab('wholesale');
+      const goldDisplay = loggedGold > 0 ? `$${loggedGold.toFixed(2)}/oz` : '';
+      showToast(`Loaded wholesale order #${fullData.jobNum || item.id} with original spot prices ${goldDisplay ? `(Gold: ${goldDisplay})` : ''}`, 'info');
     } else {
       updateRetailSessionLocal(fullData, true);
       setActiveTab('quote');
+      const goldDisplay = loggedGold > 0 ? `$${loggedGold.toFixed(2)}/oz` : '';
+      showToast(`Loaded quote into editor with original spot prices ${goldDisplay ? `(Gold: ${goldDisplay})` : ''}`, 'info');
     }
   };
 
@@ -956,8 +1000,24 @@ setIsCloudSynced(true);
     const item = scrapTransactions.find(t => t.id === id);
     if (!item) return;
 
+    if (item.spotPrices) {
+      const g = Number(item.spotPrices.gold);
+      const s = Number(item.spotPrices.silver);
+      const p = Number(item.spotPrices.platinum);
+      if ((!isNaN(g) && g > 0) || (!isNaN(s) && s > 0) || (!isNaN(p) && p > 0)) {
+        setSpotPrices(prev => ({
+          gold: !isNaN(g) && g > 0 ? g : prev.gold,
+          silver: !isNaN(s) && s > 0 ? s : prev.silver,
+          platinum: !isNaN(p) && p > 0 ? p : prev.platinum,
+        }));
+        setLastUpdated(`Loaded from Scrap Buyback (${item.date || 'Record'})`);
+      }
+    }
+
     setEditingScrapTx(item);
     setActiveTab('scrap');
+    const goldDisplay = item.spotPrices?.gold ? `$${Number(item.spotPrices.gold).toFixed(2)}/oz` : '';
+    showToast(`Loaded scrap buyback record with original spot prices ${goldDisplay ? `(Gold: ${goldDisplay})` : ''}`, 'info');
   };
 
   const handleApplyScrapToQuote = (scrapId: string, isWholesale: boolean) => {
@@ -1165,13 +1225,17 @@ setIsCloudSynced(true);
       phone: demoSession.cPhone,
       summary: "Ring: 4.8g | Band: 3.5g | Men's: 7.2g",
       total: demoTotal,
-      fullData: demoSession,
-      isWholesale: false
+      fullData: {
+        ...demoSession,
+        overridePrices: { ...spotPrices }
+      },
+      isWholesale: false,
+      spotPrices: { ...spotPrices }
     };
 
     setRingQuoteTransactions(prev => {
       const updated = [demoTx, ...prev];
-      localStorage.setItem('gr_quote_ledger', JSON.stringify(updated));
+      safeSetLocalStorage('gr_quote_ledger', updated);
       return updated;
     });
 

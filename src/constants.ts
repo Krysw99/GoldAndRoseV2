@@ -261,6 +261,35 @@ export const DEFAULT_SETTINGS = {
     { minWidth: 14, maxWidth: 24, multiplier: 1.4 }
   ],
   
+  retailRepairPricing: {
+    resizeUp14kThin_base: 85,
+    resizeUp14kThin_extra: 110,
+    resizeUp14kThick_base: 105,
+    resizeUp14kThick_extra: 130,
+    resizeUp18k_base: 135,
+    resizeUp18k_extra: 160,
+    resizeUp22k_base: 175,
+    resizeUp22k_extra: 200,
+    resizeDownFlat: 65,
+    stretchRing: 40,
+    resetMelee: 15,
+    resetCenter: 65,
+    laserEngravingSimple: 50,
+    laserEngravingAdvanced: 75,
+    prongRetip: 55,
+    replatingBase: 85,
+    replatingOptionRhodium: 0,
+    replatingOption14kYellow: 0,
+    replatingOption24k: 0,
+    replatingOptionBlackRuthenium: 0,
+    replatingOptionNickel: 0,
+    replatingOptionRose: 0,
+    laserChainRepair: 35,
+    simplePolishCleanup: 35,
+    heavyCleanupPolishMin: 85,
+    heavyCleanupPolishMax: 250
+  },
+  
   wholesale: {
     goldSpotPremium: 100,
     laborPerGram: 40,
@@ -302,3 +331,6 @@ export const DEFAULT_SETTINGS = {
   },
   wholesaleProfiles: []
 };
+
+export const DEFAULT_WHOLESALE_REPAIR_PRICING = DEFAULT_SETTINGS.wholesale.repairPricing!;
+export const DEFAULT_RETAIL_REPAIR_PRICING = DEFAULT_SETTINGS.retailRepairPricing!;

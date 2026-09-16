@@ -10,6 +10,7 @@ import {
   Calculator, Info, ShieldAlert, ArrowRight, Printer, Coins
 } from 'lucide-react';
 import { DENSITIES, TROY_ONCE_GRAMS } from '../constants';
+import { safeSetLocalStorage } from '../utils';
 
 interface SavedJumpRingEstimate {
   id: string;
@@ -299,11 +300,7 @@ export default function JumpRingEstimator({
 
     const updated = [newEst, ...savedEstimates];
     setSavedEstimates(updated);
-    try {
-      localStorage.setItem('gr_jumpring_estimates', JSON.stringify(updated));
-    } catch (e) {
-      console.error("Failed to save jump ring estimate locally:", e);
-    }
+    safeSetLocalStorage('gr_jumpring_estimates', updated);
 
     if (showToast) {
       showToast("Jump Ring Estimate saved successfully!", "success");
@@ -314,11 +311,7 @@ export default function JumpRingEstimator({
   const handleDeleteEstimate = (id: string) => {
     const updated = savedEstimates.filter(e => e.id !== id);
     setSavedEstimates(updated);
-    try {
-      localStorage.setItem('gr_jumpring_estimates', JSON.stringify(updated));
-    } catch (e) {
-      console.error("Failed to delete estimate:", e);
-    }
+    safeSetLocalStorage('gr_jumpring_estimates', updated);
     if (showToast) {
       showToast("Estimate removed", "info");
     }

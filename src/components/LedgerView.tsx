@@ -1051,11 +1051,18 @@ export default function LedgerView({
                   );
                 }
 
+                const txSpot = (activeTx as any).spotPrices || 
+                  (fullSession.overridePrices && (fullSession.overridePrices.gold || fullSession.overridePrices.platinum || fullSession.overridePrices.silver) ? {
+                    gold: fullSession.overridePrices.gold || spotPrices?.gold || 4000,
+                    silver: fullSession.overridePrices.silver || spotPrices?.silver || 45,
+                    platinum: fullSession.overridePrices.platinum || spotPrices?.platinum || 1200,
+                  } : (spotPrices || { gold: 4000, silver: 45, platinum: 1200 }));
+
                 return (
                   <ClientInvoicePrint
                     session={fullSession}
                     settings={settings}
-                    spotPrices={spotPrices || { gold: 4000, silver: 45, platinum: 1200 }}
+                    spotPrices={txSpot}
                     isWholesale={selectedTx.type === 'wholesale'}
                     containerId="ledger-invoice-box"
                     dateStr={activeTx.date}

@@ -4,15 +4,16 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Trash2, Check } from 'lucide-react';
+import { Trash2, Check, ShieldCheck } from 'lucide-react';
 
 interface SignaturePadProps {
   initialSignature: string | null;
   onSave: (signatureDataUrl: string) => void;
   onClear: () => void;
+  onOpenPolicy?: () => void;
 }
 
-export default function SignaturePad({ initialSignature, onSave, onClear }: SignaturePadProps) {
+export default function SignaturePad({ initialSignature, onSave, onClear, onOpenPolicy }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSigned, setHasSigned] = useState(!!initialSignature);
@@ -202,11 +203,22 @@ export default function SignaturePad({ initialSignature, onSave, onClear }: Sign
           </div>
         )}
       </div>
-      <div className="flex justify-end gap-2">
+      <div className="flex items-center justify-between gap-2 pt-0.5">
+        {onOpenPolicy ? (
+          <button
+            type="button"
+            onClick={onOpenPolicy}
+            className="flex items-center gap-1.5 text-xs text-amber-800 hover:text-amber-950 font-bold bg-amber-50 hover:bg-amber-100 border border-amber-200/80 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer shadow-xs"
+            title="View 50% Deposit & Studio Cancellation Policy"
+          >
+            <ShieldCheck size={13} className="text-amber-600 shrink-0" />
+            <span>Refund & Cancellation Policy</span>
+          </button>
+        ) : <div />}
         <button
           type="button"
           onClick={clear}
-          className="flex items-center gap-1 text-xs text-red-500 font-bold hover:bg-red-50 px-2.5 py-1.5 rounded-lg border border-transparent hover:border-red-100 transition-colors"
+          className="flex items-center gap-1 text-xs text-red-500 font-bold hover:bg-red-50 px-2.5 py-1.5 rounded-lg border border-transparent hover:border-red-100 transition-colors ml-auto cursor-pointer"
         >
           <Trash2 size={13} />
           Clear Signature
