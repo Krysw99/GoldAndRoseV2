@@ -60,12 +60,33 @@ export default function WholesaleRepairInvoicePrint({
   const computedDiscount = (subtotalTotal * discountPercent) / 100;
 
   const scrapCredit = Number(session.scrapCredit) || 0;
-  const netSubtotal = Math.max(0, subtotalTotal - computedDiscount - scrapCredit);
-  const taxAmount = session.applyTax ? netSubtotal * 0.12 : 0;
-  const calculatedGrandTotal = netSubtotal + taxAmount;
+  const netBeforeTax = Math.max(0, subtotalTotal - computedDiscount - scrapCredit);
+  const calculatedTaxAmount = session.applyTax ? Math.max(0, netBeforeTax) * 0.12 : 0;
+  const calculatedGrandTotal = netBeforeTax + calculatedTaxAmount;
 
   const isOverridden = typeof session.customGrandTotal === 'number' && !isNaN(session.customGrandTotal) && session.customGrandTotal !== null;
-  const grandTotal = isOverridden ? (session.customGrandTotal as number) : calculatedGrandTotal;
+  let netSubtotal = netBeforeTax;
+  let taxAmount = calculatedTaxAmount;
+  let grandTotal = calculatedGrandTotal;
+
+  if (isOverridden) {
+    const customVal = session.customGrandTotal as number;
+    if (session.customGrandTotalIsInclusive) {
+      if (session.applyTax) {
+        grandTotal = customVal;
+        netSubtotal = customVal / 1.12;
+        taxAmount = customVal - netSubtotal;
+      } else {
+        grandTotal = customVal;
+        netSubtotal = customVal;
+        taxAmount = 0;
+      }
+    } else {
+      netSubtotal = customVal;
+      taxAmount = session.applyTax ? Math.max(0, customVal) * 0.12 : 0;
+      grandTotal = netSubtotal + taxAmount;
+    }
+  }
 
   return (
     <div id={containerId} className="bg-white text-black p-8 max-w-4xl mx-auto font-sans text-xs space-y-6 text-left print:p-0 print:px-2 print:max-w-full">
@@ -250,12 +271,14 @@ export default function WholesaleRepairInvoicePrint({
 
         {/* Print Totals */}
         <div className="space-y-2 text-right">
-          <div className="flex justify-between text-xs text-gray-600 px-1 font-medium">
-            <span>Calculated Operations Subtotal:</span>
-            <span className="font-mono font-bold">${subtotalTotal.toFixed(2)}</span>
-          </div>
+          {!isOverridden && (
+            <div className="flex justify-between text-xs text-gray-600 px-1 font-medium">
+              <span>Calculated Operations Subtotal:</span>
+              <span className="font-mono font-bold">${subtotalTotal.toFixed(2)}</span>
+            </div>
+          )}
           
-          {computedDiscount > 0 && (
+          {!isOverridden && computedDiscount > 0 && (
             <div className="flex justify-between text-xs text-amber-600 px-1 font-bold">
               <span>Profile Discount Deduct:</span>
               <span className="font-mono">-${computedDiscount.toFixed(2)}</span>
@@ -270,7 +293,7 @@ export default function WholesaleRepairInvoicePrint({
           )}
 
           <div className="flex justify-between text-xs text-gray-900 border-t border-gray-200 pt-2 px-1 font-bold">
-            <span>Net Estimated Total:</span>
+            <span>{isOverridden ? 'Agreed Job Subtotal:' : 'Net Estimated Total:'}</span>
             <span className="font-mono">{netSubtotal < 0 ? `-$${Math.abs(netSubtotal).toFixed(2)}` : `$${netSubtotal.toFixed(2)}`}</span>
           </div>
 

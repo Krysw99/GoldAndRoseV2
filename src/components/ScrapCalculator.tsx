@@ -1142,7 +1142,7 @@ export default function ScrapCalculator({
                 ${finalPayout.toFixed(2)}
               </p>
               {isOfferOverridden && (
-                <p className="text-[7.5px] font-mono text-amber-700 font-bold mt-0.5">
+                <p className="text-[7.5px] font-mono text-amber-700 font-bold mt-0.5 print:hidden">
                   (Agreed Offer Override)
                 </p>
               )}

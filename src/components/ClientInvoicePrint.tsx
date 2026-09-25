@@ -588,10 +588,10 @@ export default function ClientInvoicePrint({
                         )}
                         {discVal > 0 ? (
                           <div className="flex flex-col items-end">
-                            <span className="text-[9.5px] text-slate-400/90 line-through font-normal print:text-[7.5px]">
+                            <span className={`text-[9.5px] text-slate-400/90 line-through font-normal ${isOverriddenPiece ? 'print:hidden' : 'print:text-[7.5px]'}`}>
                               ${cost.toFixed(2)}
                             </span>
-                            <span className="text-[8.5px] text-red-600 font-extrabold font-sans print:text-[7px]">
+                            <span className={`text-[8.5px] text-red-600 font-extrabold font-sans ${isOverriddenPiece ? 'print:hidden' : 'print:text-[7px]'}`}>
                               -{r.discountType === '%' ? `${discVal}%` : `$${discVal.toFixed(2)}`}
                             </span>
                             <span className="text-brand-950 font-bold">${finalPieceCost.toFixed(2)}</span>
@@ -603,7 +603,7 @@ export default function ClientInvoicePrint({
                           </div>
                         ) : isOverriddenPiece ? (
                           <div className="flex flex-col items-end">
-                            <span className="text-[9.5px] text-slate-400/90 line-through font-normal print:text-[7.5px]">
+                            <span className="text-[9.5px] text-slate-400/90 line-through font-normal print:hidden">
                               ${cost.toFixed(2)}
                             </span>
                             <span className="text-brand-950 font-bold">${finalPieceCost.toFixed(2)}</span>
