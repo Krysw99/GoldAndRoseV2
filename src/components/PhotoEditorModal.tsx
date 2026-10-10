@@ -8,7 +8,8 @@ import {
   Crop, PenTool, ArrowRight, Circle, Square, 
   Type, Eraser, RotateCw, RotateCcw, FlipHorizontal, FlipVertical,
   Check, X, Undo, Redo, ZoomIn, ZoomOut, Maximize2, RefreshCw, 
-  Trash2, Move, Eye, Sparkles, Camera
+  Trash2, Move, Eye, Sparkles, Camera,
+  ArrowUpLeft, ArrowUpRight, ArrowDownLeft, ArrowDownRight
 } from 'lucide-react';
 import { compressImage } from '../utils';
 import { playClickSound } from '../utils/audio';
@@ -501,17 +502,25 @@ export default function PhotoEditorModal({
       const transformedW = isRotated90or270 ? srcH : srcW;
       const transformedH = isRotated90or270 ? srcW : srcH;
 
+      const maxDim = 1200;
+      const scale = Math.min(1, maxDim / transformedW, maxDim / transformedH);
+      const outW = Math.max(1, Math.round(transformedW * scale));
+      const outH = Math.max(1, Math.round(transformedH * scale));
+
       const exportCanvas = document.createElement('canvas');
-      exportCanvas.width = transformedW;
-      exportCanvas.height = transformedH;
+      exportCanvas.width = outW;
+      exportCanvas.height = outH;
       const ctx = exportCanvas.getContext('2d');
 
       if (ctx) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, outW, outH);
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
 
-        // Draw background photo with orientation transforms
+        // Draw background photo with orientation transforms scaled to output
         ctx.save();
+        ctx.scale(scale, scale);
         ctx.translate(transformedW / 2, transformedH / 2);
         ctx.rotate((rotation * Math.PI) / 180);
         ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
@@ -519,11 +528,12 @@ export default function PhotoEditorModal({
         ctx.restore();
 
         // Draw drawing annotation layer
-        ctx.drawImage(drawingCanvasRef.current, 0, 0);
+        if (drawingCanvasRef.current) {
+          ctx.drawImage(drawingCanvasRef.current, 0, 0, outW, outH);
+        }
 
-        // Convert to high-resolution JPEG (1200px max, 0.85 quality)
-        const rawBase64 = exportCanvas.toDataURL('image/jpeg', 0.90);
-        const optimized = await compressImage(rawBase64, 1200, 0.85);
+        // Convert directly to high-resolution lightweight JPEG (~70KB)
+        const optimized = exportCanvas.toDataURL('image/jpeg', 0.80);
 
         onSave(optimized);
         onClose();
@@ -1299,41 +1309,41 @@ export default function PhotoEditorModal({
                       </div>
                     </div>
 
-                    {/* 4 Corner Drag Handles (with prominent bottom corner emphasis) */}
+                    {/* 4 Corner Drag Handles (with prominent 45 degree angle arrows) */}
                     {/* Top-Left */}
                     <div
-                      className="absolute -top-3 -left-3 w-6 h-6 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nwse-resize shadow-lg flex items-center justify-center transition-transform hover:scale-125 z-40"
+                      className="absolute -top-3 -left-3 w-6 h-6 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nwse-resize shadow-lg flex items-center justify-center transition-transform hover:scale-125 z-40 select-none touch-none"
                       onPointerDown={(e) => handleCropPointerDown(e, 'tl')}
                       title="Adjust Top-Left"
                     >
-                      <div className="w-1.5 h-1.5 bg-slate-950 rounded-full" />
+                      <ArrowUpLeft size={12} className="text-slate-950" strokeWidth={2.5} />
                     </div>
 
                     {/* Top-Right */}
                     <div
-                      className="absolute -top-3 -right-3 w-6 h-6 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nesw-resize shadow-lg flex items-center justify-center transition-transform hover:scale-125 z-40"
+                      className="absolute -top-3 -right-3 w-6 h-6 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nesw-resize shadow-lg flex items-center justify-center transition-transform hover:scale-125 z-40 select-none touch-none"
                       onPointerDown={(e) => handleCropPointerDown(e, 'tr')}
                       title="Adjust Top-Right"
                     >
-                      <div className="w-1.5 h-1.5 bg-slate-950 rounded-full" />
+                      <ArrowUpRight size={12} className="text-slate-950" strokeWidth={2.5} />
                     </div>
 
                     {/* Bottom-Left (Adjustable Corner) */}
                     <div
-                      className="absolute -bottom-3 -left-3 w-7 h-7 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nesw-resize shadow-xl flex items-center justify-center transition-transform hover:scale-125 ring-2 ring-amber-400/40 z-40"
+                      className="absolute -bottom-3.5 -left-3.5 w-7 h-7 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nesw-resize shadow-xl flex items-center justify-center transition-transform hover:scale-125 ring-2 ring-amber-400/40 z-40 select-none touch-none"
                       onPointerDown={(e) => handleCropPointerDown(e, 'bl')}
                       title="Adjust Bottom-Left Corner"
                     >
-                      <div className="w-2 h-2 bg-slate-950 rounded-full" />
+                      <ArrowDownLeft size={13} className="text-slate-950" strokeWidth={2.5} />
                     </div>
 
                     {/* Bottom-Right (Adjustable Corner) */}
                     <div
-                      className="absolute -bottom-3 -right-3 w-7 h-7 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nwse-resize shadow-xl flex items-center justify-center transition-transform hover:scale-125 ring-2 ring-amber-400/40 z-40"
+                      className="absolute -bottom-3.5 -right-3.5 w-7 h-7 bg-amber-400 border-2 border-slate-950 rounded-full cursor-nwse-resize shadow-xl flex items-center justify-center transition-transform hover:scale-125 ring-2 ring-amber-400/40 z-40 select-none touch-none"
                       onPointerDown={(e) => handleCropPointerDown(e, 'br')}
                       title="Adjust Bottom-Right Corner"
                     >
-                      <div className="w-2 h-2 bg-slate-950 rounded-full" />
+                      <ArrowDownRight size={13} className="text-slate-950" strokeWidth={2.5} />
                     </div>
 
                     {/* 4 Edge Adjustment Handles */}

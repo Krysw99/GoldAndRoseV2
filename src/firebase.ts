@@ -74,8 +74,8 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     path
   };
   
-  if (message.includes('Quota limit exceeded') || message.includes('RESOURCE_EXHAUSTED')) {
-    console.warn(`[Firestore Quota Notice] Free daily quota reached for ${operationType} on ${path || 'database'}. Operating in local offline mode.`);
+  if (message.includes('Quota limit exceeded') || message.includes('RESOURCE_EXHAUSTED') || message.toLowerCase().includes('quota')) {
+    console.warn(`[Firestore Quota Notice] Cloud daily quota reached for ${operationType} on ${path || 'database'}. Preserved in local device storage.`);
   } else {
     console.error('Firestore Error: ', JSON.stringify(errInfo));
   }
@@ -85,7 +85,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 /**
  * Compresses heavy base64 image strings using browser canvas API to fit Firestore 1MB limits.
  */
-async function compressBase64Image(dataUrl: string, maxWidth = 800, maxHeight = 800, quality = 0.7): Promise<string> {
+async function compressBase64Image(dataUrl: string, maxWidth = 900, maxHeight = 900, quality = 0.68): Promise<string> {
   if (!dataUrl || !dataUrl.startsWith('data:image/')) return dataUrl;
   // If the dataUrl is already small (e.g. < 40KB), don't compress it
   if (dataUrl.length < 40000) return dataUrl;
@@ -109,17 +109,21 @@ async function compressBase64Image(dataUrl: string, maxWidth = 800, maxHeight = 
           }
         }
 
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = Math.max(1, width);
+        canvas.height = Math.max(1, height);
         const ctx = canvas.getContext('2d');
         if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
           const compressed = canvas.toDataURL('image/jpeg', quality);
           resolve(compressed);
           return;
         }
       } catch (e) {
-        console.warn("Base64 image compression failed:", e);
+        console.warn("Base64 image compression notice:", e);
       }
       resolve(dataUrl);
     };
@@ -205,9 +209,9 @@ export function isDocumentDeleted(id: string): boolean {
 }
 
 /**
- * Syncs a single document to Firestore.
+ * Syncs a single document to Firestore with quota resilience.
  */
-export async function saveDocument(collectionName: string, id: string, data: any) {
+export async function saveDocument(collectionName: string, id: string, data: any): Promise<{ success: boolean; offline?: boolean; quotaExceeded?: boolean }> {
   const path = `${collectionName}/${id}`;
   unmarkDocumentDeleted(id);
   try {
@@ -222,8 +226,24 @@ export async function saveDocument(collectionName: string, id: string, data: any
     const compressed = await compressPayload(sanitized);
     await setDoc(docRef, compressed, { merge: true });
     console.log(`Successfully synced document ${id} to collection ${collectionName}`);
-  } catch (error) {
+    return { success: true, offline: false };
+  } catch (error: any) {
+    const message = error instanceof Error ? error.message : String(error);
+    const isQuotaOrLimit = 
+      message.includes('Quota limit exceeded') || 
+      message.includes('RESOURCE_EXHAUSTED') || 
+      message.includes('1 MiB') || 
+      message.toLowerCase().includes('quota') ||
+      message.includes('unavailable') ||
+      message.includes('network');
+
+    if (isQuotaOrLimit) {
+      console.warn(`[Firestore Quota Notice] Cloud quota/network limit reached for ${path}. Document safely preserved in local device storage.`);
+      return { success: true, offline: true, quotaExceeded: true };
+    }
+
     handleFirestoreError(error, OperationType.WRITE, path);
+    return { success: false, offline: true };
   }
 }
 

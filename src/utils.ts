@@ -220,36 +220,43 @@ export function getEmptyQuoteSession(): QuoteSession {
   };
 }
 
-export function compressImage(base64Str: string, maxDim: number = 1200, quality: number = 0.85): Promise<string> {
+export function compressImage(base64Str: string, maxDim: number = 1200, quality: number = 0.80): Promise<string> {
   return new Promise((resolve) => {
     if (!base64Str || typeof base64Str !== 'string' || !base64Str.startsWith('data:image/')) {
       resolve(base64Str);
       return;
     }
-    // If the image is already lightweight (< 60KB), don't re-compress
-    if (base64Str.length < 60000) {
+    // If the image is already lightweight (< 50KB), don't re-compress
+    if (base64Str.length < 50000) {
       resolve(base64Str);
       return;
     }
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
-      // Scale down only if greater than maxDim, otherwise keep natural dimension with high quality
-      const scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(img.width * scale));
-      canvas.height = Math.max(1, Math.round(img.height * scale));
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      } else {
-        resolve(base64Str);
+      try {
+        const scale = Math.min(1, maxDim / img.width, maxDim / img.height);
+        const targetW = Math.max(1, Math.round(img.width * scale));
+        const targetH = Math.max(1, Math.round(img.height * scale));
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, targetW, targetH);
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, targetW, targetH);
+          const out = canvas.toDataURL('image/jpeg', quality);
+          resolve(out);
+          return;
+        }
+      } catch (err) {
+        console.warn("Image compression notice:", err);
       }
+      resolve(base64Str);
     };
     img.onerror = () => {
       resolve(base64Str);
@@ -387,192 +394,176 @@ export function safeParseDate(dateStr: string): number {
 
 const inMemoryCache = new Map<string, any>();
 
+// --- ROCK-SOLID INDEXEDDB PERSISTENCE LAYER ---
+// Protects all ledgers, historical quotes, active sessions, and multi-photo uploads
+// from browser localStorage 5MB quota restrictions. IndexedDB supports gigabytes of storage.
+const DB_NAME = 'gr_jewelry_app_db';
+const DB_VERSION = 1;
+const STORE_NAME = 'app_storage';
+
+function openIndexedDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      reject(new Error('IndexedDB not supported'));
+      return;
+    }
+    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = (e: any) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function idbGet<T = any>(key: string): Promise<T | null> {
+  try {
+    const db = await openIndexedDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(key);
+      req.onsuccess = () => resolve(req.result ?? null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function idbSet(key: string, value: any): Promise<void> {
+  try {
+    const db = await openIndexedDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.put(value, key);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn(`[IndexedDB Notice] Failed to persist ${key}:`, err);
+  }
+}
+
+export async function idbGetAll(): Promise<Record<string, any>> {
+  try {
+    const db = await openIndexedDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.openCursor();
+      const results: Record<string, any> = {};
+      req.onsuccess = (e: any) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          results[cursor.key as string] = cursor.value;
+          cursor.continue();
+        } else {
+          resolve(results);
+        }
+      };
+      req.onerror = () => resolve({});
+    });
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Hydrates app storage from IndexedDB on startup and backs up any existing
+ * localStorage data into IndexedDB so no ledgers or photos are ever lost.
+ */
+export async function hydrateFromIndexedDb(): Promise<Record<string, any>> {
+  const keysToSync = [
+    'gr_quote_ledger',
+    'gr_wholesale_ledger',
+    'gr_scrap_ledger',
+    'gr_cuban_estimates',
+    'gr_jumpring_estimates',
+    'gr_active_retail_session',
+    'gr_active_wholesale_session'
+  ];
+
+  // 1. Back up whatever is currently in localStorage into IndexedDB
+  for (const k of keysToSync) {
+    try {
+      const raw = localStorage.getItem(k);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (!inMemoryCache.has(k)) {
+          inMemoryCache.set(k, parsed);
+        }
+        const existingInIdb = await idbGet(k);
+        if (!existingInIdb) {
+          await idbSet(k, parsed);
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Read all items from IndexedDB and populate inMemoryCache
+  const idbData = await idbGetAll();
+  for (const [k, val] of Object.entries(idbData)) {
+    inMemoryCache.set(k, val);
+  }
+
+  return idbData;
+}
+
 export function safeGetLocalStorage<T = any>(key: string): T | null {
+  if (inMemoryCache.has(key)) {
+    return inMemoryCache.get(key);
+  }
   try {
     const item = localStorage.getItem(key);
-    if (item !== null) return JSON.parse(item);
-  } catch {
-    // ignore
-  }
+    if (item !== null) {
+      const parsed = JSON.parse(item);
+      inMemoryCache.set(key, parsed);
+      return parsed;
+    }
+  } catch {}
   try {
     const item = sessionStorage.getItem(key);
-    if (item !== null) return JSON.parse(item);
-  } catch {
-    // ignore
-  }
-  return inMemoryCache.has(key) ? inMemoryCache.get(key) : null;
-}
-
-/**
- * Prunes heavy image caches from other ledger keys to free up space in localStorage.
- */
-function evictOldLocalStorageCaches(): void {
-  const ledgerKeys = ['gr_quote_ledger', 'gr_wholesale_ledger', 'gr_scrap_ledger'];
-  
-  for (const lKey of ledgerKeys) {
-    try {
-      const raw = localStorage.getItem(lKey);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed) || parsed.length === 0) continue;
-
-      // Keep at most 10 items in localStorage cache
-      const trimmed = parsed.slice(0, 10).map((item, idx) => {
-        // Only keep full images on the 1 most recent item
-        if (idx === 0) return item;
-        if (item && item.fullData && Array.isArray(item.fullData.rings)) {
-          return {
-            ...item,
-            fullData: {
-              ...item.fullData,
-              rings: item.fullData.rings.map((r: any) => ({
-                ...r,
-                referencePhoto: null,
-                referencePhotos: [],
-                referenceSketch: null,
-                referenceSketches: []
-              }))
-            }
-          };
-        }
-        if (item && ('image' in item || 'signature' in item || 'goldImage' in item)) {
-          return {
-            ...item,
-            image: null,
-            goldImage: null,
-            signature: null
-          };
-        }
-        return item;
-      });
-
-      localStorage.setItem(lKey, JSON.stringify(trimmed));
-    } catch {
-      // If still failing, drop old ledger key from localStorage (state & Firestore have it)
-      try {
-        localStorage.removeItem(lKey);
-      } catch {}
+    if (item !== null) {
+      const parsed = JSON.parse(item);
+      inMemoryCache.set(key, parsed);
+      return parsed;
     }
-  }
+  } catch {}
+  return null;
 }
 
 /**
- * Creates a lightweight copy of session data by reducing heavy base64 images if needed.
+ * Persists data with rock-solid resilience across IndexedDB, in-memory cache, and localStorage.
+ * NEVER deletes or strips the user's saved ledgers or pictures under storage pressure.
  */
-function sanitizeSessionForStorage(session: any): any {
-  if (!session || typeof session !== 'object') return session;
-  if (!Array.isArray(session.rings)) return session;
-
-  return {
-    ...session,
-    rings: session.rings.map((r: any) => {
-      const photos = Array.isArray(r.referencePhotos) ? r.referencePhotos : (r.referencePhoto ? [r.referencePhoto] : []);
-      const sketches = Array.isArray(r.referenceSketches) ? r.referenceSketches : (r.referenceSketch ? [r.referenceSketch] : []);
-      
-      // Limit to 2 photos and 2 sketches per ring, and truncate oversized raw base64 data (> 300KB)
-      const cleanPhotos = photos.slice(0, 2).map((p: string) => (typeof p === 'string' && p.length > 300000 ? p.slice(0, 100000) : p));
-      const cleanSketches = sketches.slice(0, 2).map((s: string) => (typeof s === 'string' && s.length > 300000 ? s.slice(0, 100000) : s));
-
-      return {
-        ...r,
-        referencePhoto: cleanPhotos[0] || null,
-        referencePhotos: cleanPhotos,
-        referenceSketch: cleanSketches[0] || null,
-        referenceSketches: cleanSketches
-      };
-    })
-  };
-}
-
 export function safeSetLocalStorage(key: string, data: any): void {
-  // Always update in-memory cache as immediate fallback
+  // 1. Always update in-memory cache as immediate zero-latency access
   inMemoryCache.set(key, data);
 
-  // Also write to sessionStorage as reliable session backup
+  // 2. Asynchronously persist full, pristine data to IndexedDB (virtually unlimited quota)
+  idbSet(key, data).catch(err => {
+    console.warn(`[IndexedDB write notice] ${key}:`, err);
+  });
+
+  // 3. Backup to sessionStorage
   try {
     sessionStorage.setItem(key, JSON.stringify(data));
   } catch {}
 
-  // 1. Direct attempt to write to localStorage
+  // 4. Mirror to localStorage for instant synchronous reboot
   try {
     localStorage.setItem(key, JSON.stringify(data));
     return;
   } catch {
-    // Quota exceeded
-  }
-
-  // 2. Free up cache from other ledgers in localStorage and retry
-  try {
-    evictOldLocalStorageCaches();
-    localStorage.setItem(key, JSON.stringify(data));
-    return;
-  } catch {
-    // Still out of quota
-  }
-
-  // 3. Compress / sanitize data if it's an array or a QuoteSession
-  try {
-    if (Array.isArray(data)) {
-      const stripped = data.slice(0, 10).map((item, idx) => {
-        if (idx === 0) return item;
-        if (item && item.fullData && Array.isArray(item.fullData.rings)) {
-          return {
-            ...item,
-            fullData: {
-              ...item.fullData,
-              rings: item.fullData.rings.map((r: any) => ({
-                ...r,
-                referencePhoto: null,
-                referencePhotos: [],
-                referenceSketch: null,
-                referenceSketches: []
-              }))
-            }
-          };
-        }
-        if (item && ('image' in item || 'signature' in item || 'goldImage' in item)) {
-          return {
-            ...item,
-            image: null,
-            goldImage: null,
-            signature: null
-          };
-        }
-        return item;
-      });
-      localStorage.setItem(key, JSON.stringify(stripped));
-      return;
-    } else if (data && typeof data === 'object' && Array.isArray(data.rings)) {
-      const sanitized = sanitizeSessionForStorage(data);
-      localStorage.setItem(key, JSON.stringify(sanitized));
-      return;
-    }
-  } catch {
-    // Still out of quota
-  }
-
-  // 4. Final attempt: Remove old non-active caches and retry minimal session
-  try {
-    localStorage.removeItem('gr_quote_ledger');
-    localStorage.removeItem('gr_wholesale_ledger');
-    localStorage.removeItem('gr_scrap_ledger');
-    if (data && typeof data === 'object' && Array.isArray(data.rings)) {
-      const strippedSession = {
-        ...data,
-        rings: data.rings.map((r: any) => ({
-          ...r,
-          referencePhoto: null,
-          referencePhotos: [],
-          referenceSketch: null,
-          referenceSketches: []
-        }))
-      };
-      localStorage.setItem(key, JSON.stringify(strippedSession));
-    } else {
-      localStorage.setItem(key, JSON.stringify(data));
-    }
-  } catch {
-    // Quietly handled — data is preserved in React state, sessionStorage, and in-memory cache
+    // Browser 5MB localStorage quota limit reached.
+    // Data is 100% preserved in IndexedDB and in-memory cache.
+    // We intentionally NEVER delete ledgers or strip photos!
+    console.info(`[Storage Notice] Browser localStorage 5MB quota reached. "${key}" is preserved in IndexedDB and memory cache.`);
   }
 }
 

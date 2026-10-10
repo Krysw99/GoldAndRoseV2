@@ -816,9 +816,6 @@ export default function ScrapCalculator({
               {items.length} {items.length === 1 ? 'lot' : 'lots'}
             </span>
           </div>
-          <span className="text-[10px] text-brand-500 font-medium hidden sm:inline">
-            Choose <span className="font-bold font-mono text-brand-800">K</span> (5K–24K presets) or <span className="font-bold font-mono text-brand-800">%</span> (manual purity) per lot
-          </span>
         </div>
 
         {/* Desktop Header Row */}

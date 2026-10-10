@@ -1438,7 +1438,7 @@ export default function QuoteCalculator({
   const addClientStone = () => {
     if (!activeRing) return;
     const current = activeRing.clientStones || [];
-    updateActiveRing('clientStones', [...current, { qty: '', carats: '', size: '1.5', type: 'Melee' }]);
+    updateActiveRing('clientStones', [...current, { qty: '1', carats: '', size: '', type: 'Center' }]);
   };
 
   const removeClientStone = (idx: number) => {
@@ -3368,7 +3368,7 @@ export default function QuoteCalculator({
                         className="w-full py-1.5 px-2 bg-brand-50 hover:bg-brand-100 text-brand-900 hover:text-brand-950 rounded-xl border border-brand-200 hover:border-brand-300 font-bold text-[10px] tracking-wide shadow-sm transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
                       >
                         <Plus size={10} className="text-brand-gold" />
-                        + Interactive Sketch
+                        Interactive Sketch
                       </button>
                     </div>
 
@@ -3388,9 +3388,9 @@ export default function QuoteCalculator({
                           photos.map((photoUrl, pIdx) => (
                             <div key={pIdx} className="flex flex-col items-center gap-1">
                               <div
-                                onClick={() => setEnlargeImage(photoUrl)}
+                                onClick={() => onLaunchSketch('photo', pIdx)}
                                 className="border border-brand-150 bg-white rounded-xl p-0.5 w-16 h-16 flex items-center justify-center shadow-sm cursor-pointer overflow-hidden transition-all hover:scale-105 relative group"
-                                title="Click to enlarge"
+                                title="Click to open in sketchpad"
                               >
                                 <img src={photoUrl} alt={`Photo ${pIdx + 1}`} className="w-full h-full object-cover rounded-lg" />
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
@@ -3400,12 +3400,9 @@ export default function QuoteCalculator({
                               <div className="flex items-center gap-1">
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setPhotoEditorSrc(photoUrl);
-                                    setPhotoEditorIdx(pIdx);
-                                  }}
+                                  onClick={() => onLaunchSketch('photo', pIdx)}
                                   className="p-1 bg-white border border-brand-200 text-brand-900 rounded-md hover:bg-brand-50 transition-colors shadow-sm cursor-pointer flex items-center gap-0.5"
-                                  title="Crop or Draw on Photo"
+                                  title="Open in sketchpad"
                                 >
                                   <Crop size={10} className="text-brand-gold" />
                                 </button>
@@ -3428,17 +3425,40 @@ export default function QuoteCalculator({
                         type="file"
                         id={`direct-photo-picker-trigger-${activeRing.id}`}
                         accept="image/*"
+                        multiple
                         className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = (ev) => {
-                            const result = ev.target?.result as string;
-                            setPhotoEditorSrc(result);
-                            setPhotoEditorIdx(null); // new photo
-                          };
-                          reader.readAsDataURL(file);
+                        onChange={async (e) => {
+                          const files = e.target.files;
+                          if (!files || files.length === 0) return;
+                          const fileList = Array.from(files) as File[];
+
+                          const processedPhotos: string[] = [];
+                          for (const file of fileList) {
+                            await new Promise<void>((resolve) => {
+                              const reader = new FileReader();
+                              reader.onload = async (ev) => {
+                                const raw = ev.target?.result as string;
+                                if (raw) {
+                                  try {
+                                    const opt = await compressImage(raw, 1400, 0.80);
+                                    processedPhotos.push(opt);
+                                  } catch {
+                                    processedPhotos.push(raw);
+                                  }
+                                }
+                                resolve();
+                              };
+                              reader.onerror = () => resolve();
+                              reader.readAsDataURL(file);
+                            });
+                          }
+
+                          if (processedPhotos.length > 0) {
+                            const updated = [...photos, ...processedPhotos];
+                            updatePhotos(updated);
+                            // Open attached photo directly in the sketchpad window
+                            onLaunchSketch('photo', updated.length - 1);
+                          }
                           e.target.value = '';
                         }}
                       />
@@ -3448,7 +3468,7 @@ export default function QuoteCalculator({
                         className="w-full py-1.5 px-2 bg-brand-50 hover:bg-brand-100 text-brand-900 hover:text-brand-950 rounded-xl border border-brand-200 hover:border-brand-300 font-bold text-[10px] tracking-wide shadow-sm transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
                       >
                         <Plus size={10} className="text-brand-gold" />
-                        + Photo (Crop / Draw)
+                        Attach Photos
                       </label>
                     </div>
                   </div>
@@ -3923,9 +3943,10 @@ export default function QuoteCalculator({
                       <div className="col-span-2">
                         <input
                           type="number"
-                          className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
-                          value={c.qty}
-                          onChange={(e) => updateClientStone(idx, 'qty', e.target.value)}
+                          className="w-full bg-slate-100 border border-emerald-200/60 p-1.5 rounded text-xs font-bold text-emerald-950 text-center cursor-not-allowed select-none"
+                          value={1}
+                          disabled
+                          readOnly
                         />
                       </div>
                       <div className="col-span-3">
@@ -3964,9 +3985,10 @@ export default function QuoteCalculator({
                           <div className="grid grid-cols-2 gap-2">
                             <select
                               className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
-                              value={c.size || '1.5'}
+                              value={c.size || ''}
                               onChange={(e) => updateClientStone(idx, 'size', e.target.value)}
                             >
+                              <option value="">Dimensions...</option>
                               {Object.keys(ROUND_MELEE).map(sz => (
                                 <option key={sz} value={sz}>{sz}mm ({ROUND_MELEE[sz]}ct)</option>
                               ))}
@@ -3982,15 +4004,15 @@ export default function QuoteCalculator({
                           <div className="grid grid-cols-2 gap-2">
                             <input
                               type="text"
-                              placeholder="Size (e.g. 6.5mm)"
-                              className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
+                              placeholder="Dimensions"
+                              className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 placeholder:text-slate-400 placeholder:italic"
                               value={c.size || ''}
                               onChange={(e) => updateClientStone(idx, 'size', e.target.value)}
                             />
                             <input
                               type="number"
                               placeholder="Total Carats"
-                              className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
+                              className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 placeholder:text-slate-400"
                               value={c.carats}
                               onChange={(e) => updateClientStone(idx, 'carats', e.target.value)}
                             />

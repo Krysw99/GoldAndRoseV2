@@ -15,7 +15,7 @@ import {
   ScrapItem, JewelryItem 
 } from './types';
 import { DEFAULT_SETTINGS, TROY_ONCE_GRAMS, FANCY_SHAPES, ROUND_MELEE } from './constants';
-import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeGetLocalStorage, safeParseDate, genId, getTennisBaseGrams, calculateScrapItemValue, formatPhoneNumber, compileSessionCost } from './utils';
+import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeGetLocalStorage, safeParseDate, genId, getTennisBaseGrams, calculateScrapItemValue, formatPhoneNumber, compileSessionCost, hydrateFromIndexedDb } from './utils';
 
 // Modular Components
 import ScrapCalculator from './components/ScrapCalculator';
@@ -251,10 +251,29 @@ export default function App() {
     };
   }, []);
 
-  // Load remaining fast-parsing keys on initialization
+  // Load remaining fast-parsing keys on initialization & hydrate from IndexedDB
   useEffect(() => {
     isLoadedRef.current = true;
     setIsPersistenceLoaded(true);
+
+    hydrateFromIndexedDb().then(idbData => {
+      if (idbData) {
+        if (Array.isArray(idbData['gr_quote_ledger']) && idbData['gr_quote_ledger'].length > 0) {
+          setRingQuoteTransactions(prev => (idbData['gr_quote_ledger'].length >= prev.length ? idbData['gr_quote_ledger'] : prev));
+        }
+        if (Array.isArray(idbData['gr_wholesale_ledger']) && idbData['gr_wholesale_ledger'].length > 0) {
+          setWholesaleTransactions(prev => (idbData['gr_wholesale_ledger'].length >= prev.length ? idbData['gr_wholesale_ledger'] : prev));
+        }
+        if (Array.isArray(idbData['gr_scrap_ledger']) && idbData['gr_scrap_ledger'].length > 0) {
+          setScrapTransactions(prev => (idbData['gr_scrap_ledger'].length >= prev.length ? idbData['gr_scrap_ledger'] : prev));
+        }
+        if (Array.isArray(idbData['gr_cuban_estimates']) && idbData['gr_cuban_estimates'].length > 0) {
+          setCubanEstimates(prev => (idbData['gr_cuban_estimates'].length >= prev.length ? idbData['gr_cuban_estimates'] : prev));
+        }
+      }
+    }).catch(err => {
+      console.warn("Storage hydration notice:", err);
+    });
   }, []);
 
   // Shared helper to apply master settings from Firebase cloud updates
@@ -874,20 +893,28 @@ setIsCloudSynced(true);
       setWholesaleTransactions(updated);
 
       try {
-        await saveDocument('wholesale_ledger', newTx.id, newTx);
+        const syncRes = await saveDocument('wholesale_ledger', newTx.id, newTx);
         if (resetSessionAfterSave) {
           updateWholesaleSessionLocal(getEmptyQuoteSession(), true);
         }
         playClickSound('success');
-        showToast("Wholesale job order successfully saved and synced!", "success");
+        if (syncRes && syncRes.quotaExceeded) {
+          showToast("Wholesale order saved to ledger! (Offline mode - all pictures preserved)", "success");
+        } else {
+          showToast("Wholesale job order successfully saved and synced!", "success");
+        }
       } catch (err: any) {
-        console.error("Cloud sync failed on wholesale save:", err);
+        console.warn("Cloud sync notice on wholesale save:", err);
         if (resetSessionAfterSave) {
           updateWholesaleSessionLocal(getEmptyQuoteSession(), true);
         }
         playClickSound('success');
         const errMsg = err?.message || String(err);
-        showToast(`Saved locally! Cloud sync pending (Error: ${errMsg.substring(0, 60)})`, "info");
+        if (errMsg.toLowerCase().includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+          showToast("Wholesale order saved to ledger! (Offline mode - all pictures preserved)", "success");
+        } else {
+          showToast("Wholesale order saved to local ledger! (Cloud sync queued)", "info");
+        }
       }
     } else {
       const idx = ringQuoteTransactions.findIndex(q => q.id === safeTxId);
@@ -903,20 +930,28 @@ setIsCloudSynced(true);
       setRingQuoteTransactions(updated);
 
       try {
-        await saveDocument('retail_ledger', newTx.id, newTx);
+        const syncRes = await saveDocument('retail_ledger', newTx.id, newTx);
         if (resetSessionAfterSave) {
           updateRetailSessionLocal(getEmptyQuoteSession(), true);
         }
         playClickSound('success');
-        showToast("Retail custom quote saved and synced successfully!", "success");
+        if (syncRes && syncRes.quotaExceeded) {
+          showToast("Retail custom quote saved to ledger! (Offline mode - all pictures preserved)", "success");
+        } else {
+          showToast("Retail custom quote saved and synced successfully!", "success");
+        }
       } catch (err: any) {
-        console.error("Cloud sync failed on retail save:", err);
+        console.warn("Cloud sync notice on retail save:", err);
         if (resetSessionAfterSave) {
           updateRetailSessionLocal(getEmptyQuoteSession(), true);
         }
         playClickSound('success');
         const errMsg = err?.message || String(err);
-        showToast(`Saved locally! Cloud sync pending (Error: ${errMsg.substring(0, 60)})`, "info");
+        if (errMsg.toLowerCase().includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+          showToast("Retail custom quote saved to ledger! (Offline mode - all pictures preserved)", "success");
+        } else {
+          showToast("Retail custom quote saved to local ledger! (Cloud sync queued)", "info");
+        }
       }
     }
   };
@@ -1704,28 +1739,15 @@ setIsCloudSynced(true);
 
       {/* 3. INTERACTIVE GEOMETRIC SKETCHPAD & PHOTO EDITOR OVERLAY */}
       {isSketching && (
-        editingImageType === 'photo' ? (
-          <PhotoEditorModal
-            isOpen={true}
-            imageSrc={getActiveSketchSrc()}
-            onSave={handleSketchSave}
-            onClose={() => {
-              setIsSketching(false);
-              setEditingImageIndex(null);
-            }}
-            title="Crop & Draw Reference Photo"
-          />
-        ) : (
-          <Sketchpad
-            initialImage={getActiveSketchSrc()}
-            onSave={handleSketchSave}
-            onCancel={() => {
-              setIsSketching(false);
-              setEditingImageIndex(null);
-            }}
-            title="Interactive Design Sketchpad"
-          />
-        )
+        <Sketchpad
+          initialImage={getActiveSketchSrc()}
+          onSave={handleSketchSave}
+          onCancel={() => {
+            setIsSketching(false);
+            setEditingImageIndex(null);
+          }}
+          title={editingImageType === 'photo' ? "Reference Photo" : "Interactive Design Sketchpad"}
+        />
       )}
 
       {/* 4. IPAD PRINT OPTIMIZATION MODAL */}

@@ -7,7 +7,8 @@ import React, { useRef, useState, useEffect } from 'react';
 import { 
   Pen, Highlighter, Eraser, Move, 
   RotateCw, RefreshCw, X, Check, Camera, Sparkles, HelpCircle,
-  Undo2, Redo2, Ruler, Grid3X3, Minus, Maximize2
+  Undo2, Redo2, Ruler, Grid3X3, Minus, Maximize2, Plus, Trash2, Copy, Layers, ImagePlus,
+  ArrowUpLeft, ArrowUpRight, ArrowDownLeft, ArrowDownRight
 } from 'lucide-react';
 import { CENTER_SHAPES } from '../constants';
 import { compressImage } from '../utils';
@@ -562,6 +563,19 @@ interface SketchpadProps {
   title: string;
 }
 
+export interface SketchPhoto {
+  id: string;
+  src: string;
+  img: HTMLImageElement;
+  x: number;      // Center X coordinate in canvas space
+  y: number;      // Center Y coordinate in canvas space
+  scale: number;  // Scale factor (default 1)
+  rot: number;    // Rotation in degrees (0 to 360)
+  width: number;  // Intrinsic width
+  height: number; // Intrinsic height
+  opacity?: number;
+}
+
 interface ImageState {
   x: number;
   y: number;
@@ -621,25 +635,48 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
   const [stencilOffsetY, setStencilOffsetY] = useState<number>(0);
   const [stencilIncludeInExport, setStencilIncludeInExport] = useState<boolean>(true);
 
-  // Background image state
-  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
-  const [bgSrc, setBgSrc] = useState<string | null>(null);
-  const [imgState, setImgState] = useState<ImageState>({
-    x: 0,
-    y: 0,
-    scale: 1,
-    rot: 0,
-    width: 0,
-    height: 0
-  });
+  // Multi-photo state
+  const [photos, setPhotos] = useState<SketchPhoto[]>([]);
+  const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
 
-  // Interactivity tracking
-  const [transformMode, setTransformMode] = useState<'drag' | 'scale' | 'rotate' | null>(null);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [initialImgState, setInitialImgState] = useState<ImageState | null>(null);
-  const [transformCenter, setTransformCenter] = useState({ x: 0, y: 0 });
-  const [transformStartDist, setTransformStartDist] = useState(1);
-  const [transformStartAngle, setTransformStartAngle] = useState(0);
+  const activePhoto = photos.find(p => p.id === activePhotoId) || (photos.length > 0 ? photos[photos.length - 1] : null);
+  const bgSrc = activePhoto?.src || null;
+  const bgImage = activePhoto?.img || null;
+  const imgState: ImageState = {
+    x: activePhoto ? activePhoto.x - (activePhoto.width * activePhoto.scale) / 2 : 0,
+    y: activePhoto ? activePhoto.y - (activePhoto.height * activePhoto.scale) / 2 : 0,
+    scale: activePhoto ? activePhoto.scale : 1,
+    rot: activePhoto ? activePhoto.rot : 0,
+    width: activePhoto ? activePhoto.width : 0,
+    height: activePhoto ? activePhoto.height : 0
+  };
+
+  // Photo transformation interactivity tracking
+  interface PhotoTransformSession {
+    mode: 'scale' | 'drag' | 'rotate';
+    corner?: 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r';
+    photoId: string;
+    initialPhoto: SketchPhoto;
+    startClientX: number;
+    startClientY: number;
+    centerClient: { x: number; y: number };
+    startDist: number;
+    startAngle: number;
+    vectorInit: { x: number; y: number };
+  }
+
+  const [photoTransformMode, setPhotoTransformMode] = useState<'drag' | 'scale' | 'rotate' | null>(null);
+  const transformSessionRef = useRef<PhotoTransformSession | null>(null);
+
+  // iPad / Touch multi-pointer tracking for 2-finger pinch and rotate directly on photo
+  const photoPointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const photoPinchInitialDistRef = useRef<number | null>(null);
+  const photoPinchInitialAngleRef = useRef<number>(0);
+  const photoPinchInitialScaleRef = useRef<number>(1);
+  const photoPinchInitialRotRef = useRef<number>(0);
+  const photoPinchInitialMidpointRef = useRef<{ x: number; y: number } | null>(null);
+  const photoPinchInitialCenterRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const photoTransformBoxRef = useRef<HTMLDivElement>(null);
 
   // Saved canvas data for interactive stamp previewing
   const [savedCanvasData, setSavedCanvasData] = useState<ImageData | null>(null);
@@ -714,28 +751,53 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
   // Load initial background image if any
   useEffect(() => {
     if (initialImage) {
-      setBgSrc(initialImage);
       const img = new Image();
       img.onload = () => {
-        setBgImage(img);
-        
-        // Auto-scale background image to fit nicely inside the canvas
-        const canvas = canvasRef.current;
-        if (canvas) {
-          const s = Math.min(1, (canvas.width / img.width) * 0.75, (canvas.height / img.height) * 0.75);
-          setImgState({
-            x: (canvas.width - img.width * s) / 2,
-            y: (canvas.height - img.height * s) / 2,
-            scale: s,
-            rot: 0,
-            width: img.width,
-            height: img.height
-          });
-        }
+        const container = containerRef.current;
+        const rect = container ? container.getBoundingClientRect() : null;
+        const cW = (rect && rect.width > 50) ? rect.width : (canvasRef.current?.width || window.innerWidth || 800);
+        const cH = (rect && rect.height > 50) ? rect.height : (canvasRef.current?.height || (window.innerHeight - 120) || 600);
+        // Scale to fill the space cleanly while preserving aspect ratio
+        const s = Math.min((cW / img.width) * 0.96, (cH / img.height) * 0.96);
+        const initPhoto: SketchPhoto = {
+          id: `photo-init-${Date.now()}`,
+          src: initialImage,
+          img,
+          x: cW / 2,
+          y: cH / 2,
+          scale: s,
+          rot: 0,
+          width: img.width,
+          height: img.height,
+          opacity: 1
+        };
+        setPhotos([initPhoto]);
+        setActivePhotoId(initPhoto.id);
+        setTool('transform');
       };
       img.src = initialImage;
     }
   }, [initialImage]);
+
+  // Prevent iPadOS Safari default viewport gestures (pinch-zoom hijacking)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const preventGesture = (e: Event) => {
+      e.preventDefault();
+    };
+
+    container.addEventListener('gesturestart', preventGesture, { passive: false });
+    container.addEventListener('gesturechange', preventGesture, { passive: false });
+    container.addEventListener('gestureend', preventGesture, { passive: false });
+
+    return () => {
+      container.removeEventListener('gesturestart', preventGesture);
+      container.removeEventListener('gesturechange', preventGesture);
+      container.removeEventListener('gestureend', preventGesture);
+    };
+  }, []);
 
   // Handle resizing of drawing canvas
   useEffect(() => {
@@ -769,6 +831,21 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
 
       canvas.width = rect.width;
       canvas.height = rect.height;
+
+      // Keep single initial photo centered and filling the space cleanly on container resize
+      setPhotos(prev => {
+        if (prev.length === 1 && prev[0].id.startsWith('photo-init-')) {
+          const p = prev[0];
+          const s = Math.min((rect.width / p.width) * 0.96, (rect.height / p.height) * 0.96);
+          return [{
+            ...p,
+            x: rect.width / 2,
+            y: rect.height / 2,
+            scale: s
+          }];
+        }
+        return prev;
+      });
 
       if (stencilCanvas) {
         stencilCanvas.width = rect.width;
@@ -2046,36 +2123,471 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     }
   };
 
-  // Background Image Upload
-  const handleBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const result = ev.target?.result as string;
-      const compressed = await compressImage(result, 1600, 0.88);
-      setBgSrc(compressed);
-      const img = new Image();
-      img.onload = () => {
-        setBgImage(img);
-        const canvas = canvasRef.current;
-        if (canvas) {
-          const s = Math.min(1, (canvas.width / img.width) * 0.75, (canvas.height / img.height) * 0.75);
-          setImgState({
-            x: (canvas.width - img.width * s) / 2,
-            y: (canvas.height - img.height * s) / 2,
-            scale: s,
-            rot: 0,
-            width: img.width,
-            height: img.height
-          });
-          setTool('transform');
-        }
-      };
-      img.src = compressed;
+  // Helper to get client center of active photo (exact screen coordinates)
+  const getPhotoCenterClientCoords = (photo: SketchPhoto): { x: number; y: number } => {
+    const container = containerRef.current;
+    if (!container) return { x: 0, y: 0 };
+    const rect = container.getBoundingClientRect();
+    return {
+      x: rect.left + panX + (photo.x * zoom),
+      y: rect.top + panY + (photo.y * zoom)
     };
-    reader.readAsDataURL(file);
+  };
+
+  // Multi-Photo Upload Handler supporting multiple photos simultaneously
+  const handlePhotosUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const canvas = canvasRef.current;
+    const canvasWidth = canvas?.width || 800;
+    const canvasHeight = canvas?.height || 600;
+
+    const fileList = Array.from(files) as File[];
+    const newPhotosToAdd: SketchPhoto[] = [];
+
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      await new Promise<void>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          const result = ev.target?.result as string;
+          if (!result) {
+            resolve();
+            return;
+          }
+          try {
+            const compressed = await compressImage(result, 1600, 0.88);
+            const img = new Image();
+            img.onload = () => {
+              // Scale to fill canvas space cleanly
+              const s = Math.min((canvasWidth / img.width) * 0.96, (canvasHeight / img.height) * 0.96);
+              const cascadeOffset = (photos.length + newPhotosToAdd.length + i) * 35;
+              const newPhoto: SketchPhoto = {
+                id: `photo-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}`,
+                src: compressed,
+                img,
+                x: (canvasWidth / 2) + ((cascadeOffset % 150) - 60),
+                y: (canvasHeight / 2) + ((cascadeOffset % 150) - 60),
+                width: img.width,
+                height: img.height,
+                scale: Math.max(0.08, s),
+                rot: 0,
+                opacity: 1
+              };
+              newPhotosToAdd.push(newPhoto);
+              resolve();
+            };
+            img.onerror = () => resolve();
+            img.src = compressed;
+          } catch {
+            resolve();
+          }
+        };
+        reader.onerror = () => resolve();
+        reader.readAsDataURL(file);
+      });
+    }
+
+    if (newPhotosToAdd.length > 0) {
+      setPhotos(prev => [...prev, ...newPhotosToAdd]);
+      setActivePhotoId(newPhotosToAdd[newPhotosToAdd.length - 1].id);
+      setTool('transform');
+    }
+
+    if (e.target) {
+      e.target.value = '';
+    }
+  };
+
+  // Start dragging active photo (supports mouse, stylus, touch, and 2-finger iPad pinch)
+  const handlePhotoDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    if ((e.target as HTMLElement).closest('button')) return;
+    if ((e.target as HTMLElement).closest('input')) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!activePhoto) return;
+
+    // Track touch pointer for iPad 2-finger gesture
+    photoPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // Handle iPad 2-finger pinch start directly on photo
+    if (photoPointersRef.current.size >= 2) {
+      const pointers = Array.from(photoPointersRef.current.values()) as Array<{ x: number; y: number }>;
+      const p1 = pointers[0];
+      const p2 = pointers[1];
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      photoPinchInitialDistRef.current = Math.hypot(dx, dy) || 1;
+      photoPinchInitialAngleRef.current = Math.atan2(dy, dx);
+      photoPinchInitialScaleRef.current = activePhoto.scale;
+      photoPinchInitialRotRef.current = activePhoto.rot;
+      photoPinchInitialMidpointRef.current = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+      photoPinchInitialCenterRef.current = { x: activePhoto.x, y: activePhoto.y };
+      return;
+    }
+
+    const session: PhotoTransformSession = {
+      mode: 'drag',
+      photoId: activePhoto.id,
+      initialPhoto: { ...activePhoto },
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      centerClient: getPhotoCenterClientCoords(activePhoto),
+      startDist: 1,
+      startAngle: 0,
+      vectorInit: { x: 0, y: 0 }
+    };
+    transformSessionRef.current = session;
+    setPhotoTransformMode('drag');
+
+    const onPointerMove = (ev: PointerEvent) => {
+      if (photoPointersRef.current.has(ev.pointerId)) {
+        photoPointersRef.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      }
+
+      // Handle 2-finger pinch gesture dynamically
+      if (photoPointersRef.current.size >= 2 && photoPinchInitialDistRef.current && photoPinchInitialMidpointRef.current) {
+        ev.preventDefault();
+        const pointers = Array.from(photoPointersRef.current.values()) as Array<{ x: number; y: number }>;
+        const p1 = pointers[0];
+        const p2 = pointers[1];
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const currentDist = Math.hypot(dx, dy);
+        const currentAngle = Math.atan2(dy, dx);
+
+        const scaleMultiplier = currentDist / photoPinchInitialDistRef.current;
+        const newScale = Math.max(0.04, Math.min(8.0, photoPinchInitialScaleRef.current * scaleMultiplier));
+
+        const angleDiff = (currentAngle - photoPinchInitialAngleRef.current) * (180 / Math.PI);
+        const newRot = Math.round((photoPinchInitialRotRef.current + angleDiff + 360) % 360);
+
+        const currentMidX = (p1.x + p2.x) / 2;
+        const currentMidY = (p1.y + p2.y) / 2;
+        const deltaX = (currentMidX - photoPinchInitialMidpointRef.current.x) / zoom;
+        const deltaY = (currentMidY - photoPinchInitialMidpointRef.current.y) / zoom;
+
+        setPhotos(prev => prev.map(p => p.id === activePhoto.id ? {
+          ...p,
+          scale: newScale,
+          rot: newRot,
+          x: photoPinchInitialCenterRef.current.x + deltaX,
+          y: photoPinchInitialCenterRef.current.y + deltaY
+        } : p));
+        return;
+      }
+
+      const curSession = transformSessionRef.current;
+      if (!curSession || curSession.mode !== 'drag') return;
+      ev.preventDefault();
+
+      const dxClient = ev.clientX - curSession.startClientX;
+      const dyClient = ev.clientY - curSession.startClientY;
+      const dxCanvas = dxClient / zoom;
+      const dyCanvas = dyClient / zoom;
+
+      setPhotos(prev => prev.map(p => p.id === curSession.photoId ? {
+        ...p,
+        x: curSession.initialPhoto.x + dxCanvas,
+        y: curSession.initialPhoto.y + dyCanvas
+      } : p));
+    };
+
+    const onPointerUp = (ev: PointerEvent) => {
+      photoPointersRef.current.delete(ev.pointerId);
+      if (photoPointersRef.current.size < 2) {
+        photoPinchInitialDistRef.current = null;
+        photoPinchInitialMidpointRef.current = null;
+      }
+
+      if (photoPointersRef.current.size === 0) {
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        window.removeEventListener('pointercancel', onPointerUp);
+        transformSessionRef.current = null;
+        setPhotoTransformMode(null);
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  };
+
+  // Start scaling active photo from corner handles (optimized for iPad touch precision)
+  const handlePhotoCornerStart = (e: React.PointerEvent<HTMLDivElement>, corner: 'tl' | 'tr' | 'bl' | 'br') => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!activePhoto) return;
+
+    const center = getPhotoCenterClientCoords(activePhoto);
+    const vInitX = e.clientX - center.x;
+    const vInitY = e.clientY - center.y;
+    const initDist = Math.hypot(vInitX, vInitY) || 1;
+
+    const session: PhotoTransformSession = {
+      mode: 'scale',
+      corner,
+      photoId: activePhoto.id,
+      initialPhoto: { ...activePhoto },
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      centerClient: center,
+      startDist: initDist,
+      startAngle: Math.atan2(vInitY, vInitX),
+      vectorInit: { x: vInitX, y: vInitY }
+    };
+    transformSessionRef.current = session;
+    setPhotoTransformMode('scale');
+
+    const onPointerMove = (ev: PointerEvent) => {
+      ev.preventDefault();
+      const curSession = transformSessionRef.current;
+      if (!curSession || curSession.mode !== 'scale') return;
+
+      const vx = ev.clientX - curSession.centerClient.x;
+      const vy = ev.clientY - curSession.centerClient.y;
+
+      // Project current vector onto initial diagonal vector for true directional scaling
+      const dot = vx * curSession.vectorInit.x + vy * curSession.vectorInit.y;
+      const projRatio = dot / (curSession.startDist * curSession.startDist);
+      const newScale = Math.max(0.04, Math.min(8.0, curSession.initialPhoto.scale * Math.max(0.04, projRatio)));
+
+      setPhotos(prev => prev.map(p => p.id === curSession.photoId ? {
+        ...p,
+        scale: newScale
+      } : p));
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      transformSessionRef.current = null;
+      setPhotoTransformMode(null);
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  };
+
+  // Start scaling active photo from edge handles
+  const handlePhotoEdgeScaleStart = (e: React.PointerEvent<HTMLDivElement>, edge: 't' | 'b' | 'l' | 'r') => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!activePhoto) return;
+
+    const center = getPhotoCenterClientCoords(activePhoto);
+    const vInitX = e.clientX - center.x;
+    const vInitY = e.clientY - center.y;
+    const initDist = Math.hypot(vInitX, vInitY) || 1;
+
+    const session: PhotoTransformSession = {
+      mode: 'scale',
+      corner: edge,
+      photoId: activePhoto.id,
+      initialPhoto: { ...activePhoto },
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      centerClient: center,
+      startDist: initDist,
+      startAngle: Math.atan2(vInitY, vInitX),
+      vectorInit: { x: vInitX, y: vInitY }
+    };
+    transformSessionRef.current = session;
+    setPhotoTransformMode('scale');
+
+    const onPointerMove = (ev: PointerEvent) => {
+      ev.preventDefault();
+      const curSession = transformSessionRef.current;
+      if (!curSession || curSession.mode !== 'scale') return;
+
+      const vx = ev.clientX - curSession.centerClient.x;
+      const vy = ev.clientY - curSession.centerClient.y;
+
+      const dot = vx * curSession.vectorInit.x + vy * curSession.vectorInit.y;
+      const projRatio = dot / (curSession.startDist * curSession.startDist);
+      const newScale = Math.max(0.04, Math.min(8.0, curSession.initialPhoto.scale * Math.max(0.04, projRatio)));
+
+      setPhotos(prev => prev.map(p => p.id === curSession.photoId ? {
+        ...p,
+        scale: newScale
+      } : p));
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      transformSessionRef.current = null;
+      setPhotoTransformMode(null);
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  };
+
+  // Start rotating active photo from top handle
+  const handlePhotoRotateStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!activePhoto) return;
+
+    const center = getPhotoCenterClientCoords(activePhoto);
+    const dx = e.clientX - center.x;
+    const dy = e.clientY - center.y;
+    const startAngle = Math.atan2(dy, dx);
+
+    const session: PhotoTransformSession = {
+      mode: 'rotate',
+      photoId: activePhoto.id,
+      initialPhoto: { ...activePhoto },
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      centerClient: center,
+      startDist: Math.hypot(dx, dy) || 1,
+      startAngle,
+      vectorInit: { x: dx, y: dy }
+    };
+    transformSessionRef.current = session;
+    setPhotoTransformMode('rotate');
+
+    const onPointerMove = (ev: PointerEvent) => {
+      ev.preventDefault();
+      const curSession = transformSessionRef.current;
+      if (!curSession || curSession.mode !== 'rotate') return;
+
+      const cx = ev.clientX - curSession.centerClient.x;
+      const cy = ev.clientY - curSession.centerClient.y;
+      const currentAngle = Math.atan2(cy, cx);
+      const angleDiffDeg = (currentAngle - curSession.startAngle) * (180 / Math.PI);
+      const newRot = Math.round((curSession.initialPhoto.rot + angleDiffDeg + 360) % 360);
+
+      setPhotos(prev => prev.map(p => p.id === curSession.photoId ? {
+        ...p,
+        rot: newRot
+      } : p));
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      transformSessionRef.current = null;
+      setPhotoTransformMode(null);
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  };
+
+  // Quick Photo Action Helpers for iPad / Touch screens
+  const stepPhotoScale = (delta: number) => {
+    if (!activePhoto) return;
+    const newScale = Math.max(0.04, Math.min(8.0, activePhoto.scale + delta));
+    setPhotos(prev => prev.map(p => p.id === activePhoto.id ? { ...p, scale: newScale } : p));
+  };
+
+  const setPhotoScaleDirect = (scaleVal: number) => {
+    if (!activePhoto) return;
+    const newScale = Math.max(0.04, Math.min(8.0, scaleVal));
+    setPhotos(prev => prev.map(p => p.id === activePhoto.id ? { ...p, scale: newScale } : p));
+  };
+
+  const setPhotoOpacityDirect = (opacityVal: number) => {
+    if (!activePhoto) return;
+    setPhotos(prev => prev.map(p => p.id === activePhoto.id ? { ...p, opacity: opacityVal } : p));
+  };
+
+  const fitPhotoToCanvas = (id: string) => {
+    const canvas = canvasRef.current;
+    const photo = photos.find(p => p.id === id);
+    if (!canvas || !photo) return;
+    const s = Math.min((canvas.width / photo.width) * 0.96, (canvas.height / photo.height) * 0.96);
+    setPhotos(prev => prev.map(p => p.id === id ? {
+      ...p,
+      scale: s,
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      rot: 0
+    } : p));
+  };
+
+  const resetPhotoScale = (id: string) => {
+    setPhotos(prev => prev.map(p => p.id === id ? { ...p, scale: 1.0 } : p));
+  };
+
+  const rotatePhoto90 = (id: string) => {
+    setPhotos(prev => prev.map(p => p.id === id ? {
+      ...p,
+      rot: (p.rot + 90) % 360
+    } : p));
+  };
+
+  const duplicatePhoto = (id: string) => {
+    const photo = photos.find(p => p.id === id);
+    if (!photo) return;
+    const dup: SketchPhoto = {
+      ...photo,
+      id: `photo-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      x: photo.x + 35,
+      y: photo.y + 35
+    };
+    setPhotos(prev => [...prev, dup]);
+    setActivePhotoId(dup.id);
+  };
+
+  const deletePhoto = (id: string) => {
+    setPhotos(prev => {
+      const next = prev.filter(p => p.id !== id);
+      if (activePhotoId === id) {
+        setActivePhotoId(next.length > 0 ? next[next.length - 1].id : null);
+      }
+      return next;
+    });
+  };
+
+  const bringPhotoForward = (id: string) => {
+    setPhotos(prev => {
+      const idx = prev.findIndex(p => p.id === id);
+      if (idx < 0 || idx === prev.length - 1) return prev;
+      const next = [...prev];
+      const [item] = next.splice(idx, 1);
+      next.push(item);
+      return next;
+    });
+  };
+
+  const sendPhotoBackward = (id: string) => {
+    setPhotos(prev => {
+      const idx = prev.findIndex(p => p.id === id);
+      if (idx <= 0) return prev;
+      const next = [...prev];
+      const [item] = next.splice(idx, 1);
+      next.unshift(item);
+      return next;
+    });
+  };
+
+  const clearAllPhotos = () => {
+    setPhotos([]);
+    setActivePhotoId(null);
+    if (tool === 'transform') {
+      setTool('pen');
+    }
   };
 
   // Active stamp transformation logic
@@ -2178,74 +2690,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     setInitialStampTransformState(null);
   };
 
-  // Background transformation logic
-  const handleTransformStart = (e: React.PointerEvent<HTMLDivElement>, mode: 'drag' | 'scale' | 'rotate') => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setTransformMode(mode);
-    setDragStart({ x: e.clientX, y: e.clientY });
-    setInitialImgState({ ...imgState });
-
-    // Find center of bounding box to calculate angles/distances
-    const box = e.currentTarget.parentElement;
-    if (box) {
-      const rect = box.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      setTransformCenter({ x: cx, y: cy });
-
-      const dx = e.clientX - cx;
-      const dy = e.clientY - cy;
-      setTransformStartDist(Math.sqrt(dx * dx + dy * dy) || 1);
-      setTransformStartAngle(Math.atan2(dy, dx));
-    }
-    
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-
-  const handleTransformMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!transformMode || !initialImgState) return;
-    e.preventDefault();
-
-    if (transformMode === 'drag') {
-      const dx = e.clientX - dragStart.x;
-      const dy = e.clientY - dragStart.y;
-      setImgState(prev => ({
-        ...prev,
-        x: initialImgState.x + dx,
-        y: initialImgState.y + dy
-      }));
-    } else if (transformMode === 'scale') {
-      const dx = e.clientX - transformCenter.x;
-      const dy = e.clientY - transformCenter.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const scaleMultiplier = dist / transformStartDist;
-      setImgState(prev => ({
-        ...prev,
-        scale: Math.max(0.1, Math.min(5, initialImgState.scale * scaleMultiplier))
-      }));
-    } else if (transformMode === 'rotate') {
-      const dx = e.clientX - transformCenter.x;
-      const dy = e.clientY - transformCenter.y;
-      const angle = Math.atan2(dy, dx);
-      const radDiff = angle - transformStartAngle;
-      const degDiff = radDiff * (180 / Math.PI);
-      setImgState(prev => ({
-        ...prev,
-        rot: (initialImgState.rot + degDiff) % 360
-      }));
-    }
-  };
-
-  const handleTransformEnd = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!transformMode) return;
-    e.currentTarget.releasePointerCapture(e.pointerId);
-    setTransformMode(null);
-    setInitialImgState(null);
-  };
-
-  // Clear Sketchpad
+  // Clear Sketchpad ink
   const clear = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -2254,12 +2699,10 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setActiveStamp(null);
-    setBgImage(null);
-    setBgSrc(null);
     setTool('pen');
   };
 
-  // Save Canvas (Flattens background image + drawings together)
+  // Save Canvas (Flattens all background photos + drawings together)
   const save = () => {
     if (activeStamp) {
       flattenActiveStamp();
@@ -2278,26 +2721,19 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, virtualCanvas.width, virtualCanvas.height);
 
-    // 1. Draw transformed background image
-    if (bgImage) {
+    // 1. Draw all transformed photos in layer order
+    photos.forEach(photo => {
       ctx.save();
-      // Translate to image center point
-      const cx = imgState.x + (imgState.width * imgState.scale) / 2;
-      const cy = imgState.y + (imgState.height * imgState.scale) / 2;
-      
-      ctx.translate(cx, cy);
-      ctx.rotate((imgState.rot * Math.PI) / 180);
-      ctx.translate(-cx, -cy);
-      
-      ctx.drawImage(
-        bgImage,
-        imgState.x,
-        imgState.y,
-        imgState.width * imgState.scale,
-        imgState.height * imgState.scale
-      );
+      ctx.translate(photo.x, photo.y);
+      ctx.rotate((photo.rot * Math.PI) / 180);
+      const pw = photo.width * photo.scale;
+      const ph = photo.height * photo.scale;
+      if (photo.opacity !== undefined) {
+        ctx.globalAlpha = photo.opacity;
+      }
+      ctx.drawImage(photo.img, -pw / 2, -ph / 2, pw, ph);
       ctx.restore();
-    }
+    });
 
     // 1.25. Draw grid and rulers on virtual canvas if selected for export
     if (includeGridAndRulersInExport) {
@@ -2522,7 +2958,7 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
       <div 
         ref={containerRef}
         onWheel={handleWheel}
-        className="flex-1 relative overflow-hidden bg-brand-100"
+        className="flex-1 relative overflow-hidden bg-brand-100 touch-none select-none"
       >
         {/* Transformable stage viewport wrapper */}
         <div
@@ -2535,67 +2971,294 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
             height: '100%',
           }}
         >
-          {/* Hardware-accelerated background image element */}
-          {bgSrc && bgImage && (
-            <img
-              src={bgSrc}
-              alt="Design backdrop"
-              style={{
-                position: 'absolute',
-                pointerEvents: 'none',
-                left: 0,
-                top: 0,
-                width: `${imgState.width}px`,
-                height: `${imgState.height}px`,
-                transform: `translate(${imgState.x}px, ${imgState.y}px) scale(${imgState.scale}) rotate(${imgState.rot}deg)`,
-                transformOrigin: 'top left',
-                display: 'block',
-                maxWidth: 'none',
-                maxHeight: 'none',
-                boxShadow: '0 10px 25px rgba(0,0,0,0.08)'
-              }}
-            />
-          )}
+          {/* Hardware-accelerated multi-photo elements */}
+          {photos.map((photo, idx) => {
+            const isSelected = activePhotoId === photo.id && tool === 'transform';
+            return (
+              <div
+                key={photo.id}
+                onPointerDown={(e) => {
+                  if (tool === 'transform') {
+                    e.stopPropagation();
+                    setActivePhotoId(photo.id);
+                  }
+                }}
+                style={{
+                  position: 'absolute',
+                  left: `${photo.x}px`,
+                  top: `${photo.y}px`,
+                  width: `${photo.width * photo.scale}px`,
+                  height: `${photo.height * photo.scale}px`,
+                  transform: `translate(-50%, -50%) rotate(${photo.rot}deg)`,
+                  transformOrigin: 'center center',
+                  pointerEvents: tool === 'transform' ? 'auto' : 'none',
+                  cursor: tool === 'transform' ? 'pointer' : 'default',
+                  zIndex: isSelected ? 22 : 10 + idx
+                }}
+              >
+                <img
+                  src={photo.src}
+                  alt="Reference photo"
+                  draggable={false}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'block',
+                    pointerEvents: 'none',
+                    opacity: photo.opacity !== undefined ? photo.opacity : 1,
+                    boxShadow: isSelected 
+                      ? '0 0 0 2.5px #d4af37, 0 12px 30px rgba(0,0,0,0.22)' 
+                      : '0 4px 14px rgba(0,0,0,0.1)',
+                    borderRadius: '4px',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none'
+                  }}
+                />
+              </div>
+            );
+          })}
 
-          {/* Gestural transformation box (only active/visible in transform tool) */}
-          {bgSrc && bgImage && tool === 'transform' && (
+          {/* Interactive active photo transform box (only visible in transform tool) */}
+          {activePhoto && tool === 'transform' && (
             <div
-              onPointerDown={(e) => handleTransformStart(e, 'drag')}
-              onPointerMove={handleTransformMove}
-              onPointerUp={handleTransformEnd}
+              ref={photoTransformBoxRef}
+              onPointerDown={handlePhotoDragStart}
               style={{
                 position: 'absolute',
+                left: `${activePhoto.x}px`,
+                top: `${activePhoto.y}px`,
+                width: `${activePhoto.width * activePhoto.scale}px`,
+                height: `${activePhoto.height * activePhoto.scale}px`,
+                transform: `translate(-50%, -50%) rotate(${activePhoto.rot}deg)`,
+                transformOrigin: 'center center',
                 border: '2px dashed #d4af37',
-                width: `${w}px`,
-                height: `${h}px`,
-                left: 0,
-                top: 0,
-                transform: `translate(${cx - w/2}px, ${cy - h/2}px) rotate(${imgState.rot}deg)`,
+                borderRadius: '4px',
                 cursor: 'move',
-                zIndex: 30,
-                pointerEvents: 'auto'
+                zIndex: 35,
+                pointerEvents: 'auto',
+                touchAction: 'none'
               }}
             >
-              {/* Rotation Handle (top-right) */}
-              <div
-                onPointerDown={(e) => handleTransformStart(e, 'rotate')}
-                onPointerMove={handleTransformMove}
-                onPointerUp={handleTransformEnd}
-                className="absolute -top-3.5 -right-3.5 w-7 h-7 bg-brand-800 text-brand-gold rounded-full border border-brand-gold flex items-center justify-center cursor-alias shadow-lg"
-                title="Rotate Background"
+              {/* Floating Quick Action Toolbar for iPad / Touch screens */}
+              <div 
+                className="absolute -top-16 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-brand-950/95 text-white px-3 py-1.5 rounded-2xl border border-brand-700 shadow-2xl backdrop-blur-md z-50 pointer-events-auto select-none whitespace-nowrap"
+                onPointerDown={(e) => e.stopPropagation()}
               >
-                <RotateCw size={12} />
+                {/* Scale Down Button */}
+                <button
+                  type="button"
+                  onClick={() => stepPhotoScale(-0.1)}
+                  className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 flex items-center justify-center text-brand-gold transition-colors cursor-pointer"
+                  title="Scale Down (-10%)"
+                >
+                  <Minus size={13} />
+                </button>
+
+                {/* Direct Touch Scale Slider */}
+                <div className="flex items-center gap-1 px-1">
+                  <input
+                    type="range"
+                    min="0.05"
+                    max="3.0"
+                    step="0.02"
+                    value={activePhoto.scale}
+                    onChange={(e) => setPhotoScaleDirect(parseFloat(e.target.value))}
+                    className="w-16 sm:w-20 md:w-24 accent-brand-gold cursor-pointer h-1.5 bg-brand-800 rounded-lg appearance-none"
+                    title="Slide to scale photo smoothly"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => resetPhotoScale(activePhoto.id)}
+                    className="text-[10px] font-mono font-bold text-brand-gold px-1 hover:underline min-w-[38px] text-center cursor-pointer"
+                    title="Click to reset to 100% original scale"
+                  >
+                    {Math.round(activePhoto.scale * 100)}%
+                  </button>
+                </div>
+
+                {/* Scale Up Button */}
+                <button
+                  type="button"
+                  onClick={() => stepPhotoScale(0.1)}
+                  className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 flex items-center justify-center text-brand-gold transition-colors cursor-pointer"
+                  title="Scale Up (+10%)"
+                >
+                  <Plus size={13} />
+                </button>
+
+                <div className="w-px h-4 bg-brand-700 mx-0.5" />
+
+                {/* Fit to canvas */}
+                <button
+                  type="button"
+                  onClick={() => fitPhotoToCanvas(activePhoto.id)}
+                  className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 text-[9px] font-black uppercase text-brand-200 tracking-wider transition-colors flex items-center gap-1 cursor-pointer"
+                  title="Fit photo nicely into canvas"
+                >
+                  <Maximize2 size={10} /> Fit
+                </button>
+
+                {/* Opacity quick presets for tracing */}
+                <div className="flex items-center gap-0.5 bg-white/10 rounded-lg p-0.5" title="Photo Opacity / Translucency (Great for tracing over fine details)">
+                  {[1.0, 0.7, 0.4].map((op) => (
+                    <button
+                      key={op}
+                      type="button"
+                      onClick={() => setPhotoOpacityDirect(op)}
+                      className={`px-1.5 py-0.5 text-[8.5px] font-bold rounded cursor-pointer transition-colors ${
+                        (activePhoto.opacity ?? 1) === op ? 'bg-brand-gold text-brand-950 font-black shadow' : 'text-brand-300 hover:text-white'
+                      }`}
+                    >
+                      {Math.round(op * 100)}%
+                    </button>
+                  ))}
+                </div>
+
+                {/* Rotate 90 deg */}
+                <button
+                  type="button"
+                  onClick={() => rotatePhoto90(activePhoto.id)}
+                  className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 flex items-center justify-center text-brand-200 transition-colors cursor-pointer"
+                  title="Rotate 90° Clockwise"
+                >
+                  <RotateCw size={12} />
+                </button>
+
+                {/* Duplicate Photo */}
+                <button
+                  type="button"
+                  onClick={() => duplicatePhoto(activePhoto.id)}
+                  className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 flex items-center justify-center text-brand-200 transition-colors cursor-pointer"
+                  title="Duplicate this photo"
+                >
+                  <Copy size={12} />
+                </button>
+
+                {/* Layering if multiple photos */}
+                {photos.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => bringPhotoForward(activePhoto.id)}
+                    className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 flex items-center justify-center text-brand-200 transition-colors cursor-pointer"
+                    title="Bring to front"
+                  >
+                    <Layers size={12} />
+                  </button>
+                )}
+
+                <div className="w-px h-4 bg-brand-700 mx-0.5" />
+
+                {/* Delete photo */}
+                <button
+                  type="button"
+                  onClick={() => deletePhoto(activePhoto.id)}
+                  className="w-7 h-7 rounded-lg bg-red-900/60 hover:bg-red-800 text-red-300 flex items-center justify-center transition-colors cursor-pointer"
+                  title="Remove this photo"
+                >
+                  <Trash2 size={12} />
+                </button>
+
+                {/* Done / Switch to pen */}
+                <button
+                  type="button"
+                  onClick={() => setTool('pen')}
+                  className="w-7 h-7 rounded-lg bg-brand-gold hover:bg-brand-gold/90 text-brand-950 font-bold flex items-center justify-center transition-colors shadow-sm cursor-pointer ml-0.5"
+                  title="Done Positioning (Switch back to pen to draw)"
+                >
+                  <Check size={14} />
+                </button>
               </div>
 
-              {/* Scale Handle (bottom-right) */}
+              {/* Top-Left Corner Scale Handle (iPad touch hitbox 48px) */}
               <div
-                onPointerDown={(e) => handleTransformStart(e, 'scale')}
-                onPointerMove={handleTransformMove}
-                onPointerUp={handleTransformEnd}
-                className="absolute -bottom-3.5 -right-3.5 w-7 h-7 bg-brand-gold text-brand-900 rounded-full border border-white flex items-center justify-center cursor-se-resize shadow-lg"
-                title="Scale Background"
+                onPointerDown={(e) => handlePhotoCornerStart(e, 'tl')}
+                className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center cursor-nwse-resize z-40 touch-none select-none"
+                title="Drag to scale photo"
               >
-                <Maximize2 size={12} />
+                <div className="w-6 h-6 rounded-full bg-brand-gold border-2 border-white shadow-xl flex items-center justify-center pointer-events-none active:scale-125 transition-transform">
+                  <ArrowUpLeft size={13} className="text-brand-900" strokeWidth={2.5} />
+                </div>
+              </div>
+
+              {/* Top-Right Corner Scale Handle (iPad touch hitbox 48px) */}
+              <div
+                onPointerDown={(e) => handlePhotoCornerStart(e, 'tr')}
+                className="absolute top-0 left-full -translate-x-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center cursor-nesw-resize z-40 touch-none select-none"
+                title="Drag to scale photo"
+              >
+                <div className="w-6 h-6 rounded-full bg-brand-gold border-2 border-white shadow-xl flex items-center justify-center pointer-events-none active:scale-125 transition-transform">
+                  <ArrowUpRight size={13} className="text-brand-900" strokeWidth={2.5} />
+                </div>
+              </div>
+
+              {/* Bottom-Left Corner Scale Handle (iPad touch hitbox 48px) */}
+              <div
+                onPointerDown={(e) => handlePhotoCornerStart(e, 'bl')}
+                className="absolute top-full left-0 -translate-x-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center cursor-nesw-resize z-40 touch-none select-none"
+                title="Drag to scale photo"
+              >
+                <div className="w-6 h-6 rounded-full bg-brand-gold border-2 border-white shadow-xl flex items-center justify-center pointer-events-none active:scale-125 transition-transform">
+                  <ArrowDownLeft size={13} className="text-brand-900" strokeWidth={2.5} />
+                </div>
+              </div>
+
+              {/* Bottom-Right Corner Scale Handle (iPad touch hitbox 48px) */}
+              <div
+                onPointerDown={(e) => handlePhotoCornerStart(e, 'br')}
+                className="absolute top-full left-full -translate-x-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center cursor-nwse-resize z-40 touch-none select-none"
+                title="Drag to scale photo"
+              >
+                <div className="w-6 h-6 rounded-full bg-brand-gold border-2 border-white shadow-xl flex items-center justify-center pointer-events-none active:scale-125 transition-transform">
+                  <ArrowDownRight size={13} className="text-brand-900" strokeWidth={2.5} />
+                </div>
+              </div>
+
+              {/* Edge Handle - Top Center */}
+              <div
+                onPointerDown={(e) => handlePhotoEdgeScaleStart(e, 't')}
+                className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center cursor-ns-resize z-40 touch-none select-none"
+                title="Scale photo vertically"
+              >
+                <div className="w-5 h-2 rounded-full bg-brand-gold border border-white shadow pointer-events-none" />
+              </div>
+
+              {/* Edge Handle - Bottom Center */}
+              <div
+                onPointerDown={(e) => handlePhotoEdgeScaleStart(e, 'b')}
+                className="absolute top-full left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center cursor-ns-resize z-40 touch-none select-none"
+                title="Scale photo vertically"
+              >
+                <div className="w-5 h-2 rounded-full bg-brand-gold border border-white shadow pointer-events-none" />
+              </div>
+
+              {/* Edge Handle - Left Center */}
+              <div
+                onPointerDown={(e) => handlePhotoEdgeScaleStart(e, 'l')}
+                className="absolute top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center cursor-ew-resize z-40 touch-none select-none"
+                title="Scale photo horizontally"
+              >
+                <div className="w-2 h-5 rounded-full bg-brand-gold border border-white shadow pointer-events-none" />
+              </div>
+
+              {/* Edge Handle - Right Center */}
+              <div
+                onPointerDown={(e) => handlePhotoEdgeScaleStart(e, 'r')}
+                className="absolute top-1/2 left-full -translate-x-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center cursor-ew-resize z-40 touch-none select-none"
+                title="Scale photo horizontally"
+              >
+                <div className="w-2 h-5 rounded-full bg-brand-gold border border-white shadow pointer-events-none" />
+              </div>
+
+              {/* Top Rotation Handle with vertical stem */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full mb-2 flex flex-col items-center z-40 pointer-events-none">
+                <div
+                  onPointerDown={handlePhotoRotateStart}
+                  className="w-9 h-9 rounded-full bg-brand-800 text-brand-gold border-2 border-brand-gold flex items-center justify-center cursor-alias shadow-xl pointer-events-auto touch-none active:scale-125 transition-transform"
+                  title="Rotate photo"
+                >
+                  <RotateCw size={14} />
+                </div>
+                <div className="w-0.5 h-3 bg-brand-gold" />
               </div>
             </div>
           )}
@@ -2692,11 +3355,61 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
                 className="absolute -bottom-3.5 -right-3.5 w-7 h-7 bg-brand-gold text-brand-900 rounded-full border border-white flex items-center justify-center cursor-se-resize shadow-lg select-none pointer-events-auto z-40"
                 title="Scale Stamp"
               >
-                <Maximize2 size={12} />
+                <ArrowDownRight size={13} className="text-brand-900" strokeWidth={2.5} />
               </div>
             </div>
           )}
         </div>
+
+        {/* Floating Multi-Photo Tray & Switcher (Shown when photos exist) */}
+        {photos.length > 0 && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-brand-950/95 text-white px-3 py-1.5 rounded-2xl border border-brand-700/90 shadow-2xl backdrop-blur-md z-40 flex items-center gap-2 max-w-[90vw] overflow-x-auto scrollbar-none pointer-events-auto">
+            <div className="flex items-center gap-1.5 pr-2 border-r border-brand-800 shrink-0">
+              <Camera size={13} className="text-brand-gold" />
+              <span className="text-[10px] font-black uppercase tracking-wider text-brand-gold">
+                Photos ({photos.length})
+              </span>
+            </div>
+
+            {/* Thumbnails of all photos */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {photos.map((p, idx) => {
+                const isSelected = activePhoto?.id === p.id && tool === 'transform';
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setActivePhotoId(p.id);
+                      setTool('transform');
+                    }}
+                    className={`relative rounded-lg overflow-hidden border-2 transition-all p-0.5 shrink-0 cursor-pointer ${
+                      isSelected 
+                        ? 'border-brand-gold ring-2 ring-brand-gold/50 scale-105 shadow-md bg-brand-gold/20' 
+                        : 'border-brand-800 opacity-60 hover:opacity-100 hover:border-brand-400 bg-brand-900'
+                    }`}
+                    title={`Select & transform photo #${idx + 1}`}
+                  >
+                    <img src={p.src} alt={`Photo ${idx + 1}`} className="w-8 h-8 object-cover rounded" />
+                    <span className="absolute bottom-0.5 right-0.5 bg-black/80 text-[7.5px] font-mono text-white px-1 rounded font-bold">
+                      #{idx + 1}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Upload another photo button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-brand-gold text-brand-950 hover:bg-brand-gold/90 font-black text-[9px] uppercase tracking-wider transition-all shadow-sm shrink-0 cursor-pointer ml-1"
+              title="Upload additional reference photos"
+            >
+              <Plus size={11} /> Add Photo
+            </button>
+          </div>
+        )}
 
         {/* Floating Zoom Control (Top Right of Stage) */}
         <div className="absolute top-4 right-4 bg-brand-900/95 backdrop-blur-md px-3 py-2 rounded-xl text-xs text-brand-200 border border-brand-800 shadow-lg pointer-events-auto z-40 flex items-center gap-2.5">
@@ -2716,26 +3429,6 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
               Reset View
             </button>
           )}
-        </div>
-
-        {/* Floating Help Tip */}
-        <div className="absolute top-4 left-4 bg-brand-900/90 backdrop-blur-md px-3.5 py-2 rounded-xl text-xs text-brand-200 border border-brand-800 shadow-lg pointer-events-none z-40 max-w-xs space-y-1">
-          <p className="font-bold text-brand-gold flex items-center gap-1">
-            <HelpCircle size={13} />
-            Designer Instructions:
-          </p>
-          <p className="text-[10px] text-brand-300">
-            {tool === 'stamp' 
-              ? 'Move cursor onto the canvas to preview the shape. Click anywhere to instantly stamp it. Adjust the size slider anytime.' 
-              : tool === 'transform' 
-              ? 'Drag inside the dashed box to move the backdrop photo. Drag the golden handles to scale or rotate it.' 
-              : tool === 'ruler'
-              ? 'Click and drag calipers across any parts of the design to measure live dimensions in physical millimeters.'
-              : 'Select pen color/thickness and draw directly on top. Switch to eraser to correct strokes.'}
-          </p>
-          <p className="text-[9px] text-brand-400 font-mono italic">
-            💡 Tablet Tip: Pinch with 2 fingers to zoom or pan.
-          </p>
         </div>
 
         {/* Floating CAD HUD Panels Overlay (Floating above the canvas to prevent layout shifts) */}
@@ -3063,11 +3756,16 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
               <button
                 type="button"
                 onClick={() => selectTool('transform')}
-                disabled={!bgSrc}
-                className={`p-2.5 md:p-3 rounded-lg transition-all min-w-[42px] min-h-[42px] flex items-center justify-center ${tool === 'transform' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-400 disabled:opacity-30 hover:bg-brand-100'}`}
-                title="Position Reference Photo"
+                disabled={photos.length === 0}
+                className={`p-2.5 md:p-3 rounded-lg transition-all min-w-[42px] min-h-[42px] flex items-center justify-center relative ${tool === 'transform' ? 'bg-brand-900 text-white shadow-md' : 'text-brand-600 hover:bg-brand-100 disabled:opacity-30'}`}
+                title="Position & Scale Reference Photos"
               >
                 <Move size={15} />
+                {photos.length > 1 && (
+                  <span className="absolute -top-1 -right-1 bg-brand-gold text-brand-950 font-mono font-black text-[9px] rounded-full w-4 h-4 flex items-center justify-center shadow">
+                    {photos.length}
+                  </span>
+                )}
               </button>
             </div>
 
@@ -3113,13 +3811,14 @@ export default function Sketchpad({ initialImage, onSave, onCancel, title }: Ske
             <div className="shrink-0">
               <label className="cursor-pointer text-[10px] font-black text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200/80 px-4 py-3 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm uppercase tracking-wider min-h-[42px]">
                 <Camera size={14} className="text-brand-gold shrink-0" />
-                Upload Photo
+                {photos.length > 0 ? `Add Photos (${photos.length})` : 'Upload Photos'}
                 <input 
                   ref={fileInputRef}
                   type="file" 
                   accept="image/*" 
+                  multiple
                   className="hidden" 
-                  onChange={handleBgUpload} 
+                  onChange={handlePhotosUpload} 
                 />
               </label>
             </div>
