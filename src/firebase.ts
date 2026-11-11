@@ -9,7 +9,8 @@ import {
   query, 
   orderBy,
   writeBatch,
-  getDocs
+  getDocs,
+  getDocFromServer
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
@@ -28,6 +29,17 @@ const app = initializeApp(firebaseConfig);
 // Use the custom databaseId provided in the applet config
 const db = getFirestore(app, "ai-studio-goldroseexecutiv-24ffabdd-e90e-4dd9-8e2b-4b1051c7eea0");
 const auth = getAuth(app);
+
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration.");
+    }
+  }
+}
+testConnection();
 
 export enum OperationType {
   CREATE = 'create',

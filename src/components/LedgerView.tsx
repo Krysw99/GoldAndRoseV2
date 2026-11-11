@@ -290,7 +290,7 @@ export default function LedgerView({
           if (addons) repDesc += ` with Addons: [${addons}]`;
           return repDesc;
         }
-        const catLabel = r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Wedding Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : r.category === 'tennisBracelet' ? 'Tennis Bracelet' : 'Custom Piece';
+        const catLabel = r.customTitle?.trim() || (r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Wedding Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : r.category === 'tennisBracelet' ? 'Tennis Bracelet' : 'Custom Piece');
         const metal = `${r.metalColor} ${r.goldKarat ? r.goldKarat + 'k' : ''} ${r.material}`;
         const center = r.centerStone?.carats ? `${r.centerStone.carats}ct ${r.centerStone.shape} ${r.centerStone.type}` : '';
         const sizeInfo = r.category === 'mensBand' && r.mbSize ? `Size ${r.mbSize}` : r.category === 'customRing' && r.cRingSize ? `Size US ${r.cRingSize}` : '';

@@ -79,6 +79,19 @@
         "deletedAt": { "type": "number" }
       },
       "required": ["id", "collectionName", "deletedAt"]
+    },
+    "WholesaleProfile": {
+      "title": "WholesaleProfile",
+      "description": "A dedicated wholesale client profile with custom markup rates and labor fee schedules.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "settings": { "type": "object" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "name", "settings"]
     }
   },
   "firestore": {
@@ -101,6 +114,10 @@
     "/app_settings/{document}": {
       "schema": "AppSettings",
       "description": "Master settings documents."
+    },
+    "/wholesale_profiles/{document}": {
+      "schema": "WholesaleProfile",
+      "description": "Dedicated wholesale client pricing profiles synchronized across all devices."
     },
     "/deleted_doc_ids/{document}": {
       "schema": "DeletedDoc",

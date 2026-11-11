@@ -8,20 +8,21 @@ import {
   Plus, Trash2, Camera, Compass, Type, Tag, HelpCircle, 
   Signature, CheckCircle, Calculator, Sparkles, AlertCircle, FileText,
   Gem, UserCheck, User, Lock, Unlock, Save, Edit3, Check, X,
-  Crop, PenTool, Printer, Coins, ShieldCheck
+  Crop, PenTool, Printer, Coins, ShieldCheck, Layers, Scale
 } from 'lucide-react';
 import { 
   QuoteSession, JewelryItem, MeleeItem, FancyItem, ClientStoneItem, 
   AddonItem, DesignNote, AppSettings, CategoryType, MaterialType, MetalColorType, StoneSourceType,
-  ScrapTransaction
+  ScrapTransaction, RingTierId
 } from '../types';
 import { 
-  CENTER_SHAPES, FANCY_SHAPES, ROUND_MELEE, SETTING_STYLES, PURITY_OPTIONS 
+  CENTER_SHAPES, FANCY_SHAPES, ROUND_MELEE, SETTING_STYLES, PURITY_OPTIONS,
+  RING_TIERS, DEFAULT_RING_TIER_GRAMS
 } from '../constants';
 import { 
   getEmptyRing, getTennisEstimates, calculateBandWeight, 
   calculateRingCost, calculateRawCost, hasRingData, compressImage, formatPhoneNumber,
-  compileSessionCost
+  compileSessionCost, getTierGrams, getTierLabel, calculateTierPrice
 } from '../utils';
 import { printElement } from '../utils/printHelper';
 import { playClickSound } from '../utils/audio';
@@ -914,13 +915,15 @@ export default function QuoteCalculator({
     session.rings.forEach((r, ringIdx) => {
       if (!hasRingData(r)) return;
 
-      const ringLabel = r.category === 'customRing' ? 'Engagement' 
-                  : r.category === 'weddingBand' ? 'Wedding Band'
-                  : r.category === 'mensBand' ? "Men's Band"
-                  : r.category === 'pendant' ? 'Pendant'
-                  : r.category === 'earrings' ? 'Earrings'
-                  : r.category === 'repair' ? 'Repair'
-                  : 'Tennis';
+      const ringLabel = r.customTitle?.trim() || (
+        r.category === 'customRing' ? 'Engagement' 
+        : r.category === 'weddingBand' ? 'Wedding Band'
+        : r.category === 'mensBand' ? "Men's Band"
+        : r.category === 'pendant' ? 'Pendant'
+        : r.category === 'earrings' ? 'Earrings'
+        : r.category === 'repair' ? 'Repair'
+        : 'Tennis'
+      );
 
       const g = Number(r.goldGrams) || 0;
 
@@ -1066,6 +1069,7 @@ export default function QuoteCalculator({
 
   // Modal for category selection
   const [showAddModal, setShowAddModal] = useState(false);
+  const [newItemCustomTitle, setNewItemCustomTitle] = useState('');
   const [showScrapLinkModal, setShowScrapLinkModal] = useState(false);
   const [scrapSearchQuery, setScrapSearchQuery] = useState('');
   const [enlargeImage, setEnlargeImage] = useState<string | null>(null);
@@ -1099,6 +1103,7 @@ export default function QuoteCalculator({
   const [simViewMode, setSimViewMode] = useState<'realistic' | 'blueprint'>('realistic');
   const [isDesignerMode, setIsDesignerMode] = useState(false);
   const [openDiscounts, setOpenDiscounts] = useState<Record<string, boolean>>({});
+  const [isTotalDiscountOpen, setIsTotalDiscountOpen] = useState(false);
 
   // Local string state for JOB METAL SPOT OVERRIDES inputs to allow deleting all digits cleanly
   const [localOverrideSpot, setLocalOverrideSpot] = useState<{ gold: string; silver: string; platinum: string }>({
@@ -1515,8 +1520,9 @@ export default function QuoteCalculator({
   };
 
   // Add Item callback
-  const handleAddNewItem = (category: CategoryType) => {
-    const newItem = getEmptyRing(category);
+  const handleAddNewItem = (category: CategoryType, customTitle?: string) => {
+    const titleToUse = customTitle !== undefined ? customTitle : newItemCustomTitle;
+    const newItem = getEmptyRing(category, titleToUse?.trim());
     newItem.overridePrice = null;
     onChangeSession(prev => ({
       ...prev,
@@ -1525,6 +1531,7 @@ export default function QuoteCalculator({
       rings: [...prev.rings, newItem],
       activeSubTab: newItem.id
     }));
+    setNewItemCustomTitle('');
     setShowAddModal(false);
   };
 
@@ -1962,7 +1969,7 @@ export default function QuoteCalculator({
                     <div key={r.id} className="space-y-1.5 py-1.5 border-b border-slate-800/40 last:border-0 last:pb-0">
                       <div className="flex justify-between items-center text-slate-300">
                         <span className="truncate font-bold text-slate-200 flex items-center gap-1.5">
-                          Piece {ri + 1}: {r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis'}
+                          Piece {ri + 1}: {r.customTitle?.trim() || (r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis')}
                           <button
                             type="button"
                             onClick={() => setOpenDiscounts(prev => ({ ...prev, [r.id]: !prev[r.id] }))}
@@ -2139,6 +2146,19 @@ export default function QuoteCalculator({
                   </div>
                 </div>
 
+                {/* Total Estimate Discount Line */}
+                {totals.sessionDiscountVal > 0 && (
+                  <div className="flex justify-between items-center text-xs text-red-400 font-mono border-t border-slate-800 pt-1.5">
+                    <span className="flex items-center gap-1.5 font-bold">
+                      <Tag size={11} className="text-amber-400" />
+                      Total Estimate Discount ({session.discountType === '%' ? `${totals.sessionDiscountVal}%` : `$${totals.sessionDiscountVal}`}):
+                    </span>
+                    <span className="font-bold text-red-400">
+                      -${(totals.sessionDiscountDeduction || 0).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+
                 {session.applyTax && (
                   <div className="flex justify-between items-center text-slate-400 font-bold border-t border-slate-800 pt-1.5">
                     <span>Tax (12% BC)</span>
@@ -2167,11 +2187,83 @@ export default function QuoteCalculator({
                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
                   {totals.grandTotal < 0 ? 'CLIENT PAYOUT DUE (CREDIT)' : 'ESTIMATED TOTAL DUE'}
                 </p>
+                <button
+                  type="button"
+                  onClick={() => setIsTotalDiscountOpen(prev => !prev)}
+                  className={`p-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                    totals.sessionDiscountVal > 0
+                      ? 'bg-amber-400/20 text-amber-300 hover:bg-amber-400/30 border border-amber-400/40'
+                      : isTotalDiscountOpen
+                        ? 'bg-slate-700 text-white border border-slate-600'
+                        : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-700 border border-slate-700/60'
+                  }`}
+                  title={totals.sessionDiscountVal > 0 ? `Total Estimate Discount: -${session.discountType === '%' ? `${totals.sessionDiscountVal}%` : `$${totals.sessionDiscountVal}`}` : "Apply Total Estimate Discount"}
+                >
+                  <Tag size={10} className={totals.sessionDiscountVal > 0 ? "animate-pulse text-amber-400" : ""} />
+                  {totals.sessionDiscountVal > 0 && (
+                    <span className="text-[9px] font-mono font-bold text-amber-300">
+                      -{session.discountType === '%' ? `${totals.sessionDiscountVal}%` : `$${totals.sessionDiscountVal}`}
+                    </span>
+                  )}
+                </button>
               </div>
+
+              {/* Interactive Total Estimate Discount Area (Toggleable) */}
+              {isTotalDiscountOpen && (
+                <div className="flex items-center justify-center md:justify-end gap-1.5 my-1.5 bg-slate-950/80 border border-slate-800/80 px-2.5 py-1.5 rounded-xl transition-all animate-fadeIn">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider shrink-0">Total Disc:</span>
+                  <div className="flex rounded-lg overflow-hidden border border-slate-700/80 shrink-0 bg-slate-950">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChangeSession(prev => ({ ...prev, discountType: '$' }));
+                      }}
+                      className={`px-2 py-0.5 text-[10px] font-black transition-all ${session.discountType === '$' || !session.discountType ? 'bg-brand-gold text-slate-950 font-extrabold shadow-inner' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
+                    >
+                      $
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChangeSession(prev => ({ ...prev, discountType: '%' }));
+                      }}
+                      className={`px-2 py-0.5 text-[10px] font-black transition-all ${session.discountType === '%' ? 'bg-brand-gold text-slate-950 font-extrabold shadow-inner' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
+                    >
+                      %
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    value={session.discount || ''}
+                    placeholder="0"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      onChangeSession(prev => ({ ...prev, discount: val }));
+                    }}
+                    className="w-16 bg-slate-950 border border-slate-800 text-[11px] text-[#f1c40f] font-mono font-bold text-center rounded-lg px-1.5 py-0.5 outline-none focus:border-brand-gold focus:ring-1 focus:ring-brand-gold"
+                  />
+                  {totals.sessionDiscountVal > 0 && totals.sessionDiscountDeduction > 0 && (
+                    <span className="text-[10px] text-red-400 font-bold font-mono">
+                      -${totals.sessionDiscountDeduction.toFixed(2)}
+                    </span>
+                  )}
+                  {totals.sessionDiscountVal > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => onChangeSession(prev => ({ ...prev, discount: '' }))}
+                      className="p-1 rounded text-red-400 hover:text-white bg-red-950/80 hover:bg-red-900 border border-red-800/60 transition-all cursor-pointer ml-0.5"
+                      title="Clear total discount"
+                    >
+                      <X size={10} />
+                    </button>
+                  )}
+                </div>
+              )}
+
               <h1 className={`text-5xl md:text-6xl font-serif italic font-black tracking-tight ${totals.grandTotal < 0 ? 'text-green-400' : totals.isOverridden ? 'text-amber-300' : 'text-[#f1c40f]'}`}>
                 {totals.grandTotal < 0 ? `-$${Math.abs(totals.grandTotal).toFixed(2)}` : `$${totals.grandTotal.toFixed(2)}`}
               </h1>
-              <div className="flex items-center justify-center md:justify-end gap-1.5 pt-0.5">
+              <div className="flex items-center justify-center md:justify-end gap-1.5 pt-0.5 flex-wrap">
                 {totals.isOverridden ? (
                   <span className="text-[9px] bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full font-mono font-bold">
                     {session.rings.filter(r => typeof r.overridePrice === 'number' && !isNaN(r.overridePrice) && r.overridePrice !== null).length} Overridden (Calc: ${totals.calculatedGrandTotal.toFixed(2)})
@@ -2180,6 +2272,11 @@ export default function QuoteCalculator({
                   <p className="text-[9px] text-slate-400 font-mono uppercase tracking-wider">
                     {totals.grandTotal < 0 ? 'Jeweler owes client CAD' : 'Calculated CAD Valuation'}
                   </p>
+                )}
+                {totals.totalDiscount > 0 && (
+                  <span className="text-[9px] bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded-full font-mono font-bold">
+                    Total Savings: -${totals.totalDiscount.toFixed(2)}
+                  </span>
                 )}
                 {totals.isOverridden && (
                   <button
@@ -2368,13 +2465,15 @@ export default function QuoteCalculator({
         {session.rings.map((r, idx) => {
           const isSelected = session.activeSubTab === r.id;
           const isPieceOverridden = typeof r.overridePrice === 'number' && !isNaN(r.overridePrice) && r.overridePrice !== null;
-          const label = r.category === 'customRing' ? 'Engagement' 
-                      : r.category === 'weddingBand' ? 'Wedding Band'
-                      : r.category === 'mensBand' ? "Men's Band"
-                      : r.category === 'pendant' ? 'Pendant'
-                      : r.category === 'earrings' ? 'Earrings'
-                      : r.category === 'repair' ? 'Repair'
-                      : 'Tennis Bracelet';
+          const label = r.customTitle?.trim() || (
+            r.category === 'customRing' ? 'Engagement' 
+            : r.category === 'weddingBand' ? 'Wedding Band'
+            : r.category === 'mensBand' ? "Men's Band"
+            : r.category === 'pendant' ? 'Pendant'
+            : r.category === 'earrings' ? 'Earrings'
+            : r.category === 'repair' ? 'Repair'
+            : 'Tennis Bracelet'
+          );
           return (
             <button
               key={r.id}
@@ -2458,15 +2557,63 @@ export default function QuoteCalculator({
               {/* Piece Specifications Card */}
               <div className="space-y-6 bg-white p-6 rounded-3xl border border-slate-200/60 shadow-sm">
               {/* Header: Name Category */}
-              <div className="flex justify-between items-center border-b border-brand-100 pb-3">
-                <h2 className="text-xs font-black text-brand-800 uppercase tracking-widest flex items-center gap-1.5">
+              <div className="flex flex-wrap justify-between items-center border-b border-brand-100 pb-3 gap-2">
+                <div className="flex items-center gap-2">
                   <Compass size={14} className="text-[#f1c40f]" />
-                  Piece Specifications
-                </h2>
+                  <h2 className="text-xs font-black text-brand-800 uppercase tracking-widest">
+                    {activeRing.customTitle?.trim() || (activeRing.category === 'customRing' ? 'Engagement / Custom Ring' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category === 'mensBand' ? "Men's Band" : 'Piece Specifications')}
+                  </h2>
+                </div>
                 <span className="bg-brand-50 text-brand-700 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border border-brand-200">
                   Category: {activeRing.category === 'customRing' ? 'Engagement / Custom' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category === 'mensBand' ? "Men's Band" : activeRing.category === 'pendant' ? 'Pendant' : activeRing.category === 'earrings' ? 'Earrings Pair' : 'Tennis Bracelet'}
                 </span>
               </div>
+
+              {/* Band / Custom Piece Rename Bar */}
+              {['customRing', 'weddingBand', 'mensBand'].includes(activeRing.category) && (
+                <div className="bg-gradient-to-r from-amber-50/80 via-white to-brand-50/50 border border-brand-200/90 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-brand-900 text-brand-gold rounded-xl shadow-xs shrink-0">
+                      <Edit3 size={13} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-brand-950">
+                          {activeRing.category === 'mensBand' ? "Men's Band Name" : "Band / Piece Name"}
+                        </label>
+                        <span className="text-[8.5px] font-bold text-amber-800 bg-amber-100/70 px-2 py-0.2 rounded-full border border-amber-200/70">
+                          Rename Band
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-brand-600/80">
+                        Updates this piece's name across the breakdown, finalize tab & printable PDF invoice.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="relative min-w-[210px] sm:w-64">
+                    <input
+                      type="text"
+                      value={activeRing.customTitle || ''}
+                      onChange={(e) => updateActiveRing('customTitle', e.target.value)}
+                      placeholder={activeRing.category === 'customRing' ? 'e.g. Oval Solitaire Ring' : activeRing.category === 'weddingBand' ? 'e.g. Matching Diamond Band' : "e.g. Classic 6mm Comfort Band"}
+                      className="w-full bg-white border border-brand-300 focus:border-brand-900 focus:ring-1 focus:ring-brand-900/20 px-3 py-2 pr-8 rounded-xl text-xs font-bold text-brand-900 shadow-2xs outline-none"
+                    />
+                    {activeRing.customTitle ? (
+                      <button
+                        type="button"
+                        onClick={() => updateActiveRing('customTitle', '')}
+                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-red-500 cursor-pointer"
+                        title="Reset to default category name"
+                      >
+                        <X size={13} />
+                      </button>
+                    ) : (
+                      <Edit3 size={13} className="absolute right-2.5 top-2.5 text-brand-300 pointer-events-none" />
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* SECTION 1: Metal & Density Inputs */}
               <div className="space-y-4">
@@ -2550,44 +2697,119 @@ export default function QuoteCalculator({
                     )}
                   </div>
 
-                  {/* Row for Karat and Grams */}
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    {/* Karat select (Gold only) */}
-                    {activeRing.material === 'gold' ? (
-                      <div>
-                        <label className="text-[9px] font-black text-brand-500 uppercase tracking-wider block mb-1">Purity Karat</label>
-                        <select
-                          value={activeRing.goldKarat}
-                          onChange={(e) => updateActiveRing('goldKarat', parseInt(e.target.value))}
-                          className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
-                        >
-                          {PURITY_OPTIONS.gold.map((karat) => (
-                            <option key={karat} value={karat}>{karat}k</option>
-                          ))}
-                        </select>
+                  {/* Pricing Option Switcher (Retail Custom Rings & Wedding Bands) */}
+                  {!isWholesale && ['customRing', 'weddingBand'].includes(activeRing.category) && (
+                    <div className="bg-amber-50/70 border border-amber-200/90 rounded-2xl p-2.5 space-y-2">
+                      <div className="flex items-center justify-between px-1">
+                        <label className="text-[9px] font-black uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                          <Sparkles size={11} className="text-amber-600" />
+                          Mounting Pricing Option
+                        </label>
+                        <span className="text-[9px] font-bold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-full border border-amber-200">
+                          {activeRing.pricingMethod === 'tiered' ? 'Tiered Complexity' : 'Metal Grams (Weight)'}
+                        </span>
                       </div>
-                    ) : (
-                      <div>
-                        <label className="text-[9px] font-black text-brand-400 uppercase tracking-wider block mb-1">Purity Level</label>
-                        <div className="bg-brand-50/50 border border-brand-200/60 p-2.5 rounded-xl text-xs font-bold text-brand-600">
-                          {activeRing.material === 'platinum' ? '95.0% pure (950)' : '92.5% pure (Sterling)'}
-                        </div>
-                      </div>
-                    )}
 
-                    {/* Metal Weight Grams */}
-                    {activeRing.category !== 'mensBand' && activeRing.category !== 'tennisBracelet' ? (
-                      <div>
-                        <label className="text-[9px] font-black text-brand-500 uppercase tracking-wider block mb-1">Metal Grams</label>
-                        <input
-                          type="number"
-                          placeholder="0.00"
-                          className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-xs font-bold no-spinner"
-                          value={activeRing.goldGrams}
-                          onChange={(e) => updateActiveRing('goldGrams', e.target.value)}
-                        />
+                      <div className="grid grid-cols-2 gap-1.5 bg-amber-100/60 p-1 rounded-xl border border-amber-200/70">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateActiveRing('pricingMethod', 'grams');
+                          }}
+                          className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                            (activeRing.pricingMethod || 'grams') === 'grams'
+                              ? 'bg-white text-brand-900 shadow-sm font-black'
+                              : 'text-amber-800 hover:text-amber-950 font-medium'
+                          }`}
+                        >
+                          <Scale size={13} />
+                          Metal Grams
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const tier = activeRing.selectedTier || 'simple';
+                            const tierGrams = getTierGrams(tier, settings);
+                            updateActiveRing('pricingMethod', 'tiered');
+                            updateActiveRing('selectedTier', tier);
+                            updateActiveRing('goldGrams', String(tierGrams));
+                          }}
+                          className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                            activeRing.pricingMethod === 'tiered'
+                              ? 'bg-brand-900 text-brand-gold shadow-sm font-black ring-1 ring-brand-900/10'
+                              : 'text-amber-800 hover:text-amber-950 font-medium'
+                          }`}
+                        >
+                          <Layers size={13} />
+                          Tiered Pricing
+                        </button>
                       </div>
-                    ) : activeRing.category === 'mensBand' ? (
+                    </div>
+                  )}
+
+                  {/* Row for Karat and Grams (or single Karat field when in Tiered mode) */}
+                  {!isWholesale && ['customRing', 'weddingBand'].includes(activeRing.category) && activeRing.pricingMethod === 'tiered' ? (
+                    <div className="pt-1">
+                      {activeRing.material === 'gold' ? (
+                        <div>
+                          <label className="text-[9px] font-black text-brand-500 uppercase tracking-wider block mb-1">Purity Karat</label>
+                          <select
+                            value={activeRing.goldKarat}
+                            onChange={(e) => updateActiveRing('goldKarat', parseInt(e.target.value))}
+                            className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                          >
+                            {PURITY_OPTIONS.gold.map((karat) => (
+                              <option key={karat} value={karat}>{karat}k</option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="text-[9px] font-black text-brand-400 uppercase tracking-wider block mb-1">Purity Level</label>
+                          <div className="bg-brand-50/50 border border-brand-200/60 p-2.5 rounded-xl text-xs font-bold text-brand-600">
+                            {activeRing.material === 'platinum' ? '95.0% pure (950)' : '92.5% pure (Sterling)'}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      {/* Karat select (Gold only) */}
+                      {activeRing.material === 'gold' ? (
+                        <div>
+                          <label className="text-[9px] font-black text-brand-500 uppercase tracking-wider block mb-1">Purity Karat</label>
+                          <select
+                            value={activeRing.goldKarat}
+                            onChange={(e) => updateActiveRing('goldKarat', parseInt(e.target.value))}
+                            className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-xs font-bold"
+                          >
+                            {PURITY_OPTIONS.gold.map((karat) => (
+                              <option key={karat} value={karat}>{karat}k</option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="text-[9px] font-black text-brand-400 uppercase tracking-wider block mb-1">Purity Level</label>
+                          <div className="bg-brand-50/50 border border-brand-200/60 p-2.5 rounded-xl text-xs font-bold text-brand-600">
+                            {activeRing.material === 'platinum' ? '95.0% pure (950)' : '92.5% pure (Sterling)'}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Metal Weight Grams */}
+                      {activeRing.category !== 'mensBand' && activeRing.category !== 'tennisBracelet' ? (
+                        <div>
+                          <label className="text-[9px] font-black text-brand-500 uppercase tracking-wider block mb-1">Metal Grams</label>
+                          <input
+                            type="number"
+                            placeholder="0.00"
+                            className="w-full bg-brand-50/50 border border-brand-200 p-2.5 rounded-xl text-xs font-bold no-spinner"
+                            value={activeRing.goldGrams}
+                            onChange={(e) => updateActiveRing('goldGrams', e.target.value)}
+                          />
+                        </div>
+                      ) : activeRing.category === 'mensBand' ? (
                       <div>
                         <div className="flex justify-between items-center mb-1">
                           <label className="text-[9px] font-black text-brand-400 uppercase tracking-wider block">Metal weight</label>
@@ -2649,6 +2871,58 @@ export default function QuoteCalculator({
                       </div>
                     )}
                   </div>
+                )}
+
+                  {/* Tier Selection Cards (when Tiered Pricing is active) */}
+                  {!isWholesale && ['customRing', 'weddingBand'].includes(activeRing.category) && activeRing.pricingMethod === 'tiered' && (
+                    <div className="space-y-2 pt-2 border-t border-brand-100/70">
+                      <div>
+                        <label className="text-[9px] font-black text-brand-700 uppercase tracking-wider block">
+                          Select Design Complexity Tier
+                        </label>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        {RING_TIERS.map((tier) => {
+                          const isSel = (activeRing.selectedTier || 'simple') === tier.id;
+                          const tierGrams = getTierGrams(tier.id, settings);
+                          return (
+                            <button
+                              key={tier.id}
+                              type="button"
+                              onClick={() => {
+                                updateActiveRing('selectedTier', tier.id as RingTierId);
+                                updateActiveRing('goldGrams', String(tierGrams));
+                              }}
+                              className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-start min-h-[82px] group ${
+                                isSel
+                                  ? 'bg-brand-900 border-brand-900 text-white shadow-md ring-2 ring-brand-900/15'
+                                  : 'bg-white border-brand-200 text-brand-800 hover:border-amber-400 hover:bg-amber-50/40 shadow-2xs'
+                              }`}
+                            >
+                              <div className="w-full">
+                                <div className="flex items-start justify-between gap-1 mb-1.5">
+                                  <span className={`text-xs font-black leading-tight ${isSel ? 'text-brand-gold' : 'text-brand-950 group-hover:text-amber-900'}`}>
+                                    {tier.label}
+                                  </span>
+                                  {isSel && (
+                                    <span className="p-0.5 bg-brand-gold text-brand-950 rounded-full shrink-0">
+                                      <Check size={10} strokeWidth={3} />
+                                    </span>
+                                  )}
+                                </div>
+                                <p className={`text-[10px] leading-relaxed line-clamp-3 ${
+                                  isSel ? 'text-slate-300' : 'text-slate-500 group-hover:text-slate-600'
+                                }`}>
+                                  {tier.description}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -3483,16 +3757,34 @@ export default function QuoteCalculator({
                   <div className="space-y-2 border-r border-brand-100 pr-4 font-mono text-[11px] text-brand-600">
                     <p className="text-[9px] font-black text-brand-400 uppercase tracking-widest border-b border-brand-50 pb-1 mb-1">Active Piece Specs</p>
                     <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans font-bold">
-                      <span>Category</span>
-                      <span className="text-brand-900">{activeRing.category === 'customRing' ? 'Engagement' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category === 'mensBand' ? "Men's Band" : activeRing.category === 'pendant' ? 'Pendant' : activeRing.category === 'earrings' ? 'Earrings' : 'Tennis'}</span>
+                      <span>Piece Name</span>
+                      <span className="text-brand-900 font-extrabold text-right truncate max-w-[140px]">
+                        {activeRing.customTitle?.trim() || (activeRing.category === 'customRing' ? 'Engagement' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category === 'mensBand' ? "Men's Band" : activeRing.category === 'pendant' ? 'Pendant' : activeRing.category === 'earrings' ? 'Earrings' : 'Tennis')}
+                      </span>
                     </div>
+                    {activeRing.customTitle?.trim() && (
+                      <div className="flex justify-between items-center text-[9px] text-brand-500 font-sans">
+                        <span>Category</span>
+                        <span className="text-brand-700 font-medium">
+                          {activeRing.category === 'customRing' ? 'Engagement Ring' : activeRing.category === 'weddingBand' ? 'Wedding Band' : activeRing.category}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans">
                       <span>Material / Purity</span>
                       <span className="font-bold text-brand-900">{activeRing.material === 'gold' ? `${activeRing.goldKarat}K ${activeRing.metalColor} Gold` : `${activeRing.metalColor} ${activeRing.material}`}</span>
                     </div>
+                    {!isWholesale && ['customRing', 'weddingBand'].includes(activeRing.category) && activeRing.pricingMethod === 'tiered' && (
+                      <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans">
+                        <span>Pricing Tier</span>
+                        <span className="font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                          {getTierLabel(activeRing.selectedTier)} ({getTierGrams(activeRing.selectedTier, settings)}g)
+                        </span>
+                      </div>
+                    )}
                     {activeRing.goldGrams && (
                       <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans">
-                        <span>Calculated Metal Wt</span>
+                        <span>{activeRing.pricingMethod === 'tiered' ? 'Tier Metal Wt' : 'Calculated Metal Wt'}</span>
                         <span className="font-mono font-bold text-brand-900">{activeRing.goldGrams}g</span>
                       </div>
                     )}
@@ -4381,7 +4673,12 @@ export default function QuoteCalculator({
                         {/* Piece Title & Basic Classification */}
                         <div className="flex justify-between items-center border-b border-slate-100 pb-3 print:pb-1.5">
                           <h4 className="text-sm font-black text-brand-900 uppercase tracking-wider print:text-xs">
-                            Piece #{ri + 1}: {r.category === 'customRing' ? 'Engagement Ring' : r.category === 'weddingBand' ? 'Wedding Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : r.category === 'repair' ? 'Repair' : 'Tennis Bracelet'}
+                            Piece #{ri + 1}: {r.customTitle?.trim() ? r.customTitle.trim() : (r.category === 'customRing' ? 'Engagement Ring' : r.category === 'weddingBand' ? 'Wedding Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : r.category === 'repair' ? 'Repair' : 'Tennis Bracelet')}
+                            {r.customTitle?.trim() && (
+                              <span className="text-xs font-normal text-slate-500 italic ml-2">
+                                ({r.category === 'customRing' ? 'Engagement Ring' : r.category === 'weddingBand' ? 'Wedding Band' : r.category})
+                              </span>
+                            )}
                           </h4>
                           <span className="text-[10px] font-black uppercase bg-slate-200 text-slate-700 px-3 py-1 rounded-md print:px-2 print:py-0.5 print:text-[8px]">
                             {r.material.toUpperCase()} ({r.goldKarat ? `${r.goldKarat}K` : 'N/A'}) - {r.metalColor}
@@ -4437,9 +4734,13 @@ export default function QuoteCalculator({
                             </div>
 
                             <div className={`bg-slate-50/50 p-3 rounded-xl border border-slate-100 print:p-2 print:rounded-lg ${!isWholesale ? 'print:hidden' : ''}`}>
-                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1 print:text-[8px]">Target Metal Weight</span>
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1 print:text-[8px]">
+                                {r.pricingMethod === 'tiered' ? 'Tier / Target Weight' : 'Target Metal Weight'}
+                              </span>
                               <span className="font-mono font-bold text-brand-950 text-sm print:text-xs">
-                                {r.goldGrams || 'N/A'} grams
+                                {r.pricingMethod === 'tiered' 
+                                  ? `${r.goldGrams || getTierGrams(r.selectedTier, settings)}g (${getTierLabel(r.selectedTier)})` 
+                                  : `${r.goldGrams || 'N/A'} grams`}
                               </span>
                             </div>
                           </div>
@@ -4929,7 +5230,21 @@ export default function QuoteCalculator({
             >
               <XCircleIcon />
             </button>
-            <h3 className="font-serif text-xl font-bold italic text-brand-900 mb-4">Select Jewelry Category</h3>
+            <h3 className="font-serif text-xl font-bold italic text-brand-900 mb-2">Select Jewelry Category</h3>
+            <p className="text-xs text-brand-500 mb-3.5">Choose a bespoke piece type to add to this quote.</p>
+
+            <div className="mb-3.5 text-left bg-brand-50/70 p-3 rounded-2xl border border-brand-200/80 shadow-2xs">
+              <label className="text-[10px] font-black uppercase tracking-wider text-brand-800 block mb-1">
+                Band / Piece Name <span className="text-brand-400 font-normal lowercase">(optional - can rename anytime)</span>
+              </label>
+              <input
+                type="text"
+                value={newItemCustomTitle}
+                onChange={(e) => setNewItemCustomTitle(e.target.value)}
+                placeholder="e.g. Oval Solitaire Ring, Contoured Chevron Band..."
+                className="w-full bg-white border border-brand-300 focus:border-brand-900 focus:ring-1 focus:ring-brand-900/20 rounded-xl px-3 py-2 text-xs font-bold text-brand-900 outline-none shadow-2xs"
+              />
+            </div>
             <div className="grid grid-cols-1 gap-2.5">
               <button
                 type="button"
@@ -5169,13 +5484,15 @@ export default function QuoteCalculator({
         const targetRing = effectiveRingId ? session.rings.find(r => r.id === effectiveRingId) : null;
         const targetRingIdx = targetRing ? session.rings.findIndex(r => r.id === targetRing.id) : 0;
         const targetLabel = targetRing ? (
-          targetRing.category === 'mensBand' ? "Men's Band" :
-          targetRing.category === 'weddingBand' ? 'Wedding Band' :
-          targetRing.category === 'earrings' ? 'Earrings' :
-          targetRing.category === 'pendant' ? 'Pendant' :
-          targetRing.category === 'repair' ? 'Repair Service' :
-          targetRing.category === 'tennisBracelet' ? 'Tennis Bracelet' :
-          `Piece ${targetRingIdx + 1} (Engagement)`
+          targetRing.customTitle?.trim() || (
+            targetRing.category === 'mensBand' ? "Men's Band" :
+            targetRing.category === 'weddingBand' ? 'Wedding Band' :
+            targetRing.category === 'earrings' ? 'Earrings' :
+            targetRing.category === 'pendant' ? 'Pendant' :
+            targetRing.category === 'repair' ? 'Repair Service' :
+            targetRing.category === 'tennisBracelet' ? 'Tennis Bracelet' :
+            `Piece ${targetRingIdx + 1} (Engagement)`
+          )
         ) : 'Piece';
         const targetPc = targetRing ? totals.pieceCosts[targetRing.id] : null;
         const isTargetOverridden = targetRing ? (typeof targetRing.overridePrice === 'number' && !isNaN(targetRing.overridePrice) && targetRing.overridePrice !== null) : false;
@@ -5215,7 +5532,7 @@ export default function QuoteCalculator({
                       const isSelected = (targetRing?.id === r.id);
                       const isOverridden = typeof r.overridePrice === 'number' && !isNaN(r.overridePrice) && r.overridePrice !== null;
                       const pc = totals.pieceCosts[r.id];
-                      const label = `Piece ${ri + 1}: ${r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis'}`;
+                      const label = `Piece ${ri + 1}: ${r.customTitle?.trim() || (r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : 'Tennis')}`;
                       return (
                         <button
                           key={r.id}

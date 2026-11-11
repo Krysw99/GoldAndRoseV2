@@ -7,10 +7,11 @@ import React, { useState } from 'react';
 import { 
   Save, Download, Trash2, Calendar, Settings, ShieldAlert, Key, 
   DollarSign, Wrench, Gem, HardDrive, EyeOff, Upload, FileJson,
-  Building, ShoppingBag, Globe, Plus, Edit, RefreshCw, Check, Cloud, Coins
+  Building, ShoppingBag, Globe, Plus, Edit, RefreshCw, Check, Cloud, Coins,
+  Layers, Sparkles, Scale
 } from 'lucide-react';
-import { AppSettings, RepairPricingSettings, ScrapTransaction, QuoteTransaction } from '../types';
-import { ROUND_MELEE, FANCY_SHAPES, DEFAULT_RETAIL_REPAIR_PRICING, DEFAULT_WHOLESALE_REPAIR_PRICING } from '../constants';
+import { AppSettings, RepairPricingSettings, ScrapTransaction, QuoteTransaction, RingTierId } from '../types';
+import { ROUND_MELEE, FANCY_SHAPES, DEFAULT_RETAIL_REPAIR_PRICING, DEFAULT_WHOLESALE_REPAIR_PRICING, RING_TIERS, DEFAULT_RING_TIER_GRAMS } from '../constants';
 import { saveDocument } from '../firebase';
 
 interface SettingsViewProps {
@@ -27,6 +28,7 @@ interface SettingsViewProps {
   ringQuoteTransactions: QuoteTransaction[];
   wholesaleTransactions: QuoteTransaction[];
   cubanEstimates: any[];
+  onDeleteWholesaleProfile?: (id: string) => void;
 }
 
 export default function SettingsView({
@@ -42,7 +44,8 @@ export default function SettingsView({
   scrapTransactions,
   ringQuoteTransactions,
   wholesaleTransactions,
-  cubanEstimates
+  cubanEstimates,
+  onDeleteWholesaleProfile
 }: SettingsViewProps) {
   // Key state
   const [apiKey, setApiKey] = useState(goldApiKey);
@@ -184,14 +187,16 @@ export default function SettingsView({
     if (!profile) return;
     
     if (confirm(`Are you sure you want to permanently delete the profile "${profile.name}"?`)) {
+      const deletedId = selectedProfileId;
       const updatedSettings: AppSettings = {
         ...localSettings,
-        wholesaleProfiles: (localSettings.wholesaleProfiles || []).filter(p => p.id !== selectedProfileId)
+        wholesaleProfiles: (localSettings.wholesaleProfiles || []).filter(p => p.id !== deletedId)
       };
       
       setLocalSettings(updatedSettings);
       setSelectedProfileId('');
       onSaveSettings(updatedSettings);
+      onDeleteWholesaleProfile?.(deletedId);
     }
   };
 
@@ -221,6 +226,7 @@ export default function SettingsView({
       quoteLedger: ringQuoteTransactions, // Alias for backward compatibility
       wholesaleLedger: wholesaleTransactions,
       cubanEstimates: cubanEstimates,
+      wholesaleProfiles: settings.wholesaleProfiles || [],
       masterSettings: settings,
       goldApiKey: goldApiKey
     };
@@ -289,6 +295,13 @@ export default function SettingsView({
           for (const item of cubanItems) {
             if (item && item.id) {
               await saveDocument('cuban_estimates', item.id, item);
+            }
+          }
+
+          const profileItems = parseItems(json.wholesaleProfiles || json.masterSettings?.wholesaleProfiles);
+          for (const item of profileItems) {
+            if (item && item.id) {
+              await saveDocument('wholesale_profiles', item.id, item);
             }
           }
 
@@ -1109,6 +1122,131 @@ export default function SettingsView({
                     />
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Engagement & Wedding Band Tiered Pricing Matrix */}
+            <div className="bg-gradient-to-br from-amber-50/70 via-white to-amber-100/40 p-5 rounded-2xl border border-amber-300/80 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-amber-200/80 pb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-brand-900 text-brand-gold rounded-xl shadow-xs">
+                    <Layers size={16} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-black text-brand-950 uppercase tracking-wider">
+                        Engagement & Wedding Band Tiered Pricing Matrix
+                      </h4>
+                      <span className="text-[10px] bg-amber-200/80 text-amber-950 border border-amber-300 font-bold px-2 py-0.5 rounded-full">
+                        Retail Tiers
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-brand-700/80">
+                      Configure base metal gram weights and optional fixed price overrides for the 5 mounting complexity tiers.
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-mono font-bold text-amber-800 bg-amber-100/70 px-2.5 py-1 rounded-lg border border-amber-200">
+                    Active 14K Gold Rate: ${(localSettings.goldPricesPerGram?.[14] || 230)}/g
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                {RING_TIERS.map(tier => {
+                  const currentGrams = localSettings.ringTierGrams?.[tier.id] !== undefined 
+                    ? localSettings.ringTierGrams[tier.id] 
+                    : tier.defaultGrams;
+                  const currentPrice = localSettings.ringTierPrices?.[tier.id] ?? '';
+                  const rate14k = Number(localSettings.goldPricesPerGram?.[14] || 230);
+                  const estPrice = (currentPrice !== '' && Number(currentPrice) > 0)
+                    ? Number(currentPrice)
+                    : (Number(currentGrams) || 0) * rate14k;
+
+                  return (
+                    <div 
+                      key={tier.id} 
+                      className="bg-white p-3.5 rounded-2xl border border-amber-200 shadow-2xs flex flex-col justify-between space-y-3 hover:border-amber-400 transition-all"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-black text-brand-950 uppercase tracking-wide">
+                            {tier.label}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200">
+                            {tier.defaultGrams}g def
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-brand-600/80 leading-snug line-clamp-2 min-h-[28px]">
+                          {tier.description}
+                        </p>
+                      </div>
+
+                      <div className="space-y-2 pt-1 border-t border-brand-100">
+                        <div>
+                          <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">
+                            Grams Equivalent
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              className="w-full bg-amber-50/30 border border-slate-300 p-2 pr-7 rounded-lg text-xs font-mono font-bold text-slate-900 focus:border-amber-500 outline-none"
+                              value={currentGrams !== undefined ? currentGrams : tier.defaultGrams}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? '' : parseFloat(e.target.value);
+                                handleNestedSetting('ringTierGrams', tier.id, val);
+                              }}
+                            />
+                            <span className="absolute right-2.5 top-2 text-[10px] font-mono text-brand-400 font-bold">g</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block">
+                              Fixed Price ($)
+                            </label>
+                            <span className="text-[9px] text-brand-400 font-medium">Optional</span>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="1"
+                              min="0"
+                              placeholder="Auto (Grams)"
+                              className="w-full bg-slate-50 border border-slate-300 p-2 pr-7 rounded-lg text-xs font-mono font-bold text-slate-900 focus:bg-white focus:border-amber-500 outline-none"
+                              value={currentPrice}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? '' : parseFloat(e.target.value);
+                                handleNestedSetting('ringTierPrices', tier.id, val);
+                              }}
+                            />
+                            <span className="absolute right-2.5 top-2 text-[10px] font-mono text-brand-400 font-bold">$</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-amber-50/70 p-2 rounded-xl border border-amber-200/80 text-center">
+                        <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block">
+                          {(currentPrice !== '' && Number(currentPrice) > 0) ? 'Fixed Override' : 'Est 14K Gold Price'}
+                        </span>
+                        <span className="text-sm font-black font-serif text-brand-950 block">
+                          ${estPrice.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="bg-amber-100/50 p-2.5 rounded-xl border border-amber-200/70 text-[11px] text-amber-900/90 flex items-center gap-2">
+                <Sparkles size={14} className="text-amber-600 shrink-0" />
+                <span>
+                  <strong>Tip:</strong> In the Retail Quote tab for Engagement Rings and Wedding Bands, switch to <strong>Tiered Pricing</strong> to choose from these 5 mounting tiers. The quote metal cost is automatically calculated using the grams equivalent multiplied by the selected metal & karat rate, or the fixed price override if entered.
+                </span>
               </div>
             </div>
 

@@ -3,17 +3,102 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CategoryType, JewelryItem, QuoteSession, ScrapItem, AppSettings, ScrapTransaction } from './types';
-import { DENSITIES, FANCY_SHAPES, ROUND_MELEE, TROY_ONCE_GRAMS } from './constants';
+import { CategoryType, JewelryItem, QuoteSession, ScrapItem, AppSettings, ScrapTransaction, RingTierId } from './types';
+import { DENSITIES, FANCY_SHAPES, ROUND_MELEE, TROY_ONCE_GRAMS, RING_TIERS, DEFAULT_RING_TIER_GRAMS } from './constants';
 
 export function genId(): string {
   return Math.random().toString(36).substring(2, 11);
 }
 
-export function getEmptyRing(category: CategoryType): JewelryItem {
+export function getTierGrams(tierId?: RingTierId | string, settings?: AppSettings): number {
+  const id = (tierId || 'simple') as RingTierId;
+  const configured = settings?.ringTierGrams?.[id];
+  if (configured !== undefined && configured !== null && !isNaN(Number(configured)) && Number(configured) > 0) {
+    return Number(configured);
+  }
+  return DEFAULT_RING_TIER_GRAMS[id] ?? 3.5;
+}
+
+export function getTierLabel(tierId?: RingTierId | string): string {
+  const tier = RING_TIERS.find(t => t.id === tierId);
+  return tier ? tier.label : 'Simple';
+}
+
+export function calculateTierPrice(
+  tierId: RingTierId | string,
+  r: JewelryItem,
+  settings: AppSettings,
+  spotPrices: { gold: number; silver: number; platinum: number },
+  overridePrices?: { gold?: number; silver?: number; platinum?: number }
+): number {
+  const id = (tierId || 'simple') as RingTierId;
+  const fixedPrice = settings?.ringTierPrices?.[id];
+  if (fixedPrice !== undefined && fixedPrice !== null && !isNaN(Number(fixedPrice)) && Number(fixedPrice) > 0) {
+    return Number(fixedPrice);
+  }
+
+  const sPGold = Number(overridePrices?.gold ?? spotPrices.gold);
+  const sPPlat = Number(overridePrices?.platinum ?? spotPrices.platinum);
+  const sPSilv = Number(overridePrices?.silver ?? spotPrices.silver);
+
+  const rGoldPrem = Number(settings.retailGoldPremium !== undefined ? settings.retailGoldPremium : 100);
+  const rSilverPrem = Number(settings.retailSilverPremium !== undefined ? settings.retailSilverPremium : 20);
+  const rPlatPrem = Number(settings.retailPlatinumPremium !== undefined ? settings.retailPlatinumPremium : 100);
+
+  const tierGrams = getTierGrams(id, settings);
+
+  let rate = 0;
+  if (r.material === 'gold') {
+    const karat = Number(r.goldKarat) || 14;
+    rate = Number(settings.goldPricesPerGram?.[karat] ?? (((sPGold + rGoldPrem) / 31.1034768) * (karat / 24)));
+  } else if (r.material === 'platinum') {
+    rate = Number(settings.platinumPricePerGram ?? (((sPPlat + rPlatPrem) / 31.1034768) * 0.95));
+  } else if (r.material === 'silver') {
+    rate = Number(settings.silverPricePerGram ?? (((sPSilv + rSilverPrem) / 31.1034768) * 0.925));
+  }
+
+  return tierGrams * rate;
+}
+
+export function getItemDisplayName(r: JewelryItem, index?: number, short: boolean = false): string {
+  if (r.customTitle && r.customTitle.trim().length > 0) {
+    return r.customTitle.trim();
+  }
+  const prefix = index !== undefined ? (short ? `#${index + 1} ` : `Piece ${index + 1}: `) : '';
+  let defaultName = 'Piece';
+  switch (r.category) {
+    case 'customRing':
+      defaultName = short ? 'Engagement' : 'Engagement Ring';
+      break;
+    case 'weddingBand':
+      defaultName = short ? 'Band' : 'Wedding Band';
+      break;
+    case 'mensBand':
+      defaultName = short ? "Men's" : "Men's Band";
+      break;
+    case 'pendant':
+      defaultName = 'Pendant';
+      break;
+    case 'earrings':
+      defaultName = short ? 'Earrings' : 'Earrings Pair';
+      break;
+    case 'tennisBracelet':
+      defaultName = short ? 'Tennis' : 'Tennis Bracelet';
+      break;
+    case 'repair':
+      defaultName = 'Repair Service';
+      break;
+  }
+  return `${prefix}${defaultName}`;
+}
+
+export function getEmptyRing(category: CategoryType, customTitle?: string): JewelryItem {
   const base: JewelryItem = {
     id: genId(),
     category,
+    customTitle: customTitle || '',
+    pricingMethod: 'grams',
+    selectedTier: 'simple',
     stoneSource: 'our',
     custCenterCt: '',
     custMeleeCount: '',
@@ -197,6 +282,9 @@ export function upgradeRingData(r: any): JewelryItem {
   } else {
     base.overridePrice = null;
   }
+  if (!base.pricingMethod) base.pricingMethod = 'grams';
+  if (!base.selectedTier) base.selectedTier = 'simple';
+  if (base.customTitle === undefined) base.customTitle = '';
   return base as JewelryItem;
 }
 
@@ -216,7 +304,9 @@ export function getEmptyQuoteSession(): QuoteSession {
     scrapCredit: 0,
     signatureImg: null,
     referenceSketch: null,
-    referencePhoto: null
+    referencePhoto: null,
+    discount: '',
+    discountType: '$'
   };
 }
 
@@ -479,6 +569,8 @@ export async function idbGetAll(): Promise<Record<string, any>> {
  */
 export async function hydrateFromIndexedDb(): Promise<Record<string, any>> {
   const keysToSync = [
+    'gr_app_settings',
+    'gr_wholesale_profiles',
     'gr_quote_ledger',
     'gr_wholesale_ledger',
     'gr_scrap_ledger',
@@ -565,6 +657,34 @@ export function safeSetLocalStorage(key: string, data: any): void {
     // We intentionally NEVER delete ledgers or strip photos!
     console.info(`[Storage Notice] Browser localStorage 5MB quota reached. "${key}" is preserved in IndexedDB and memory cache.`);
   }
+}
+
+/**
+ * Safely merges wholesale profiles by ID, updating existing profiles
+ * while ensuring no profiles are ever lost during device sync.
+ */
+export function mergeWholesaleProfiles<T extends { id: string; name?: string; settings?: any }>(existing: T[], incoming: T[]): T[] {
+  const map = new Map<string, T>();
+  (existing || []).forEach(p => {
+    if (p && p.id) {
+      map.set(p.id, p);
+    }
+  });
+  (incoming || []).forEach(p => {
+    if (p && p.id) {
+      const current = map.get(p.id);
+      if (current) {
+        map.set(p.id, {
+          ...current,
+          ...p,
+          settings: { ...(current.settings || {}), ...(p.settings || {}) }
+        });
+      } else {
+        map.set(p.id, p);
+      }
+    }
+  });
+  return Array.from(map.values());
 }
 
 export interface TennisEstimateResult {
@@ -925,7 +1045,9 @@ export function calculateRingCost(r: JewelryItem, settings: AppSettings, spotPri
   const rPlatPrem = Number(settings.retailPlatinumPremium !== undefined ? settings.retailPlatinumPremium : 100);
 
   if (['mensBand', 'customRing', 'weddingBand', 'pendant'].includes(r.category)) {
-    if (r.material === 'gold') {
+    if (['customRing', 'weddingBand'].includes(r.category) && r.pricingMethod === 'tiered') {
+      cM = calculateTierPrice(r.selectedTier || 'simple', r, settings, spotPrices, overridePrices);
+    } else if (r.material === 'gold') {
       const karat = Number(r.goldKarat) || 14;
       const rate = r.category === 'mensBand'
         ? Number(settings.mensBandGoldPricesPerGram?.[karat] ?? settings.goldPricesPerGram?.[karat] ?? (((sPGold + rGoldPrem) / 31.1034768) * (karat / 24)))
@@ -1293,7 +1415,9 @@ export function getDemoQuoteSession(): QuoteSession {
     scrapCredit: 0,
     signatureImg: null,
     referenceSketch: null,
-    referencePhoto: null
+    referencePhoto: null,
+    discount: '',
+    discountType: '$'
   };
 }
 
@@ -1343,6 +1467,8 @@ export interface CompiledSessionCost {
   grandTotal: number;
   targetPiecesTotal: number;
   pieceCosts: Record<string, SessionPieceCost>;
+  sessionDiscountVal: number;
+  sessionDiscountDeduction: number;
 }
 
 /**
@@ -1407,10 +1533,26 @@ export function compileSessionCost(
   });
 
   const scrapCredit = Number(session.scrapCredit) || 0;
-  const netBeforeTax = postDiscountTotal - scrapCredit;
+
+  // Session-wide discount (Order/Quote discount on total estimate)
+  const sessionDiscVal = parseFloat(session.discount || '0') || 0;
+  const sessionDiscDeduction = session.discountType === '%'
+    ? (postDiscountTotal * (sessionDiscVal / 100))
+    : sessionDiscVal;
+  const calculatedSessionDiscDeduction = session.discountType === '%'
+    ? (calculatedPostDiscountTotal * (sessionDiscVal / 100))
+    : sessionDiscVal;
+
+  const effectivePostDiscountTotal = Math.max(0, postDiscountTotal - sessionDiscDeduction);
+  const effectiveCalculatedPostDiscountTotal = Math.max(0, calculatedPostDiscountTotal - calculatedSessionDiscDeduction);
+
+  totalDiscount += sessionDiscDeduction;
+  calculatedTotalDiscount += calculatedSessionDiscDeduction;
+
+  const netBeforeTax = effectivePostDiscountTotal - scrapCredit;
   const taxableSubtotal = Math.max(0, netBeforeTax);
   const calculatedTax = session.applyTax ? taxableSubtotal * 0.12 : 0;
-  const calculatedGrandTotal = (calculatedPostDiscountTotal - scrapCredit) + (session.applyTax ? Math.max(0, calculatedPostDiscountTotal - scrapCredit) * 0.12 : 0);
+  const calculatedGrandTotal = (effectiveCalculatedPostDiscountTotal - scrapCredit) + (session.applyTax ? Math.max(0, effectiveCalculatedPostDiscountTotal - scrapCredit) * 0.12 : 0);
 
   const hasAnyPieceOverride = rings.some(r => typeof r.overridePrice === 'number' && !isNaN(r.overridePrice) && r.overridePrice !== null);
   // In retail custom quote mode, overrides are strictly on a per-piece basis.
@@ -1447,7 +1589,7 @@ export function compileSessionCost(
   return {
     grossTotal,
     totalDiscount,
-    postDiscountTotal,
+    postDiscountTotal: effectivePostDiscountTotal,
     scrapCredit,
     subtotal,
     tax,
@@ -1455,7 +1597,9 @@ export function compileSessionCost(
     isOverridden,
     grandTotal,
     targetPiecesTotal,
-    pieceCosts
+    pieceCosts,
+    sessionDiscountVal: sessionDiscVal,
+    sessionDiscountDeduction: sessionDiscDeduction
   };
 }
 

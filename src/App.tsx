@@ -12,10 +12,10 @@ import {
 // Types & Constants
 import { 
   QuoteSession, ScrapTransaction, QuoteTransaction, AppSettings, 
-  ScrapItem, JewelryItem 
+  ScrapItem, JewelryItem, WholesaleProfile 
 } from './types';
 import { DEFAULT_SETTINGS, TROY_ONCE_GRAMS, FANCY_SHAPES, ROUND_MELEE } from './constants';
-import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeGetLocalStorage, safeParseDate, genId, getTennisBaseGrams, calculateScrapItemValue, formatPhoneNumber, compileSessionCost, hydrateFromIndexedDb } from './utils';
+import { getEmptyQuoteSession, upgradeRingData, calculateRingCost, getDemoQuoteSession, safeSetLocalStorage, safeGetLocalStorage, safeParseDate, genId, getTennisBaseGrams, calculateScrapItemValue, formatPhoneNumber, compileSessionCost, hydrateFromIndexedDb, mergeWholesaleProfiles } from './utils';
 
 // Modular Components
 import ScrapCalculator from './components/ScrapCalculator';
@@ -105,7 +105,22 @@ export default function App() {
   });
 
   // Master settings
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    try {
+      const raw = safeGetLocalStorage<AppSettings>('gr_app_settings');
+      const savedProfiles = safeGetLocalStorage<WholesaleProfile[]>('gr_wholesale_profiles');
+      if (raw && typeof raw === 'object') {
+        const merged = { ...DEFAULT_SETTINGS, ...raw };
+        if (Array.isArray(savedProfiles) && savedProfiles.length > 0) {
+          merged.wholesaleProfiles = mergeWholesaleProfiles(merged.wholesaleProfiles || [], savedProfiles);
+        }
+        return merged;
+      } else if (Array.isArray(savedProfiles) && savedProfiles.length > 0) {
+        return { ...DEFAULT_SETTINGS, wholesaleProfiles: savedProfiles };
+      }
+    } catch {}
+    return DEFAULT_SETTINGS;
+  });
 
   // Active custom quote sessions
   const [retailSession, setRetailSession] = useState<QuoteSession>(() => {
@@ -258,6 +273,18 @@ export default function App() {
 
     hydrateFromIndexedDb().then(idbData => {
       if (idbData) {
+        const idbSettings = idbData['gr_app_settings'];
+        const idbProfiles: WholesaleProfile[] = idbData['gr_wholesale_profiles'] || idbSettings?.wholesaleProfiles || [];
+        if (idbSettings || (Array.isArray(idbProfiles) && idbProfiles.length > 0)) {
+          setSettings(prev => {
+            const mergedProfiles = mergeWholesaleProfiles(prev.wholesaleProfiles || [], idbProfiles);
+            return {
+              ...prev,
+              ...(idbSettings || {}),
+              wholesaleProfiles: mergedProfiles
+            };
+          });
+        }
         if (Array.isArray(idbData['gr_quote_ledger']) && idbData['gr_quote_ledger'].length > 0) {
           setRingQuoteTransactions(prev => (idbData['gr_quote_ledger'].length >= prev.length ? idbData['gr_quote_ledger'] : prev));
         }
@@ -282,18 +309,24 @@ export default function App() {
     lastCloudSettingsRef.current = cloudSettingsStr;
     
     setSettings(prev => {
-      const cloudProfiles = cleanMasterDoc.wholesaleProfiles || prev.wholesaleProfiles || [];
+      const incomingProfiles = Array.isArray(cleanMasterDoc.wholesaleProfiles) ? cleanMasterDoc.wholesaleProfiles : [];
+      // Protect existing profiles from being wiped if cloud master doc has empty array or missing profiles
+      const mergedProfiles = mergeWholesaleProfiles(prev.wholesaleProfiles || [], incomingProfiles);
+      
       const merged = {
         ...prev,
         ...cleanMasterDoc,
         wholesale: { ...prev.wholesale, ...(cleanMasterDoc.wholesale || {}) },
-        wholesaleProfiles: cloudProfiles,
+        wholesaleProfiles: mergedProfiles,
         centerStoneRates: { ...prev.centerStoneRates, ...(cleanMasterDoc.centerStoneRates || {}) },
         centerStoneRawRates: { ...prev.centerStoneRawRates, ...(cleanMasterDoc.centerStoneRawRates || {}) },
         cubanMultipliers: cleanMasterDoc.cubanMultipliers || prev.cubanMultipliers,
         tennisMultipliers: cleanMasterDoc.tennisMultipliers || prev.tennisMultipliers,
       };
       
+      safeSetLocalStorage('gr_app_settings', merged);
+      safeSetLocalStorage('gr_wholesale_profiles', mergedProfiles);
+
       if (JSON.stringify(prev) === JSON.stringify(merged)) {
         return prev;
       }
@@ -321,9 +354,36 @@ export default function App() {
   const handleSaveSettings = (newSettings: AppSettings) => {
     lastLocalChangeTimeRef.current = Date.now();
     setSettings(newSettings);
-    // Sync to cloud Firestore immediately on manual save/profile operations
+    
+    // 1. Immediately persist to localStorage and IndexedDB (offline-first & permanent)
+    safeSetLocalStorage('gr_app_settings', newSettings);
+    if (Array.isArray(newSettings.wholesaleProfiles)) {
+      safeSetLocalStorage('gr_wholesale_profiles', newSettings.wholesaleProfiles);
+    }
+
+    // 2. Sync to cloud Firestore immediately on manual save/profile operations
     saveDocument('app_settings', 'master', newSettings).catch(err => {
       console.warn("Could not sync app_settings to cloud, saved locally:", err?.message || err);
+    });
+
+    // 3. ALSO sync each wholesale profile individually to dedicated cloud collection
+    // This guarantees each client profile is permanently saved as its own document,
+    // protecting it from ever being lost or overwritten across devices!
+    if (Array.isArray(newSettings.wholesaleProfiles)) {
+      for (const profile of newSettings.wholesaleProfiles) {
+        if (profile && profile.id) {
+          saveDocument('wholesale_profiles', profile.id, profile).catch(err => {
+            console.warn(`Could not sync profile ${profile.name} to cloud:`, err?.message || err);
+          });
+        }
+      }
+    }
+  };
+
+  const handleDeleteWholesaleProfile = (profileId: string) => {
+    lastLocalChangeTimeRef.current = Date.now();
+    deleteDocument('wholesale_profiles', profileId).catch(err => {
+      console.warn(`Cloud delete failed for profile ${profileId}:`, err);
     });
   };
 
@@ -337,6 +397,7 @@ export default function App() {
     let unsubWholesale: (() => void) | null = null;
     let unsubSettings: (() => void) | null = null;
     let unsubCuban: (() => void) | null = null;
+    let unsubProfiles: (() => void) | null = null;
     let unsubDeletedDocs: (() => void) | null = null;
 
     const runSyncAndListen = async () => {
@@ -390,12 +451,19 @@ export default function App() {
             return raw ? JSON.parse(raw) : [];
           } catch { return []; }
         })();
+        const localProfiles = (() => {
+          try {
+            const raw = localStorage.getItem('gr_wholesale_profiles');
+            return raw ? JSON.parse(raw) : [];
+          } catch { return []; }
+        })();
 
         await Promise.all([
           syncLocalToCloud('scrap_ledger', localScrap),
           syncLocalToCloud('retail_ledger', localRetail),
           syncLocalToCloud('wholesale_ledger', localWholesale),
-          syncLocalToCloud('cuban_estimates', localCuban)
+          syncLocalToCloud('cuban_estimates', localCuban),
+          syncLocalToCloud('wholesale_profiles', localProfiles)
         ]).catch(err => {
           console.warn("Offline local-to-cloud sync warning:", err);
         });
@@ -568,7 +636,22 @@ export default function App() {
            }
          });
 
-setIsCloudSynced(true);
+         // 5b. Set up real-time listener for dedicated Wholesale Client Profiles
+         unsubProfiles = listenCollection('wholesale_profiles', (docs) => {
+           if (!active) return;
+           const validDocs = docs.filter(d => d && d.id && !isDocumentDeleted(d.id));
+           if (validDocs.length === 0) return;
+
+           setSettings(prev => {
+             const merged = mergeWholesaleProfiles(prev.wholesaleProfiles || [], validDocs as any);
+             safeSetLocalStorage('gr_wholesale_profiles', merged);
+             const updatedSettings = { ...prev, wholesaleProfiles: merged };
+             safeSetLocalStorage('gr_app_settings', updatedSettings);
+             return updatedSettings;
+           });
+         });
+
+         setIsCloudSynced(true);
         console.log("Server synchronization initialized successfully.");
       } catch (err) {
         console.error("Error setting up server synchronization:", err);
@@ -583,6 +666,7 @@ setIsCloudSynced(true);
       if (unsubRetail) unsubRetail();
       if (unsubWholesale) unsubWholesale();
       if (unsubSettings) unsubSettings();
+      if (unsubProfiles) unsubProfiles();
       if (unsubCuban) unsubCuban();
       if (unsubDeletedDocs) unsubDeletedDocs();
     };
@@ -832,7 +916,7 @@ setIsCloudSynced(true);
     });
 
     const l: Record<string, string> = { customRing: 'Ring', weddingBand: 'Band', mensBand: "Men's", pendant: 'Pend', tennisBracelet: 'Tennis', earrings: 'Earrings' };
-    const sum = activeSession.rings.map(r => `${l[r.category] || 'Item'}: ${r.goldGrams || 'Est'}g`).join(' | ') || (isWholesale ? "Wholesale Contract" : "Retail Consultation");
+    const sum = activeSession.rings.map(r => `${r.customTitle?.trim() || l[r.category] || 'Item'}: ${r.goldGrams || 'Est'}g`).join(' | ') || (isWholesale ? "Wholesale Contract" : "Retail Consultation");
 
     // Recalculate accurate final sum using compileSessionCost
     const totals = compileSessionCost(activeSession, settings, spotPrices, isWholesale);
@@ -983,6 +1067,8 @@ setIsCloudSynced(true);
 
     const fullData = JSON.parse(JSON.stringify(item.fullData)) as QuoteSession;
     fullData.rings = (fullData.rings || []).map(upgradeRingData);
+    if (fullData.discount === undefined) fullData.discount = '';
+    if (!fullData.discountType) fullData.discountType = '$';
 
     // Ensure active piece subtab exists so sketches and parameters render immediately
     if (fullData.rings.length > 0) {
@@ -1222,32 +1308,8 @@ setIsCloudSynced(true);
       demoSession.id = `demo-set-wedding-quote-${Math.random().toString(36).substring(2, 6)}`;
     }
 
-    let gT = 0;
-    let tD = 0;
-    demoSession.rings.forEach(r => {
-      const cost = calculateRingCost(r, settings, spotPrices, 'retail', demoSession.overridePrices);
-      gT += cost;
-      const val = parseFloat(r.discount) || 0;
-      tD += r.discountType === '%' ? cost * (val / 100) : val;
-    });
-    const postDiscount = gT - tD;
-    const scrapCred = Number(demoSession.scrapCredit) || 0;
-    const netBeforeTax = postDiscount - scrapCred;
-    const taxableSubtotal = Math.max(0, netBeforeTax);
-    const tax = demoSession.applyTax ? taxableSubtotal * 0.12 : 0;
-    const calculatedGrandTotal = netBeforeTax + tax;
-    const isOverridden = typeof demoSession.customGrandTotal === 'number' && !isNaN(demoSession.customGrandTotal) && demoSession.customGrandTotal !== null;
-    let finalInvoiceAmount = calculatedGrandTotal;
-
-    if (isOverridden) {
-      const customVal = demoSession.customGrandTotal as number;
-      if (demoSession.customGrandTotalIsInclusive) {
-        finalInvoiceAmount = customVal;
-      } else {
-        const taxVal = demoSession.applyTax ? Math.max(0, customVal) * 0.12 : 0;
-        finalInvoiceAmount = customVal + taxVal;
-      }
-    }
+    const totals = compileSessionCost(demoSession, settings, spotPrices, false);
+    const finalInvoiceAmount = totals.grandTotal;
     const demoTotal = finalInvoiceAmount < 0 
       ? `-$${Math.abs(finalInvoiceAmount).toFixed(2)}` 
       : `$${finalInvoiceAmount.toFixed(2)}`;
@@ -1732,6 +1794,7 @@ setIsCloudSynced(true);
               ringQuoteTransactions={ringQuoteTransactions}
               wholesaleTransactions={wholesaleTransactions}
               cubanEstimates={cubanEstimates}
+              onDeleteWholesaleProfile={handleDeleteWholesaleProfile}
             />
           </div>
         </div>

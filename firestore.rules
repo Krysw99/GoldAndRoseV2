@@ -16,6 +16,9 @@ service cloud.firestore {
     match /cuban_estimates/{document} {
       allow read, write: if true;
     }
+    match /wholesale_profiles/{document} {
+      allow read, write: if true;
+    }
     match /deleted_doc_ids/{document} {
       allow read, write: if true;
     }

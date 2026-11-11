@@ -57,9 +57,14 @@ export interface RepairSelection {
   price: number;
 }
 
+export type RingTierId = 'simple' | 'classicAccent' | 'detailed' | 'intricateDesign' | 'complexArtisan';
+
 export interface JewelryItem {
   id: string;
   category: CategoryType;
+  customTitle?: string;
+  pricingMethod?: 'grams' | 'tiered';
+  selectedTier?: RingTierId;
   stoneSource: StoneSourceType;
   custCenterCt: string;
   custMeleeCount: string;
@@ -140,6 +145,8 @@ export interface QuoteSession {
   wholesaleProfileId?: string;
   customGrandTotal?: number | null;
   customGrandTotalIsInclusive?: boolean;
+  discount?: string;
+  discountType?: '%' | '$';
 }
 
 export interface ScrapItem {
@@ -312,6 +319,10 @@ export interface AppSettings {
   tennisMultipliers?: TennisMultiplierRange[];
   
   retailRepairPricing?: RepairPricingSettings;
+  
+  // Engagement & Wedding Band Retail Tier Pricing
+  ringTierGrams?: Partial<Record<RingTierId, number>>;
+  ringTierPrices?: Partial<Record<RingTierId, number>>;
   
   wholesale: WholesaleSettings;
   wholesaleProfiles?: WholesaleProfile[];

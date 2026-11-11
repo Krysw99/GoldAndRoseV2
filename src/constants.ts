@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { MaterialType } from './types';
+import { MaterialType, RingTierId } from './types';
 
 export const TROY_ONCE_GRAMS = 31.1034768;
 
@@ -290,6 +290,16 @@ export const DEFAULT_SETTINGS = {
     heavyCleanupPolishMax: 250
   },
   
+  // Engagement & Wedding Band Retail Tier Pricing Defaults
+  ringTierGrams: {
+    simple: 3.5,
+    classicAccent: 4.5,
+    detailed: 5.5,
+    intricateDesign: 6.5,
+    complexArtisan: 8.0
+  },
+  ringTierPrices: {},
+
   wholesale: {
     goldSpotPremium: 100,
     laborPerGram: 40,
@@ -330,6 +340,22 @@ export const DEFAULT_SETTINGS = {
     }
   },
   wholesaleProfiles: []
+};
+
+export const RING_TIERS: { id: RingTierId; label: string; defaultGrams: number; description: string }[] = [
+  { id: 'simple', label: 'Simple', defaultGrams: 3.5, description: 'Clean solitaire, minimal plain band' },
+  { id: 'classicAccent', label: 'Classic Accent', defaultGrams: 4.5, description: 'Subtle side stones, cathedral accents' },
+  { id: 'detailed', label: 'Detailed', defaultGrams: 5.5, description: 'Pavé shoulders, halo gallery, milgrain' },
+  { id: 'intricateDesign', label: 'Intricate Design', defaultGrams: 6.5, description: 'Multi-row pavé, vintage filigree, split shank' },
+  { id: 'complexArtisan', label: 'Complex Artisan', defaultGrams: 8.0, description: 'Heavy sculpted gallery, 3D floral, wide band' }
+];
+
+export const DEFAULT_RING_TIER_GRAMS: Record<RingTierId, number> = {
+  simple: 3.5,
+  classicAccent: 4.5,
+  detailed: 5.5,
+  intricateDesign: 6.5,
+  complexArtisan: 8.0
 };
 
 export const DEFAULT_WHOLESALE_REPAIR_PRICING = DEFAULT_SETTINGS.wholesale.repairPricing!;

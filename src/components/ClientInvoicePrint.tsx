@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { QuoteSession, AppSettings } from '../types';
-import { calculateRingCost, hasRingData, getTennisEstimates, compileSessionCost } from '../utils';
+import { calculateRingCost, hasRingData, getTennisEstimates, compileSessionCost, getTierLabel, getTierGrams } from '../utils';
 import { FANCY_SHAPES, ROUND_MELEE } from '../constants';
-import { Edit3, X, ShieldCheck } from 'lucide-react';
+import { Edit3, X, ShieldCheck, Tag } from 'lucide-react';
 import RefundPolicyModal from './RefundPolicyModal';
 
 interface ClientInvoicePrintProps {
@@ -33,6 +33,7 @@ export default function ClientInvoicePrint({
   enlargeImage
 }: ClientInvoicePrintProps) {
   const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [isTotalDiscountOpen, setIsTotalDiscountOpen] = useState(false);
   const effectiveDate = dateStr || new Date().toLocaleDateString();
 
   // Session Totals & Piece Breakdown Compile
@@ -203,13 +204,15 @@ export default function ClientInvoicePrint({
     (session.rings || []).forEach((r) => {
       if (!hasRingData(r)) return;
 
-      const ringLabel = r.category === 'customRing' ? 'Engagement' 
-                  : r.category === 'weddingBand' ? 'Wedding Band'
-                  : r.category === 'mensBand' ? "Men's Band"
-                  : r.category === 'pendant' ? 'Pendant'
-                  : r.category === 'earrings' ? 'Earrings'
-                  : r.category === 'repair' ? 'Repair'
-                  : 'Tennis';
+      const ringLabel = r.customTitle?.trim() || (
+        r.category === 'customRing' ? 'Engagement' 
+        : r.category === 'weddingBand' ? 'Wedding Band'
+        : r.category === 'mensBand' ? "Men's Band"
+        : r.category === 'pendant' ? 'Pendant'
+        : r.category === 'earrings' ? 'Earrings'
+        : r.category === 'repair' ? 'Repair'
+        : 'Tennis'
+      );
 
       const g = Number(r.goldGrams) || 0;
 
@@ -462,10 +465,22 @@ export default function ClientInvoicePrint({
                 return (
                   <tr key={r.id || ri} className="hover:bg-brand-50/50 transition-colors">
                     <td className="p-2.5 pl-3.5 font-bold text-brand-900 text-[11px] print:p-1.5 print:pl-2.5 print:text-[9px]">
-                      #{ri + 1} {r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : r.category === 'repair' ? 'Repair' : 'Tennis'}
+                      <div>
+                        <span>#{ri + 1} {r.customTitle?.trim() ? r.customTitle.trim() : (r.category === 'customRing' ? 'Engagement' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : r.category === 'repair' ? 'Repair' : 'Tennis')}</span>
+                        {r.customTitle?.trim() && (
+                          <span className="text-[9px] text-brand-500 font-normal block print:text-[7.5px] italic">
+                            ({r.category === 'customRing' ? 'Engagement Ring' : r.category === 'weddingBand' ? 'Wedding Band' : r.category})
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-2.5 print:p-1.5">
                       <span className="font-semibold block text-[11px] print:text-[9px]">{r.goldKarat ? `${r.goldKarat}K` : ''} {r.metalColor} {r.material}</span>
+                      {!isWholesale && r.pricingMethod === 'tiered' && (
+                        <span className="text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded block w-fit mt-0.5 print:text-[7.5px]">
+                          {getTierLabel(r.selectedTier)} Tier ({getTierGrams(r.selectedTier, settings)}g)
+                        </span>
+                      )}
                       {isWholesale && (
                         <span className="text-[9.5px] text-brand-500 font-mono print:text-[8px]">{r.goldGrams || '0.0'}g</span>
                       )}
@@ -792,7 +807,7 @@ export default function ClientInvoicePrint({
               return (
                 <div key={r.id || ri} className="border border-brand-100 bg-brand-50/20 rounded-2xl p-3 space-y-3 print:p-1.5 print:space-y-1.5 print:rounded-xl">
                   <p className="text-[10px] font-black uppercase text-brand-600 tracking-wider print:text-[8px]">
-                    Piece {ri + 1}: {r.category === 'customRing' ? 'Custom Ring' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : r.category === 'repair' ? 'Repair' : 'Tennis'}
+                    Piece {ri + 1}: {r.customTitle?.trim() || (r.category === 'customRing' ? 'Custom Ring' : r.category === 'weddingBand' ? 'Band' : r.category === 'mensBand' ? "Men's Band" : r.category === 'pendant' ? 'Pendant' : r.category === 'earrings' ? 'Earrings' : r.category === 'repair' ? 'Repair' : 'Tennis')}
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     {rSketches.map((sk, skIdx) => (
@@ -845,6 +860,12 @@ export default function ClientInvoicePrint({
         <div className="space-y-2 text-xs font-mono text-brand-700 print:space-y-1 print:text-[10px]">
           <div className="flex justify-between"><span>Gross Total Cost:</span><span>${totals.grossTotal.toFixed(2)}</span></div>
           {totals.totalDiscount > 0 && <div className="flex justify-between text-red-600"><span>Client Deduction Reductions:</span><span>-${totals.totalDiscount.toFixed(2)}</span></div>}
+          {totals.sessionDiscountVal > 0 && (
+            <div className="flex justify-between text-red-600 text-[11px] print:text-[9px] pl-2 font-mono">
+              <span>• Total Estimate Discount ({session.discountType === '%' ? `${totals.sessionDiscountVal}%` : `$${totals.sessionDiscountVal}`}):</span>
+              <span>-${(totals.sessionDiscountDeduction || 0).toFixed(2)}</span>
+            </div>
+          )}
           {Number(session.scrapCredit) > 0 && (
             <div className="flex justify-between text-green-600 items-center">
               <span>Connected Scrap Payout Credit:</span>
@@ -870,7 +891,28 @@ export default function ClientInvoicePrint({
           {session.applyTax && <div className="flex justify-between"><span>BC Taxes & GST (12%):</span><span>+${totals.tax.toFixed(2)}</span></div>}
           <div className="border-t-2 border-brand-900 my-1 print:my-0.5"></div>
           <div className="flex justify-between font-bold text-sm text-brand-950 font-sans print:text-xs items-center">
-            <span>{totals.grandTotal < 0 ? 'CLIENT PAYOUT / CREDIT DUE:' : 'FINAL BALANCE DUE:'}</span>
+            <span className="flex items-center gap-1.5">
+              {totals.grandTotal < 0 ? 'CLIENT PAYOUT / CREDIT DUE:' : 'FINAL BALANCE DUE:'}
+              {isInteractive && onChangeSession && (
+                <button
+                  type="button"
+                  onClick={() => setIsTotalDiscountOpen(prev => !prev)}
+                  className={`p-1 rounded text-xs transition-all print:hidden cursor-pointer flex items-center gap-1 ${
+                    totals.sessionDiscountVal > 0
+                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                      : 'bg-brand-50 text-brand-600 hover:text-brand-900 border border-brand-200'
+                  }`}
+                  title={totals.sessionDiscountVal > 0 ? `Total Estimate Discount: -${session.discountType === '%' ? `${totals.sessionDiscountVal}%` : `$${totals.sessionDiscountVal}`}` : "Apply Total Estimate Discount"}
+                >
+                  <Tag size={11} className={totals.sessionDiscountVal > 0 ? "text-amber-700 animate-pulse" : ""} />
+                  {totals.sessionDiscountVal > 0 && (
+                    <span className="text-[9px] font-mono font-bold text-amber-800">
+                      -{session.discountType === '%' ? `${totals.sessionDiscountVal}%` : `$${totals.sessionDiscountVal}`}
+                    </span>
+                  )}
+                </button>
+              )}
+            </span>
             <div className="flex items-center gap-1.5">
               {totals.isOverridden && (
                 <div className="flex items-center gap-1 print:hidden">
@@ -911,6 +953,53 @@ export default function ClientInvoicePrint({
               )}
             </div>
           </div>
+
+          {isInteractive && onChangeSession && isTotalDiscountOpen && (
+            <div className="flex items-center justify-end gap-1.5 my-1.5 bg-brand-50 border border-brand-200 px-2.5 py-1.5 rounded-xl print:hidden">
+              <span className="text-[9px] font-black text-brand-600 uppercase tracking-wider shrink-0">Total Disc:</span>
+              <div className="flex rounded-lg overflow-hidden border border-brand-300 shrink-0 bg-white">
+                <button
+                  type="button"
+                  onClick={() => onChangeSession(prev => ({ ...prev, discountType: '$' }))}
+                  className={`px-2 py-0.5 text-[10px] font-black transition-all ${session.discountType === '$' || !session.discountType ? 'bg-brand-gold text-slate-950 font-extrabold shadow-inner' : 'text-brand-500 hover:text-brand-900'}`}
+                >
+                  $
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangeSession(prev => ({ ...prev, discountType: '%' }))}
+                  className={`px-2 py-0.5 text-[10px] font-black transition-all ${session.discountType === '%' ? 'bg-brand-gold text-slate-950 font-extrabold shadow-inner' : 'text-brand-500 hover:text-brand-900'}`}
+                >
+                  %
+                </button>
+              </div>
+              <input
+                type="number"
+                value={session.discount || ''}
+                placeholder="0"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onChangeSession(prev => ({ ...prev, discount: val }));
+                }}
+                className="w-16 bg-white border border-brand-300 text-[11px] text-brand-950 font-mono font-bold text-center rounded-lg px-1.5 py-0.5 outline-none focus:border-brand-gold focus:ring-1 focus:ring-brand-gold"
+              />
+              {totals.sessionDiscountVal > 0 && totals.sessionDiscountDeduction > 0 && (
+                <span className="text-[10px] text-red-600 font-bold font-mono">
+                  -${totals.sessionDiscountDeduction.toFixed(2)}
+                </span>
+              )}
+              {totals.sessionDiscountVal > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onChangeSession(prev => ({ ...prev, discount: '' }))}
+                  className="p-1 rounded text-red-600 hover:text-red-800 bg-red-100 border border-red-200 transition-all cursor-pointer ml-0.5"
+                  title="Clear total discount"
+                >
+                  <X size={10} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
