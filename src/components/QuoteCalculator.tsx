@@ -1462,7 +1462,9 @@ export default function QuoteCalculator({
           if (i === idx) {
             const updated = { ...cs, ...updates };
             if ('type' in updates) {
-              if (updates.type === 'Fancy') {
+              if (updates.type === 'Center') {
+                updated.qty = '1';
+              } else if (updates.type === 'Fancy') {
                 if (!updated.shape) updated.shape = 'Princess';
                 if (updated.sizeIdx === undefined) updated.sizeIdx = 0;
               } else if (updates.type === 'Melee') {
@@ -4225,6 +4227,7 @@ export default function QuoteCalculator({
                 )}
                 {activeRing.clientStones?.map((c, idx) => {
                   const isFancy = c.type === 'Fancy';
+                  const isCenter = c.type === 'Center';
                   const shapes = Object.keys(FANCY_SHAPES);
                   const currentShape = c.shape || 'Princess';
                   const sizes = FANCY_SHAPES[currentShape] || [];
@@ -4233,13 +4236,25 @@ export default function QuoteCalculator({
                   return (
                     <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-emerald-50/20 p-2.5 rounded-xl border border-emerald-200/40">
                       <div className="col-span-2">
-                        <input
-                          type="number"
-                          className="w-full bg-slate-100 border border-emerald-200/60 p-1.5 rounded text-xs font-bold text-emerald-950 text-center cursor-not-allowed select-none"
-                          value={1}
-                          disabled
-                          readOnly
-                        />
+                        {isCenter ? (
+                          <input
+                            type="number"
+                            className="w-full bg-slate-100 border border-emerald-200/60 p-1.5 rounded text-xs font-bold text-emerald-950 text-center cursor-not-allowed select-none"
+                            value={1}
+                            disabled
+                            readOnly
+                            title="Center stone quantity is fixed at 1"
+                          />
+                        ) : (
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="1"
+                            className="w-full bg-white border border-emerald-200/60 p-1.5 rounded text-xs font-bold text-emerald-950 text-center focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
+                            value={c.qty}
+                            onChange={(e) => updateClientStone(idx, 'qty', e.target.value)}
+                          />
+                        )}
                       </div>
                       <div className="col-span-3">
                         <select
