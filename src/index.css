@@ -190,4 +190,53 @@ body {
   scrollbar-color: rgba(18, 21, 26, 0.25) transparent;
 }
 
+/* Retail Calculate Price button & reveal animations */
+@keyframes calcShimmer {
+  0% {
+    transform: translateX(-120%) skewX(-20deg);
+  }
+  100% {
+    transform: translateX(220%) skewX(-20deg);
+  }
+}
+
+@keyframes calcProgress {
+  0% {
+    width: 0%;
+  }
+  100% {
+    width: 100%;
+  }
+}
+
+@keyframes priceReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.92);
+    filter: blur(4px);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.03);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+.animate-calc-shimmer {
+  animation: calcShimmer 0.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-calc-progress {
+  animation: calcProgress 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-price-reveal {
+  animation: priceReveal 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 

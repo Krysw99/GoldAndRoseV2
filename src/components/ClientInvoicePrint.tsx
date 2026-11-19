@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { QuoteSession, AppSettings } from '../types';
-import { calculateRingCost, hasRingData, getTennisEstimates, compileSessionCost, getTierLabel, getTierGrams } from '../utils';
+import { calculateRingCost, hasRingData, getTennisEstimates, compileSessionCost, getTierLabel } from '../utils';
 import { FANCY_SHAPES, ROUND_MELEE } from '../constants';
 import { Edit3, X, ShieldCheck, Tag } from 'lucide-react';
 import RefundPolicyModal from './RefundPolicyModal';
@@ -478,7 +478,7 @@ export default function ClientInvoicePrint({
                       <span className="font-semibold block text-[11px] print:text-[9px]">{r.goldKarat ? `${r.goldKarat}K` : ''} {r.metalColor} {r.material}</span>
                       {!isWholesale && r.pricingMethod === 'tiered' && (
                         <span className="text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded block w-fit mt-0.5 print:text-[7.5px]">
-                          {getTierLabel(r.selectedTier)} Tier ({getTierGrams(r.selectedTier, settings)}g)
+                          {getTierLabel(r.selectedTier)} Tier
                         </span>
                       )}
                       {isWholesale && (

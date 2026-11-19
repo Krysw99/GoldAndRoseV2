@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Trash2, Camera, Compass, Type, Tag, HelpCircle, 
   Signature, CheckCircle, Calculator, Sparkles, AlertCircle, FileText,
   Gem, UserCheck, User, Lock, Unlock, Save, Edit3, Check, X,
-  Crop, PenTool, Printer, Coins, ShieldCheck, Layers, Scale
+  Crop, PenTool, Printer, Coins, ShieldCheck, Layers, Scale, Eye, EyeOff
 } from 'lucide-react';
 import { 
   QuoteSession, JewelryItem, MeleeItem, FancyItem, ClientStoneItem, 
@@ -1105,6 +1105,15 @@ export default function QuoteCalculator({
   const [openDiscounts, setOpenDiscounts] = useState<Record<string, boolean>>({});
   const [isTotalDiscountOpen, setIsTotalDiscountOpen] = useState(false);
 
+  // Retail Privacy / Calculate Price mode (hides live adjustments from customers by default)
+  const [isLivePriceMode, setIsLivePriceMode] = useState(false);
+  const [isPriceRevealed, setIsPriceRevealed] = useState(false);
+  const [isCalculatingPrice, setIsCalculatingPrice] = useState(false);
+  const [revealedPriceKey, setRevealedPriceKey] = useState('');
+  const [priceRevealCount, setPriceRevealCount] = useState(0);
+  const calcTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestPriceKeyRef = useRef('');
+
   // Local string state for JOB METAL SPOT OVERRIDES inputs to allow deleting all digits cleanly
   const [localOverrideSpot, setLocalOverrideSpot] = useState<{ gold: string; silver: string; platinum: string }>({
     gold: String(session.overridePrices?.gold ?? spotPrices.gold ?? ''),
@@ -1570,6 +1579,86 @@ export default function QuoteCalculator({
   // Session Totals & Piece Breakdown Compile
   const totals = compileSessionCost(session, settings, spotPrices, isWholesale);
 
+  // Fingerprint of all displayed retail price figures so any live adjustment immediately re-hides the price when not in live mode
+  const currentPriceKey = `${session.id}|${totals.grandTotal.toFixed(2)}|${totals.grossTotal.toFixed(2)}|${totals.totalDiscount.toFixed(2)}|${totals.tax.toFixed(2)}|${totals.scrapCredit.toFixed(2)}|${session.applyTax ? '1' : '0'}|${session.discount || ''}|${session.discountType || ''}|${session.rings.map(r => `${r.id}:${(totals.pieceCosts[r.id]?.effectiveFinalCost ?? 0).toFixed(2)}:${r.overridePrice ?? ''}:${r.discount || ''}:${r.discountType || ''}`).join(',')}`;
+  latestPriceKeyRef.current = currentPriceKey;
+
+  const showRetailPrices = isWholesale || isLivePriceMode || (isPriceRevealed && revealedPriceKey === currentPriceKey);
+
+  // Reset revealed state cleanly whenever a price-affecting edit occurs while not in live mode
+  useEffect(() => {
+    if (!isWholesale && !isLivePriceMode && isPriceRevealed && revealedPriceKey !== currentPriceKey) {
+      setIsPriceRevealed(false);
+      setRevealedPriceKey('');
+    }
+  }, [isWholesale, isLivePriceMode, isPriceRevealed, revealedPriceKey, currentPriceKey]);
+
+  // Reset revealed/calculating state when switching sessions
+  useEffect(() => {
+    if (calcTimeoutRef.current) {
+      clearTimeout(calcTimeoutRef.current);
+      calcTimeoutRef.current = null;
+    }
+    setIsCalculatingPrice(false);
+    setIsPriceRevealed(false);
+    setRevealedPriceKey('');
+  }, [session.id]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (calcTimeoutRef.current) {
+        clearTimeout(calcTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleCalculatePrice = () => {
+    if (isCalculatingPrice) return;
+    playClickSound('click');
+    if (calcTimeoutRef.current) {
+      clearTimeout(calcTimeoutRef.current);
+    }
+    setIsCalculatingPrice(true);
+    calcTimeoutRef.current = setTimeout(() => {
+      setIsCalculatingPrice(false);
+      setRevealedPriceKey(latestPriceKeyRef.current);
+      setIsPriceRevealed(true);
+      setPriceRevealCount(c => c + 1);
+      calcTimeoutRef.current = null;
+    }, 750);
+  };
+
+  const handleToggleLivePriceMode = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    playClickSound('click');
+    if (calcTimeoutRef.current) {
+      clearTimeout(calcTimeoutRef.current);
+      calcTimeoutRef.current = null;
+    }
+    setIsCalculatingPrice(false);
+    setIsLivePriceMode(prev => {
+      const next = !prev;
+      if (!next) {
+        setIsPriceRevealed(false);
+        setRevealedPriceKey('');
+      }
+      return next;
+    });
+  };
+
+  const handleHideRetailPrice = () => {
+    playClickSound('click');
+    if (calcTimeoutRef.current) {
+      clearTimeout(calcTimeoutRef.current);
+      calcTimeoutRef.current = null;
+    }
+    setIsCalculatingPrice(false);
+    setIsLivePriceMode(false);
+    setIsPriceRevealed(false);
+    setRevealedPriceKey('');
+  };
+
   const handleSaveAndPrint = async () => {
     playClickSound('click');
     if (onSaveQuoteNoReset) {
@@ -2011,18 +2100,28 @@ export default function QuoteCalculator({
                                 <X className="w-2.5 h-2.5" />
                               </button>
                             )}
-                            <span className="font-bold text-[#f1c40f]">${finalPieceCost.toFixed(2)}</span>
+                            {showRetailPrices ? (
+                              <span key={`p-${r.id}-${priceRevealCount}`} className={`font-bold text-[#f1c40f] ${!isLivePriceMode ? 'animate-price-reveal inline-block' : ''}`}>
+                                ${finalPieceCost.toFixed(2)}
+                              </span>
+                            ) : (
+                              <span className={`font-bold tracking-widest text-xs px-2 py-0.5 rounded bg-slate-800/70 border border-slate-700/60 ${isCalculatingPrice ? 'text-amber-300 animate-pulse' : 'text-slate-500'}`}>
+                                {isCalculatingPrice ? '•••' : '••••'}
+                              </span>
+                            )}
                           </div>
-                          {isPieceOverridden ? (
-                            <span className="text-[9px] text-amber-300 font-mono flex items-center gap-1">
-                              <span className="line-through text-slate-400 font-normal">${calculatedFinalCost.toFixed(2)}</span>
-                              <span className="font-bold">(Overridden)</span>
-                            </span>
-                          ) : discVal > 0 ? (
-                            <span className="text-[9px] text-red-400 font-bold font-mono">
-                              (Disc. -{r.discountType === '%' ? `${discVal}%` : `$${discVal}`})
-                            </span>
-                          ) : null}
+                          {showRetailPrices && (
+                            isPieceOverridden ? (
+                              <span className="text-[9px] text-amber-300 font-mono flex items-center gap-1">
+                                <span className="line-through text-slate-400 font-normal">${calculatedFinalCost.toFixed(2)}</span>
+                                <span className="font-bold">(Overridden)</span>
+                              </span>
+                            ) : discVal > 0 ? (
+                              <span className="text-[9px] text-red-400 font-bold font-mono">
+                                (Disc. -{r.discountType === '%' ? `${discVal}%` : `$${discVal}`})
+                              </span>
+                            ) : null
+                          )}
                         </div>
                       </div>
 
@@ -2069,7 +2168,7 @@ export default function QuoteCalculator({
                             }}
                             className="w-16 bg-slate-950 border border-slate-800 text-[11px] text-[#f1c40f] font-mono font-bold text-center rounded-lg px-1.5 py-0.5 outline-none focus:border-brand-gold focus:ring-1 focus:ring-brand-gold"
                           />
-                          {discVal > 0 && (
+                          {discVal > 0 && showRetailPrices && (
                             <span className="text-[10px] text-red-400 font-bold ml-auto font-mono">
                               -${discDeduction.toFixed(2)}
                             </span>
@@ -2077,7 +2176,7 @@ export default function QuoteCalculator({
                         </div>
                       )}
 
-                      {showRawBreakdown && (
+                      {showRawBreakdown && showRetailPrices && (
                         <div className="flex justify-between items-center text-[10px] text-amber-400 bg-amber-950/40 border border-amber-900/50 px-2 py-1 rounded-lg mt-1 font-bold animate-fadeIn">
                           <span className="uppercase tracking-wider flex items-center gap-1">
                             <Sparkles size={10} className="text-brand-gold animate-pulse" />
@@ -2090,7 +2189,7 @@ export default function QuoteCalculator({
                   );
                 })}
 
-                {settings.showRawCostOnQuoteTab && (() => {
+                {settings.showRawCostOnQuoteTab && showRetailPrices && (() => {
                   let totalSessionRawCost = 0;
                   session.rings.forEach(r => {
                     if (hasRingData(r)) {
@@ -2110,7 +2209,11 @@ export default function QuoteCalculator({
                     <Coins size={12} className="text-amber-400" />
                     <span className="font-bold text-slate-300">Scrap Credit:</span>
                     {Number(session.scrapCredit) > 0 ? (
-                      <span className="font-bold text-green-400 font-mono">-${Number(session.scrapCredit).toFixed(2)}</span>
+                      showRetailPrices ? (
+                        <span className="font-bold text-green-400 font-mono">-${Number(session.scrapCredit).toFixed(2)}</span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-emerald-400/90 bg-emerald-950/60 border border-emerald-700/50 px-1.5 py-0.5 rounded font-mono">Linked</span>
+                      )
                     ) : (
                       <span className="text-[9px] text-slate-500 italic">$0.00</span>
                     )}
@@ -2153,10 +2256,12 @@ export default function QuoteCalculator({
                   <div className="flex justify-between items-center text-xs text-red-400 font-mono border-t border-slate-800 pt-1.5">
                     <span className="flex items-center gap-1.5 font-bold">
                       <Tag size={11} className="text-amber-400" />
-                      Total Estimate Discount ({session.discountType === '%' ? `${totals.sessionDiscountVal}%` : `$${totals.sessionDiscountVal}`}):
+                      {showRetailPrices
+                        ? `Total Estimate Discount (${session.discountType === '%' ? `${totals.sessionDiscountVal}%` : `$${totals.sessionDiscountVal}`}):`
+                        : 'Total Estimate Discount:'}
                     </span>
                     <span className="font-bold text-red-400">
-                      -${(totals.sessionDiscountDeduction || 0).toFixed(2)}
+                      {showRetailPrices ? `-$${(totals.sessionDiscountDeduction || 0).toFixed(2)}` : 'Applied'}
                     </span>
                   </div>
                 )}
@@ -2164,7 +2269,7 @@ export default function QuoteCalculator({
                 {session.applyTax && (
                   <div className="flex justify-between items-center text-slate-400 font-bold border-t border-slate-800 pt-1.5">
                     <span>Tax (12% BC)</span>
-                    <span>+${totals.tax.toFixed(2)}</span>
+                    <span>{showRetailPrices ? `+$${totals.tax.toFixed(2)}` : '••••'}</span>
                   </div>
                 )}
               </div>
@@ -2184,10 +2289,10 @@ export default function QuoteCalculator({
             </div>
 
             {/* Right Side: Estimated Total */}
-            <div className="text-center md:text-right space-y-1 pl-0 md:pl-6">
+            <div className="text-center md:text-right space-y-1.5 pl-0 md:pl-6">
               <div className="flex items-center justify-center md:justify-end gap-2">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                  {totals.grandTotal < 0 ? 'CLIENT PAYOUT DUE (CREDIT)' : 'ESTIMATED TOTAL DUE'}
+                  {showRetailPrices && totals.grandTotal < 0 ? 'CLIENT PAYOUT DUE (CREDIT)' : 'ESTIMATED TOTAL DUE'}
                 </p>
                 <button
                   type="button"
@@ -2202,7 +2307,7 @@ export default function QuoteCalculator({
                   title={totals.sessionDiscountVal > 0 ? `Total Estimate Discount: -${session.discountType === '%' ? `${totals.sessionDiscountVal}%` : `$${totals.sessionDiscountVal}`}` : "Apply Total Estimate Discount"}
                 >
                   <Tag size={10} className={totals.sessionDiscountVal > 0 ? "animate-pulse text-amber-400" : ""} />
-                  {totals.sessionDiscountVal > 0 && (
+                  {totals.sessionDiscountVal > 0 && showRetailPrices && (
                     <span className="text-[9px] font-mono font-bold text-amber-300">
                       -{session.discountType === '%' ? `${totals.sessionDiscountVal}%` : `$${totals.sessionDiscountVal}`}
                     </span>
@@ -2244,7 +2349,7 @@ export default function QuoteCalculator({
                     }}
                     className="w-16 bg-slate-950 border border-slate-800 text-[11px] text-[#f1c40f] font-mono font-bold text-center rounded-lg px-1.5 py-0.5 outline-none focus:border-brand-gold focus:ring-1 focus:ring-brand-gold"
                   />
-                  {totals.sessionDiscountVal > 0 && totals.sessionDiscountDeduction > 0 && (
+                  {totals.sessionDiscountVal > 0 && totals.sessionDiscountDeduction > 0 && showRetailPrices && (
                     <span className="text-[10px] text-red-400 font-bold font-mono">
                       -${totals.sessionDiscountDeduction.toFixed(2)}
                     </span>
@@ -2262,50 +2367,147 @@ export default function QuoteCalculator({
                 </div>
               )}
 
-              <h1 className={`text-5xl md:text-6xl font-serif italic font-black tracking-tight ${totals.grandTotal < 0 ? 'text-green-400' : totals.isOverridden ? 'text-amber-300' : 'text-[#f1c40f]'}`}>
-                {totals.grandTotal < 0 ? `-$${Math.abs(totals.grandTotal).toFixed(2)}` : `$${totals.grandTotal.toFixed(2)}`}
-              </h1>
-              <div className="flex items-center justify-center md:justify-end gap-1.5 pt-0.5 flex-wrap">
-                {totals.isOverridden ? (
-                  <span className="text-[9px] bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full font-mono font-bold">
-                    {session.rings.filter(r => typeof r.overridePrice === 'number' && !isNaN(r.overridePrice) && r.overridePrice !== null).length} Overridden (Calc: ${totals.calculatedGrandTotal.toFixed(2)})
-                  </span>
-                ) : (
-                  <p className="text-[9px] text-slate-400 font-mono uppercase tracking-wider">
-                    {totals.grandTotal < 0 ? 'Jeweler owes client CAD' : 'Calculated CAD Valuation'}
-                  </p>
-                )}
-                {totals.totalDiscount > 0 && (
-                  <span className="text-[9px] bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded-full font-mono font-bold">
-                    Total Savings: -${totals.totalDiscount.toFixed(2)}
-                  </span>
-                )}
-                {totals.isOverridden && (
-                  <button
-                    onClick={handleResetAllPieceOverrides}
-                    className="inline-flex items-center gap-1 text-[10px] font-bold text-red-300 hover:text-white bg-red-500/20 hover:bg-red-500/30 border border-red-400/40 px-2 py-0.5 rounded-md transition-all shadow-sm cursor-pointer"
-                    title="Reset all piece overrides back to calculated prices"
+              {showRetailPrices ? (
+                <>
+                  <h1
+                    key={`grand-${priceRevealCount}`}
+                    className={`text-5xl md:text-6xl font-serif italic font-black tracking-tight ${!isLivePriceMode ? 'animate-price-reveal' : ''} ${totals.grandTotal < 0 ? 'text-green-400' : totals.isOverridden ? 'text-amber-300' : 'text-[#f1c40f]'}`}
                   >
-                    <X className="w-3 h-3" /> Reset Overrides
-                  </button>
-                )}
-                {activeRing && typeof activeRing.overridePrice === 'number' && !isNaN(activeRing.overridePrice) && activeRing.overridePrice !== null && (
-                  <button
-                    onClick={() => handleClearPieceOverride(activeRing.id)}
-                    className="inline-flex items-center gap-1 text-[10px] font-bold text-red-300 hover:text-white bg-red-900/40 hover:bg-red-800/60 border border-red-700/60 px-2 py-0.5 rounded-md transition-all shadow-sm cursor-pointer"
-                    title="Cancel override for active piece and restore calculated price"
+                    {totals.grandTotal < 0 ? `-$${Math.abs(totals.grandTotal).toFixed(2)}` : `$${totals.grandTotal.toFixed(2)}`}
+                  </h1>
+                  <div className="flex items-center justify-center md:justify-end gap-1.5 pt-1 flex-wrap">
+                    {/* Compact Hide + Subtle Live Eye Toggle Pill */}
+                    <div className="inline-flex items-center rounded-lg overflow-hidden border border-slate-700/60 bg-slate-900/70 shadow-sm">
+                      <button
+                        type="button"
+                        onClick={handleHideRetailPrice}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-200 hover:text-white hover:bg-slate-800 px-2 py-0.5 transition-all cursor-pointer"
+                        title="Hide price and return to Calculate Price button"
+                      >
+                        <Calculator className="w-3 h-3 text-[#f1c40f]" />
+                        {isLivePriceMode ? 'Hide' : 'Hide Price'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleToggleLivePriceMode}
+                        className={`inline-flex items-center justify-center px-1.5 py-0.5 transition-all cursor-pointer ${
+                          isLivePriceMode
+                            ? 'text-amber-300/60 hover:text-amber-300'
+                            : 'text-slate-500/40 hover:text-slate-300'
+                        }`}
+                        title={isLivePriceMode ? 'Live calculations ON — click to turn off' : 'Toggle live calculations ON'}
+                        aria-label="Toggle Live Calculations"
+                      >
+                        {isLivePriceMode ? <Eye className="w-2.5 h-2.5" /> : <EyeOff className="w-2.5 h-2.5" />}
+                      </button>
+                    </div>
+
+                    {totals.isOverridden ? (
+                      <span className="text-[9px] bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full font-mono font-bold">
+                        {session.rings.filter(r => typeof r.overridePrice === 'number' && !isNaN(r.overridePrice) && r.overridePrice !== null).length} Overridden (Calc: ${totals.calculatedGrandTotal.toFixed(2)})
+                      </span>
+                    ) : (
+                      <p className="text-[9px] text-slate-400 font-mono uppercase tracking-wider">
+                        {totals.grandTotal < 0 ? 'Jeweler owes client CAD' : 'Calculated CAD Valuation'}
+                      </p>
+                    )}
+                    {totals.totalDiscount > 0 && (
+                      <span className="text-[9px] bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded-full font-mono font-bold">
+                        Total Savings: -${totals.totalDiscount.toFixed(2)}
+                      </span>
+                    )}
+                    {totals.isOverridden && (
+                      <button
+                        onClick={handleResetAllPieceOverrides}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold text-red-300 hover:text-white bg-red-500/20 hover:bg-red-500/30 border border-red-400/40 px-2 py-0.5 rounded-md transition-all shadow-sm cursor-pointer"
+                        title="Reset all piece overrides back to calculated prices"
+                      >
+                        <X className="w-3 h-3" /> Reset Overrides
+                      </button>
+                    )}
+                    {activeRing && typeof activeRing.overridePrice === 'number' && !isNaN(activeRing.overridePrice) && activeRing.overridePrice !== null && (
+                      <button
+                        onClick={() => handleClearPieceOverride(activeRing.id)}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold text-red-300 hover:text-white bg-red-900/40 hover:bg-red-800/60 border border-red-700/60 px-2 py-0.5 rounded-md transition-all shadow-sm cursor-pointer"
+                        title="Cancel override for active piece and restore calculated price"
+                      >
+                        <X className="w-3 h-3" /> Cancel Piece Override
+                      </button>
+                    )}
+                    <button
+                      onClick={handleOpenPriceOverride}
+                      className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-300 hover:text-white bg-white/10 hover:bg-white/20 border border-amber-400/30 px-2 py-0.5 rounded-md transition-all shadow-sm cursor-pointer"
+                      title={activeRing && typeof activeRing.overridePrice === 'number' ? "Edit Piece Override" : "Override Piece Price"}
+                    >
+                      <Edit3 className="w-3 h-3" /> {activeRing && typeof activeRing.overridePrice === 'number' ? 'Edit Piece Override' : 'Override Piece'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center md:items-end gap-2 py-1.5">
+                  {/* Primary Calculate Price Button with Integrated Live-View Eye Toggle */}
+                  <div
+                    className={`relative inline-flex items-stretch rounded-2xl overflow-hidden shadow-lg transition-all duration-300 border ${
+                      isCalculatingPrice
+                        ? 'border-amber-300/80 bg-gradient-to-r from-amber-500 via-[#f1c40f] to-amber-500 scale-[1.02] shadow-amber-400/25'
+                        : 'border-amber-400/60 bg-gradient-to-r from-[#c2a265] via-[#f1c40f] to-[#d4af37] hover:brightness-105 hover:scale-[1.01] shadow-amber-500/20'
+                    }`}
                   >
-                    <X className="w-3 h-3" /> Cancel Piece Override
-                  </button>
-                )}
-                <button
-                  onClick={handleOpenPriceOverride}
-                  className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-300 hover:text-white bg-white/10 hover:bg-white/20 border border-amber-400/30 px-2 py-0.5 rounded-md transition-all shadow-sm cursor-pointer"
-                  title={activeRing && typeof activeRing.overridePrice === 'number' ? "Edit Piece Override" : "Override Piece Price"}
-                >
-                  <Edit3 className="w-3 h-3" /> {activeRing && typeof activeRing.overridePrice === 'number' ? 'Edit Piece Override' : 'Override Piece'}
-                </button>
-              </div>
+                    {/* Animated shimmer overlay while calculating */}
+                    {isCalculatingPrice && (
+                      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                        <div className="w-1/2 h-full bg-gradient-to-r from-transparent via-white/55 to-transparent animate-calc-shimmer" />
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleCalculatePrice}
+                      disabled={isCalculatingPrice}
+                      className="relative z-10 pl-5 pr-2.5 py-3.5 flex items-center gap-2.5 text-slate-950 font-black uppercase tracking-wider text-xs sm:text-sm cursor-pointer active:scale-[0.98] transition-transform disabled:cursor-wait"
+                    >
+                      {isCalculatingPrice ? (
+                        <>
+                          <Sparkles className="w-4 h-4 text-slate-950 animate-spin" />
+                          <span>Calculating Price...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Calculator className="w-4 h-4 text-slate-950" />
+                          <span>Calculate Price</span>
+                          <Sparkles className="w-3.5 h-3.5 text-slate-900/70" />
+                        </>
+                      )}
+                    </button>
+
+                    {/* Discreet Little Eye Icon Toggle for Original Live Calculations */}
+                    <button
+                      type="button"
+                      onClick={handleToggleLivePriceMode}
+                      className="relative z-10 pr-2.5 pl-1 flex items-center justify-center text-slate-950 opacity-20 hover:opacity-80 transition-opacity cursor-pointer"
+                      title="Toggle Live Calculations"
+                      aria-label="Toggle Live Calculations"
+                    >
+                      <Eye className="w-2.5 h-2.5" />
+                    </button>
+
+                    {/* Animated Progress Bar along bottom edge */}
+                    {isCalculatingPrice && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-950/20">
+                        <div className="h-full bg-slate-950/80 animate-calc-progress" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-center md:justify-end gap-2 flex-wrap">
+                    <p className="text-[9px] text-slate-400 font-mono uppercase tracking-wider">
+                      {isCalculatingPrice
+                        ? 'Evaluating metal, stones & setting specs...'
+                        : 'Click to reveal estimate'}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -3780,13 +3982,13 @@ export default function QuoteCalculator({
                       <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans">
                         <span>Pricing Tier</span>
                         <span className="font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                          {getTierLabel(activeRing.selectedTier)} ({getTierGrams(activeRing.selectedTier, settings)}g)
+                          {getTierLabel(activeRing.selectedTier)}
                         </span>
                       </div>
                     )}
-                    {activeRing.goldGrams && (
+                    {isWholesale && activeRing.goldGrams && (
                       <div className="flex justify-between items-center text-[10px] text-brand-700 font-sans">
-                        <span>{activeRing.pricingMethod === 'tiered' ? 'Tier Metal Wt' : 'Calculated Metal Wt'}</span>
+                        <span>Calculated Metal Wt</span>
                         <span className="font-mono font-bold text-brand-900">{activeRing.goldGrams}g</span>
                       </div>
                     )}
@@ -3810,83 +4012,152 @@ export default function QuoteCalculator({
                     return (
                       <div className="text-center space-y-1.5 pl-2">
                         <p className="text-[9px] uppercase font-black tracking-widest text-brand-500">
-                          {isOverridden ? 'PIECE VALUATION (OVERRIDDEN)' : 'PIECE ESTIMATE (CALCULATED)'}
+                          {!showRetailPrices
+                            ? 'PIECE ESTIMATE'
+                            : isOverridden
+                              ? 'PIECE VALUATION (OVERRIDDEN)'
+                              : 'PIECE ESTIMATE (CALCULATED)'}
                         </p>
-                        <div className="flex items-center gap-1.5 justify-center">
-                          <h1 className={`text-3xl font-serif font-black italic tracking-tight ${isOverridden ? 'text-amber-600' : 'text-brand-950'}`}>
-                            ${piecePrice.toFixed(2)}
-                          </h1>
-                        </div>
 
-                        {/* Status badge & calculation details */}
-                        <div className="flex flex-col items-center gap-1">
-                          {isOverridden ? (
-                            <div className="space-y-0.5">
-                              <span className="inline-block text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 shadow-xs">
-                                Overridden Price
-                              </span>
-                              <p className="text-[9px] text-brand-500 font-mono">
-                                Original Calc: <span className="line-through font-bold">${calcPrice.toFixed(2)}</span> CAD
-                              </p>
+                        {showRetailPrices ? (
+                          <>
+                            <div className="flex items-center gap-1.5 justify-center">
+                              <h1
+                                key={`piece-est-${activeRing.id}-${priceRevealCount}`}
+                                className={`text-3xl font-serif font-black italic tracking-tight ${!isLivePriceMode ? 'animate-price-reveal' : ''} ${isOverridden ? 'text-amber-600' : 'text-brand-950'}`}
+                              >
+                                ${piecePrice.toFixed(2)}
+                              </h1>
                             </div>
-                          ) : (
-                            <div className="space-y-0.5">
-                              <span className="inline-block text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                                Calculated from Specs
-                              </span>
-                              <p className="text-[9px] text-brand-400 font-mono">
-                                Normal live metal & stone formula
-                              </p>
-                            </div>
-                          )}
-                        </div>
 
-                        {/* Action buttons: Override or Cancel Override */}
-                        <div className="flex items-center justify-center gap-1.5 pt-1">
-                          {isOverridden ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenPiecePriceOverride(activeRing.id)}
-                                className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-lg transition-all shadow-xs cursor-pointer"
-                                title="Edit this piece's price override"
-                              >
-                                <Edit3 className="w-3 h-3 text-amber-600" /> Edit Override
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleClearPieceOverride(activeRing.id)}
-                                className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-1 rounded-lg transition-all shadow-xs cursor-pointer"
-                                title="Cancel override and restore calculated price"
-                              >
-                                <X className="w-3 h-3 text-red-500" /> Cancel Override
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenPiecePriceOverride(activeRing.id)}
-                              className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-800 hover:text-brand-950 bg-brand-50 hover:bg-brand-100 border border-brand-200 hover:border-brand-300 px-3 py-1 rounded-lg transition-all shadow-xs cursor-pointer"
-                              title="Override this piece's price"
+                            {/* Status badge & calculation details */}
+                            <div className="flex flex-col items-center gap-1">
+                              {isOverridden ? (
+                                <div className="space-y-0.5">
+                                  <span className="inline-block text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 shadow-xs">
+                                    Overridden Price
+                                  </span>
+                                  <p className="text-[9px] text-brand-500 font-mono">
+                                    Original Calc: <span className="line-through font-bold">${calcPrice.toFixed(2)}</span> CAD
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="space-y-0.5">
+                                  <span className="inline-block text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                    Calculated from Specs
+                                  </span>
+                                  <p className="text-[9px] text-brand-400 font-mono">
+                                    Normal live metal & stone formula
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Action buttons: Override or Cancel Override */}
+                            <div className="flex items-center justify-center gap-1.5 pt-1">
+                              {isOverridden ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenPiecePriceOverride(activeRing.id)}
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-lg transition-all shadow-xs cursor-pointer"
+                                    title="Edit this piece's price override"
+                                  >
+                                    <Edit3 className="w-3 h-3 text-amber-600" /> Edit Override
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleClearPieceOverride(activeRing.id)}
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded-lg transition-all shadow-xs cursor-pointer"
+                                    title="Cancel override and restore calculated price"
+                                  >
+                                    <X className="w-3 h-3 text-red-500" /> Cancel Override
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenPiecePriceOverride(activeRing.id)}
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-800 hover:text-brand-950 bg-brand-50 hover:bg-brand-100 border border-brand-200 hover:border-brand-300 px-3 py-1 rounded-lg transition-all shadow-xs cursor-pointer"
+                                  title="Override this piece's price"
+                                >
+                                  <Edit3 className="w-3 h-3 text-brand-600" /> Override Piece Price
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Small quote subtotal context */}
+                            <div className="pt-2 border-t border-brand-50 text-[9px] text-brand-400 font-mono flex items-center justify-center gap-1.5">
+                              <span>Quote Total: <strong className="text-brand-700 font-bold">${totals.grandTotal.toFixed(2)}</strong></span>
+                              <span>•</span>
+                              <span>{session.rings.length} Piece{session.rings.length === 1 ? '' : 's'}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex flex-col items-center gap-2 py-2">
+                            <div
+                              className={`relative inline-flex items-stretch rounded-xl overflow-hidden shadow-sm border transition-all ${
+                                isCalculatingPrice
+                                  ? 'border-amber-400 bg-gradient-to-r from-amber-400 via-[#f1c40f] to-amber-400 scale-[1.02]'
+                                  : 'border-brand-900 bg-brand-900 text-white hover:bg-brand-800'
+                              }`}
                             >
-                              <Edit3 className="w-3 h-3 text-brand-600" /> Override Piece Price
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Small quote subtotal context */}
-                        <div className="pt-2 border-t border-brand-50 text-[9px] text-brand-400 font-mono flex items-center justify-center gap-1.5">
-                          <span>Quote Total: <strong className="text-brand-700 font-bold">${totals.grandTotal.toFixed(2)}</strong></span>
-                          <span>•</span>
-                          <span>{session.rings.length} Piece{session.rings.length === 1 ? '' : 's'}</span>
-                        </div>
+                              {isCalculatingPrice && (
+                                <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                                  <div className="w-1/2 h-full bg-gradient-to-r from-transparent via-white/50 to-transparent animate-calc-shimmer" />
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={handleCalculatePrice}
+                                disabled={isCalculatingPrice}
+                                className={`relative z-10 pl-3.5 pr-1.5 py-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider cursor-pointer disabled:cursor-wait ${
+                                  isCalculatingPrice ? 'text-slate-950' : 'text-[#f1c40f]'
+                                }`}
+                              >
+                                {isCalculatingPrice ? (
+                                  <>
+                                    <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                                    Calculating...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Calculator className="w-3.5 h-3.5" />
+                                    Calculate Price
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleToggleLivePriceMode}
+                                className={`relative z-10 pr-2 pl-0.5 flex items-center justify-center opacity-20 hover:opacity-80 transition-opacity cursor-pointer ${
+                                  isCalculatingPrice
+                                    ? 'text-slate-950'
+                                    : 'text-slate-300 hover:text-[#f1c40f]'
+                                }`}
+                                title="Toggle Live Calculations"
+                                aria-label="Toggle Live Calculations"
+                              >
+                                <Eye className="w-2.5 h-2.5" />
+                              </button>
+                              {isCalculatingPrice && (
+                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-950/20">
+                                  <div className="h-full bg-slate-950/80 animate-calc-progress" />
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-[9px] text-brand-400 font-mono">
+                              {session.rings.length} Piece{session.rings.length === 1 ? '' : 's'} • Hidden while adjusting
+                            </p>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
                 </div>
 
                 {/* Piece Raw cost disclosure (for transparency) */}
-                {activeRing && !isWholesale && settings.showRawCostOnQuoteTab && (
+                {activeRing && !isWholesale && settings.showRawCostOnQuoteTab && showRetailPrices && (
                   <div className="bg-amber-50 p-3 rounded-xl border border-amber-200/80 text-left text-[10px] text-amber-700 leading-relaxed flex items-start gap-1.5">
                     <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
                     <div>
