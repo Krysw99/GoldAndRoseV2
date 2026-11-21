@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CategoryType, JewelryItem, QuoteSession, ScrapItem, AppSettings, ScrapTransaction, RingTierId } from './types';
+import { CategoryType, JewelryItem, QuoteSession, ScrapItem, AppSettings, ScrapTransaction, RingTierId, MaterialType } from './types';
 import { DENSITIES, FANCY_SHAPES, ROUND_MELEE, TROY_ONCE_GRAMS, RING_TIERS, DEFAULT_RING_TIER_GRAMS } from './constants';
 
 export function genId(): string {
@@ -17,6 +17,39 @@ export function getTierGrams(tierId?: RingTierId | string, settings?: AppSetting
     return Number(configured);
   }
   return DEFAULT_RING_TIER_GRAMS[id] ?? 3.5;
+}
+
+/**
+ * Density multiplier for Tiered Pricing relative to 14K Gold base (13.1 g/cm³).
+ * - Gold > 14K (e.g. 18K, 22K, 24K): scaled up proportionally by alloy density
+ * - Platinum: scaled up proportionally by platinum density (~53.4% denser than 14K)
+ * - 14K Gold, 10K Gold (or any Gold <= 14K), and Silver: unadjusted (1.0x)
+ */
+export function getTierDensityMultiplier(material?: MaterialType | string, goldKarat?: number | string): number {
+  const baseDensity = DENSITIES.gold[14] || 13.1;
+  if (material === 'platinum') {
+    return DENSITIES.platinum / baseDensity;
+  }
+  if (material === 'gold') {
+    const karat = Number(goldKarat) || 14;
+    if (karat > 14) {
+      const karatDensity = DENSITIES.gold[karat] || baseDensity;
+      return karatDensity / baseDensity;
+    }
+  }
+  return 1;
+}
+
+export function getAdjustedTierGrams(
+  tierId?: RingTierId | string,
+  material?: MaterialType | string,
+  goldKarat?: number | string,
+  settings?: AppSettings
+): number {
+  const baseGrams = getTierGrams(tierId, settings);
+  const multiplier = getTierDensityMultiplier(material, goldKarat);
+  if (multiplier === 1) return baseGrams;
+  return Number((baseGrams * multiplier).toFixed(2));
 }
 
 export function getTierLabel(tierId?: RingTierId | string): string {
@@ -45,7 +78,7 @@ export function calculateTierPrice(
   const rSilverPrem = Number(settings.retailSilverPremium !== undefined ? settings.retailSilverPremium : 20);
   const rPlatPrem = Number(settings.retailPlatinumPremium !== undefined ? settings.retailPlatinumPremium : 100);
 
-  const tierGrams = getTierGrams(id, settings);
+  const tierGrams = getAdjustedTierGrams(id, r.material, r.goldKarat, settings);
 
   let rate = 0;
   if (r.material === 'gold') {
@@ -1197,7 +1230,9 @@ export function calculateRawCost(r: JewelryItem, settings: AppSettings, spotPric
     ? (Number(r.goldKarat) / 24) 
     : (r.material === 'silver' ? 0.925 : 0.950);
   let g = Number(r.goldGrams) || 0;
-  if (r.category === 'tennisBracelet' && !g) {
+  if (['customRing', 'weddingBand'].includes(r.category) && r.pricingMethod === 'tiered') {
+    g = getAdjustedTierGrams(r.selectedTier, r.material, r.goldKarat, settings);
+  } else if (r.category === 'tennisBracelet' && !g) {
     g = getTennisEstimates(r).estGrams;
   }
   const rM = g * s * pf;
@@ -1501,17 +1536,18 @@ export function compileSessionCost(
       isWholesale ? session.wholesaleProfileId : undefined
     );
     const discVal = parseFloat(r.discount) || 0;
-    const discDeduction = r.discountType === '%' ? cost * (discVal / 100) : discVal;
-    const calculatedFinalCost = Math.max(0, cost - discDeduction);
+    const calculatedDiscDeduction = r.discountType === '%' ? cost * (discVal / 100) : discVal;
+    const calculatedFinalCost = Math.max(0, cost - calculatedDiscDeduction);
 
     calculatedGrossTotal += cost;
-    calculatedTotalDiscount += discDeduction;
+    calculatedTotalDiscount += calculatedDiscDeduction;
     calculatedPostDiscountTotal += calculatedFinalCost;
 
-    // Per-piece price override
+    // Per-piece price override replaces the base piece price; any piece discount applies to the overridden price
     const hasPieceOverride = typeof r.overridePrice === 'number' && !isNaN(r.overridePrice) && r.overridePrice !== null;
-    const effectiveFinalCost = hasPieceOverride ? Math.max(0, Number(r.overridePrice)) : calculatedFinalCost;
-    const effectiveCost = hasPieceOverride ? (effectiveFinalCost + discDeduction) : cost;
+    const effectiveCost = hasPieceOverride ? Math.max(0, Number(r.overridePrice)) : cost;
+    const discDeduction = r.discountType === '%' ? effectiveCost * (discVal / 100) : discVal;
+    const effectiveFinalCost = Math.max(0, effectiveCost - discDeduction);
 
     grossTotal += effectiveCost;
     totalDiscount += discDeduction;

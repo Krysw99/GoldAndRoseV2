@@ -456,8 +456,8 @@ export default function ClientInvoicePrint({
                   effectiveFinalCost: 0
                 };
                 const cost = pCost.cost;
+                const effectiveCost = pCost.effectiveCost;
                 const discVal = pCost.discVal;
-                const calculatedFinalCost = pCost.calculatedFinalCost;
                 const finalPieceCost = pCost.effectiveFinalCost;
                 const isOverriddenPiece = typeof r.overridePrice === 'number' && !isNaN(r.overridePrice) && r.overridePrice !== null;
                 const w = (session.wholesaleProfileId && settings.wholesaleProfiles?.find(p => p.id === session.wholesaleProfileId)?.settings) || settings.wholesale;
@@ -603,10 +603,10 @@ export default function ClientInvoicePrint({
                         )}
                         {discVal > 0 ? (
                           <div className="flex flex-col items-end">
-                            <span className={`text-[9.5px] text-slate-400/90 line-through font-normal ${isOverriddenPiece ? 'print:hidden' : 'print:text-[7.5px]'}`}>
-                              ${cost.toFixed(2)}
+                            <span className="text-[9.5px] text-slate-400/90 line-through font-normal print:text-[7.5px]">
+                              ${effectiveCost.toFixed(2)}
                             </span>
-                            <span className={`text-[8.5px] text-red-600 font-extrabold font-sans ${isOverriddenPiece ? 'print:hidden' : 'print:text-[7px]'}`}>
+                            <span className="text-[8.5px] text-red-600 font-extrabold font-sans print:text-[7px]">
                               -{r.discountType === '%' ? `${discVal}%` : `$${discVal.toFixed(2)}`}
                             </span>
                             <span className="text-brand-950 font-bold">${finalPieceCost.toFixed(2)}</span>

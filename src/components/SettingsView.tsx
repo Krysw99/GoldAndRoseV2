@@ -1186,7 +1186,7 @@ export default function SettingsView({
                       <div className="space-y-2 pt-1 border-t border-brand-100">
                         <div>
                           <label className="text-[10px] font-black text-brand-700 uppercase tracking-wider block mb-1">
-                            Grams Equivalent
+                            14K Base Grams
                           </label>
                           <div className="relative">
                             <input
@@ -1245,7 +1245,7 @@ export default function SettingsView({
               <div className="bg-amber-100/50 p-2.5 rounded-xl border border-amber-200/70 text-[11px] text-amber-900/90 flex items-center gap-2">
                 <Sparkles size={14} className="text-amber-600 shrink-0" />
                 <span>
-                  <strong>Tip:</strong> In the Retail Quote tab for Engagement Rings and Wedding Bands, switch to <strong>Tiered Pricing</strong> to choose from these 5 mounting tiers. The quote metal cost is automatically calculated using the grams equivalent multiplied by the selected metal & karat rate, or the fixed price override if entered.
+                  <strong>Tip:</strong> In the Retail Quote tab for Engagement Rings and Wedding Bands, switch to <strong>Tiered Pricing</strong> to choose from these 5 mounting tiers. Weights are based on <strong>14K Gold</strong> and automatically scale upward in the background for denser metals (gold above 14K such as 18K +18.3%, and Platinum +53.4%), while 10K Gold and Silver stay at base weight. Fixed price overrides remain fixed if entered.
                 </span>
               </div>
             </div>

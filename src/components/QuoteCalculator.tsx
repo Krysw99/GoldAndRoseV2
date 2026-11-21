@@ -22,7 +22,7 @@ import {
 import { 
   getEmptyRing, getTennisEstimates, calculateBandWeight, 
   calculateRingCost, calculateRawCost, hasRingData, compressImage, formatPhoneNumber,
-  compileSessionCost, getTierGrams, getTierLabel, calculateTierPrice
+  compileSessionCost, getTierGrams, getAdjustedTierGrams, getTierLabel, calculateTierPrice
 } from '../utils';
 import { printElement } from '../utils/printHelper';
 import { playClickSound } from '../utils/audio';
@@ -1174,7 +1174,7 @@ export default function QuoteCalculator({
     if (typeof targetRing.overridePrice === 'number' && !isNaN(targetRing.overridePrice) && targetRing.overridePrice !== null) {
       setPriceOverrideStr(String(targetRing.overridePrice));
     } else {
-      setPriceOverrideStr(pc ? String(pc.calculatedFinalCost.toFixed(2)) : '0.00');
+      setPriceOverrideStr(pc ? String(pc.cost.toFixed(2)) : '0.00');
     }
     setPriceOverrideIsInclusive(false);
     setShowPriceOverrideModal(true);
@@ -1273,9 +1273,17 @@ export default function QuoteCalculator({
       if (String(calculated) !== activeRing.goldGrams) {
         updateActiveRing('goldGrams', String(calculated));
       }
+    } else if (!isWholesale && ['customRing', 'weddingBand'].includes(activeRing.category) && activeRing.pricingMethod === 'tiered') {
+      const adjusted = String(getAdjustedTierGrams(activeRing.selectedTier, activeRing.material, activeRing.goldKarat, settings));
+      if (adjusted !== activeRing.goldGrams) {
+        updateActiveRing('goldGrams', adjusted);
+      }
     }
   }, [
+    isWholesale,
     activeRing?.category,
+    activeRing?.pricingMethod,
+    activeRing?.selectedTier,
     activeRing?.mbSize,
     activeRing?.mbWidth,
     activeRing?.mbThickness,
@@ -1290,7 +1298,8 @@ export default function QuoteCalculator({
     activeRing?.tbLength,
     activeRing?.tbShape,
     activeRing?.tbSizeRound,
-    activeRing?.tbSizeIdx
+    activeRing?.tbSizeIdx,
+    settings.ringTierGrams
   ]);
 
   // Helper to update active ring attributes
@@ -2112,8 +2121,15 @@ export default function QuoteCalculator({
                           </div>
                           {showRetailPrices && (
                             isPieceOverridden ? (
-                              <span className="text-[9px] text-amber-300 font-mono flex items-center gap-1">
-                                <span className="line-through text-slate-400 font-normal">${calculatedFinalCost.toFixed(2)}</span>
+                              <span className="text-[9px] text-amber-300 font-mono flex items-center gap-1 flex-wrap justify-end">
+                                <span className="line-through text-slate-400 font-normal">
+                                  ${(discVal > 0 ? pCost.effectiveCost : cost).toFixed(2)}
+                                </span>
+                                {discVal > 0 && (
+                                  <span className="text-red-400 font-bold">
+                                    (Disc. -{r.discountType === '%' ? `${discVal}%` : `$${discVal}`})
+                                  </span>
+                                )}
                                 <span className="font-bold">(Overridden)</span>
                               </span>
                             ) : discVal > 0 ? (
@@ -2933,7 +2949,7 @@ export default function QuoteCalculator({
                           type="button"
                           onClick={() => {
                             const tier = activeRing.selectedTier || 'simple';
-                            const tierGrams = getTierGrams(tier, settings);
+                            const tierGrams = getAdjustedTierGrams(tier, activeRing.material, activeRing.goldKarat, settings);
                             updateActiveRing('pricingMethod', 'tiered');
                             updateActiveRing('selectedTier', tier);
                             updateActiveRing('goldGrams', String(tierGrams));
@@ -3089,7 +3105,7 @@ export default function QuoteCalculator({
                       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                         {RING_TIERS.map((tier) => {
                           const isSel = (activeRing.selectedTier || 'simple') === tier.id;
-                          const tierGrams = getTierGrams(tier.id, settings);
+                          const tierGrams = getAdjustedTierGrams(tier.id, activeRing.material, activeRing.goldKarat, settings);
                           return (
                             <button
                               key={tier.id}
@@ -4037,8 +4053,13 @@ export default function QuoteCalculator({
                                   <span className="inline-block text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 shadow-xs">
                                     Overridden Price
                                   </span>
+                                  {pc.discVal > 0 && (
+                                    <p className="text-[9px] text-red-600 font-mono font-bold">
+                                      Override ${pc.effectiveCost.toFixed(2)} − Disc. ${pc.discDeduction.toFixed(2)}
+                                    </p>
+                                  )}
                                   <p className="text-[9px] text-brand-500 font-mono">
-                                    Original Calc: <span className="line-through font-bold">${calcPrice.toFixed(2)}</span> CAD
+                                    Original Calc: <span className="line-through font-bold">${pc.cost.toFixed(2)}</span> CAD
                                   </p>
                                 </div>
                               ) : (
@@ -5025,7 +5046,7 @@ export default function QuoteCalculator({
                               </span>
                               <span className="font-mono font-bold text-brand-950 text-sm print:text-xs">
                                 {r.pricingMethod === 'tiered' 
-                                  ? `${r.goldGrams || getTierGrams(r.selectedTier, settings)}g (${getTierLabel(r.selectedTier)})` 
+                                  ? `${getAdjustedTierGrams(r.selectedTier, r.material, r.goldKarat, settings)}g (${getTierLabel(r.selectedTier)})` 
                                   : `${r.goldGrams || 'N/A'} grams`}
                               </span>
                             </div>
@@ -5828,7 +5849,7 @@ export default function QuoteCalculator({
                             if (isOverridden) {
                               setPriceOverrideStr(String(r.overridePrice));
                             } else {
-                              setPriceOverrideStr(pc ? String(pc.calculatedFinalCost.toFixed(2)) : '0.00');
+                              setPriceOverrideStr(pc ? String(pc.cost.toFixed(2)) : '0.00');
                             }
                           }}
                           className={`px-2.5 py-1 text-xs rounded-lg font-bold border transition-all cursor-pointer flex items-center gap-1 ${
@@ -5852,7 +5873,7 @@ export default function QuoteCalculator({
                 <div className="flex justify-between text-slate-600">
                   <span>Calculated {targetLabel} Valuation:</span>
                   <span className="font-bold font-mono">
-                    ${targetPc ? targetPc.calculatedFinalCost.toFixed(2) : '0.00'} CAD
+                    ${targetPc ? targetPc.cost.toFixed(2) : '0.00'} CAD
                   </span>
                 </div>
                 {isTargetOverridden && (
@@ -5885,20 +5906,41 @@ export default function QuoteCalculator({
                 </div>
 
                 {/* Output Breakdown Preview */}
-                <div className="bg-slate-900 text-white rounded-xl p-3 text-xs space-y-1 font-mono border border-slate-800">
-                  <div className="flex justify-between text-slate-400">
-                    <span>Target Piece:</span>
-                    <span className="text-white font-bold">{targetLabel}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-400">
-                    <span>Original Formula Calculation:</span>
-                    <span>${(targetPc ? targetPc.calculatedFinalCost : 0).toFixed(2)} CAD</span>
-                  </div>
-                  <div className="border-t border-slate-700 my-1 pt-1 flex justify-between font-bold text-sm text-amber-400">
-                    <span>THIS PIECE OVERRIDE PRICE:</span>
-                    <span>${modalVal.toFixed(2)} CAD</span>
-                  </div>
-                </div>
+                {(() => {
+                  const previewDiscVal = targetRing ? (parseFloat(targetRing.discount) || 0) : 0;
+                  const previewDiscDeduction = targetRing && previewDiscVal > 0
+                    ? (targetRing.discountType === '%' ? modalVal * (previewDiscVal / 100) : previewDiscVal)
+                    : 0;
+                  const previewAfterDisc = Math.max(0, modalVal - previewDiscDeduction);
+                  return (
+                    <div className="bg-slate-900 text-white rounded-xl p-3 text-xs space-y-1 font-mono border border-slate-800">
+                      <div className="flex justify-between text-slate-400">
+                        <span>Target Piece:</span>
+                        <span className="text-white font-bold">{targetLabel}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-400">
+                        <span>Original Formula Calculation:</span>
+                        <span>${(targetPc ? targetPc.cost : 0).toFixed(2)} CAD</span>
+                      </div>
+                      <div className="border-t border-slate-700 my-1 pt-1 flex justify-between font-bold text-sm text-amber-400">
+                        <span>THIS PIECE OVERRIDE PRICE:</span>
+                        <span>${modalVal.toFixed(2)} CAD</span>
+                      </div>
+                      {previewDiscVal > 0 && targetRing && (
+                        <>
+                          <div className="flex justify-between text-red-400">
+                            <span>Piece Discount ({targetRing.discountType === '%' ? `${previewDiscVal}%` : `$${previewDiscVal}`}):</span>
+                            <span>-${previewDiscDeduction.toFixed(2)} CAD</span>
+                          </div>
+                          <div className="border-t border-slate-700/70 pt-1 flex justify-between font-bold text-sm text-emerald-400">
+                            <span>FINAL AFTER DISCOUNT:</span>
+                            <span>${previewAfterDisc.toFixed(2)} CAD</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-2">
