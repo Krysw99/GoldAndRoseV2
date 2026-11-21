@@ -309,8 +309,8 @@ export const DEFAULT_SETTINGS = {
     benchLaborPerHour: 40,
     alloyPerGram: 20,
     refundProcessingDays: '7-10',
-    warrantyMonths: 12,
-    complimentarySizingDays: 30
+    warrantyMonths: 24,
+    freeResizingYears: 2
   },
 
   wholesale: {

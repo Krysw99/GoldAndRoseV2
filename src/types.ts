@@ -340,6 +340,7 @@ export interface DepositCancellationPolicySettings {
   alloyPerGram: number;
   refundProcessingDays?: string;
   warrantyMonths?: number;
+  freeResizingYears?: number;
   complimentarySizingDays?: number;
 }
 

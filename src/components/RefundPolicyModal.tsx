@@ -78,8 +78,12 @@ export default function RefundPolicyModal({
   const benchLaborPerHour = resolveNum(policy.benchLaborPerHour, DEFAULT_CANCELLATION_POLICY.benchLaborPerHour);
   const alloyPerGram = resolveNum(policy.alloyPerGram, DEFAULT_CANCELLATION_POLICY.alloyPerGram);
   const refundProcessingDays = (policy.refundProcessingDays && String(policy.refundProcessingDays).trim()) || '7-10';
-  const warrantyMonths = resolveNum(policy.warrantyMonths, DEFAULT_CANCELLATION_POLICY.warrantyMonths ?? 12);
-  const complimentarySizingDays = resolveNum(policy.complimentarySizingDays, DEFAULT_CANCELLATION_POLICY.complimentarySizingDays ?? 30);
+  const warrantyMonths = resolveNum(policy.warrantyMonths, DEFAULT_CANCELLATION_POLICY.warrantyMonths ?? 24);
+  const freeResizingYears = resolveNum(policy.freeResizingYears, DEFAULT_CANCELLATION_POLICY.freeResizingYears ?? 2);
+  const warrantyLabel = warrantyMonths >= 12 && warrantyMonths % 12 === 0
+    ? `${warrantyMonths / 12}-year`
+    : `${warrantyMonths}-month`;
+  const resizingLabel = `${freeResizingYears}-year`;
 
   // Calculator computations
   const cadUnits = parseFloat(estCadHours) || 0;
@@ -155,10 +159,10 @@ In the event of a client-initiated cancellation, the ${depositPercent}% deposit 
 - Precious Metals (Gold/Platinum): Billed at purchase-date market spot price
 - Special Gemstone/Diamond Orders: Strictly Non-Refundable (cannot be returned to wholesale cutters)
 
-3. SETTLEMENT OF BALANCE
+3. SETTLEMENT OF BALANCE & STUDIO WARRANTY
 - If accumulated costs are less than the ${depositPercent}% deposit, the remaining balance will be returned within ${refundProcessingDays} business days.
 - If accumulated costs exceed the ${depositPercent}% deposit, the client is responsible for settling the outstanding balance before any materials are released.
-- Completed custom pieces, alterations, and engraved items are final sale.
+- Completed custom pieces, alterations, and engraved items are final sale, backed by a ${warrantyLabel} manufacturer warranty, ${resizingLabel} free resizing, melee lab-grown stone replacement, lifetime cleaning & polishing, and free lifetime inspection.
 
 4. CLIENT-OWNED STONE LIABILITY WAIVER
 All client-supplied loose or mounted gemstones and diamonds are accepted strictly at the client's sole risk. ${storeName} assumes no liability for chipping, cracking, cleaving, treatment loss, or breakage of client-owned stones during unsetting, setting, soldering, cleaning, or repair.`;
@@ -354,7 +358,7 @@ All client-supplied loose or mounted gemstones and diamonds are accepted strictl
                   <li className="flex items-start gap-2.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-brand-gold mt-1.5 shrink-0"></span>
                     <span>
-                      <strong className="text-brand-950">Final Sale & Studio Warranty:</strong> Completed custom pieces, engravings, and sizing are final sale, backed by a <strong>{warrantyMonths}-month craftsmanship warranty</strong> and one complimentary sizing within <strong>{complimentarySizingDays} days</strong> of delivery.
+                      <strong className="text-brand-950">Final Sale & Studio Warranty:</strong> Completed custom pieces, engravings, and sizing are final sale, backed by a <strong>{warrantyLabel} manufacturer warranty</strong>, <strong>{resizingLabel} free resizing</strong>, <strong>melee lab-grown stone replacement</strong>, <strong>lifetime cleaning &amp; polishing</strong>, and <strong>free lifetime inspection</strong>.
                     </span>
                   </li>
                 </ul>
@@ -612,10 +616,10 @@ All client-supplied loose or mounted gemstones and diamonds are accepted strictl
 
                 <section className="space-y-1">
                   <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px]">
-                    5. Final Sale & Warranty
+                    5. Final Sale &amp; Studio Warranty
                   </h4>
                   <p>
-                    Completed custom jewelry, sized pieces, and completed repair jobs are strictly final sale. Workmanship is backed by our studio guarantee against structural defects under normal wear for {warrantyMonths} months from delivery date.
+                    Completed custom jewelry, sized pieces, and completed repair jobs are strictly final sale. Every custom commission is backed by our <strong>{warrantyLabel} manufacturer warranty</strong> against structural and manufacturing defects under normal wear, <strong>{resizingLabel} free resizing</strong>, complimentary <strong>melee lab-grown stone replacement</strong> (for lost accent melee under normal wear), <strong>lifetime complimentary cleaning and polishing</strong>, and <strong>free lifetime stone &amp; prong inspection</strong>.
                   </p>
                 </section>
 
@@ -1169,7 +1173,7 @@ All client-supplied loose or mounted gemstones and diamonds are accepted strictl
             <strong>4. Completed Custom Work:</strong> Finished custom jewelry pieces, personalized engravings, and completed repair jobs are strictly final sale and non-refundable once casting and final assembly are concluded.
           </p>
           <p>
-            <strong>5. Craftsmanship Guarantee:</strong> All custom commissions include a {warrantyMonths}-month master warranty against structural defects under normal wear and one complimentary sizing within {complimentarySizingDays} days of delivery.
+            <strong>5. Studio Warranty &amp; Lifetime Care:</strong> All custom commissions include a <strong>{warrantyLabel} manufacturer warranty</strong> against manufacturing and structural defects under normal wear, <strong>{resizingLabel} free resizing</strong>, complimentary <strong>melee lab-grown stone replacement</strong>, <strong>lifetime cleaning &amp; polishing</strong>, and <strong>free lifetime inspection</strong>.
           </p>
           <p>
             <strong>6. Client-Owned Stone Liability:</strong> Client-supplied diamonds and gemstones submitted for unsetting, setting, soldering, cleaning, or repair are accepted strictly at client's sole risk. {storeName} assumes no liability for chipping, cracking, cleaving, treatment loss, or breakage arising from inherent stone fragility or pre-existing subsurface flaws.

@@ -3504,10 +3504,10 @@ export default function SettingsView({
                 <div className="border-b border-slate-100 pb-3">
                   <h4 className="text-xs font-black uppercase tracking-wider text-brand-900 flex items-center gap-1.5">
                     <Calendar size={14} className="text-brand-gold" />
-                    Settlement & Craftsmanship Warranty Terms
+                    Settlement & Studio Warranty Terms
                   </h4>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Fine-tune processing timeframes and studio guarantee wording shown in the agreement and printable sheet.
+                    Fine-tune refund processing timeframes, manufacturer warranty, and free resizing window shown across your policy documents.
                   </p>
                 </div>
 
@@ -3530,7 +3530,7 @@ export default function SettingsView({
 
                   <div>
                     <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">
-                      Craftsmanship Warranty
+                      Manufacturer Warranty
                     </label>
                     <div className="relative">
                       <input
@@ -3538,7 +3538,7 @@ export default function SettingsView({
                         min="0"
                         step="1"
                         className="w-full bg-slate-50 border border-slate-300 p-2.5 pr-16 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:border-brand-gold outline-none"
-                        value={numVal(policy.warrantyMonths, DEFAULT_CANCELLATION_POLICY.warrantyMonths ?? 12)}
+                        value={numVal(policy.warrantyMonths, DEFAULT_CANCELLATION_POLICY.warrantyMonths ?? 24)}
                         onChange={(e) => handlePolicySetting('warrantyMonths', e.target.value)}
                       />
                       <span className="absolute right-3 top-2.5 text-[10px] font-bold text-slate-400">months</span>
@@ -3547,7 +3547,7 @@ export default function SettingsView({
 
                   <div>
                     <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">
-                      Complimentary Sizing Window
+                      Free Resizing Window
                     </label>
                     <div className="relative">
                       <input
@@ -3555,12 +3555,19 @@ export default function SettingsView({
                         min="0"
                         step="1"
                         className="w-full bg-slate-50 border border-slate-300 p-2.5 pr-14 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:border-brand-gold outline-none"
-                        value={numVal(policy.complimentarySizingDays, DEFAULT_CANCELLATION_POLICY.complimentarySizingDays ?? 30)}
-                        onChange={(e) => handlePolicySetting('complimentarySizingDays', e.target.value)}
+                        value={numVal(policy.freeResizingYears, DEFAULT_CANCELLATION_POLICY.freeResizingYears ?? 2)}
+                        onChange={(e) => handlePolicySetting('freeResizingYears', e.target.value)}
                       />
-                      <span className="absolute right-3 top-2.5 text-[10px] font-bold text-slate-400">days</span>
+                      <span className="absolute right-3 top-2.5 text-[10px] font-bold text-slate-400">years</span>
                     </div>
                   </div>
+                </div>
+
+                <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl px-3.5 py-2.5 text-[11px] text-amber-950/90 flex items-center gap-2">
+                  <Sparkles size={14} className="text-amber-600 shrink-0" />
+                  <span>
+                    <strong>Included Studio Care Benefits:</strong> Free resizing & manufacturer warranty, melee lab-grown stone replacement, lifetime cleaning & polishing, and free lifetime inspection.
+                  </span>
                 </div>
               </div>
             </div>
