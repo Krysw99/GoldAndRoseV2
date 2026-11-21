@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Camera, Shield, DollarSign, Scale, ArrowRight, Printer, Edit2, RefreshCw, X, Image as ImageIcon, ShieldCheck } from 'lucide-react';
-import { ScrapItem, MaterialType, ScrapTransaction } from '../types';
+import { ScrapItem, MaterialType, ScrapTransaction, AppSettings } from '../types';
 import { PURITY_OPTIONS, TROY_ONCE_GRAMS, GOLD_KARAT_PRESETS, SILVER_PRESETS, PLATINUM_PRESETS, KaratPreset } from '../constants';
 import { calculateScrapItemValue, calculateScrapTotal, formatPhoneNumber } from '../utils';
 import { printElement } from '../utils/printHelper';
@@ -38,6 +38,7 @@ interface ScrapCalculatorProps {
   onCancelEdit?: () => void;
   onTriggerPrint?: (printFn: () => void) => void;
   isIframe?: boolean;
+  settings?: AppSettings;
 }
 
 export default function ScrapCalculator({ 
@@ -49,7 +50,8 @@ export default function ScrapCalculator({
   editingTransaction,
   onCancelEdit,
   onTriggerPrint,
-  isIframe
+  isIframe,
+  settings
 }: ScrapCalculatorProps) {
   // Scrap State
   const [customerName, setCustomerName] = useState('');
@@ -1621,6 +1623,7 @@ export default function ScrapCalculator({
     <RefundPolicyModal
       isOpen={showPolicyModal}
       onClose={() => setShowPolicyModal(false)}
+      settings={settings}
       clientName={customerName}
     />
   </>

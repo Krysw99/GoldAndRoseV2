@@ -1656,6 +1656,7 @@ export default function App() {
               onCancelEdit={() => setEditingScrapTx(null)}
               onTriggerPrint={handleTriggerPrint}
               isIframe={isIframe}
+              settings={settings}
             />
           </div>
 

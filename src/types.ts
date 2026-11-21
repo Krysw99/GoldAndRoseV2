@@ -323,9 +323,24 @@ export interface AppSettings {
   // Engagement & Wedding Band Retail Tier Pricing
   ringTierGrams?: Partial<Record<RingTierId, number>>;
   ringTierPrices?: Partial<Record<RingTierId, number>>;
+
+  // Deposit & Cancellation Policy Pricing & Terms
+  cancellationPolicy?: DepositCancellationPolicySettings;
   
   wholesale: WholesaleSettings;
   wholesaleProfiles?: WholesaleProfile[];
+}
+
+export interface DepositCancellationPolicySettings {
+  depositPercent: number;
+  cadDesignFee: number;
+  waxMoldFee: number;
+  castingFee: number;
+  benchLaborPerHour: number;
+  alloyPerGram: number;
+  refundProcessingDays?: string;
+  warrantyMonths?: number;
+  complimentarySizingDays?: number;
 }
 
 export interface WholesaleProfile {

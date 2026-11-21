@@ -5,14 +5,15 @@
 
 import React, { useState } from 'react';
 import { 
-  Save, Download, Trash2, Calendar, Settings, ShieldAlert, Key, 
-  DollarSign, Wrench, Gem, HardDrive, EyeOff, Upload, FileJson,
+  Save, Download, Trash2, Calendar, Settings, ShieldAlert, ShieldCheck, Key, 
+  DollarSign, Wrench, Gem, HardDrive, EyeOff, Eye, Upload, FileJson,
   Building, ShoppingBag, Globe, Plus, Edit, RefreshCw, Check, Cloud, Coins,
-  Layers, Sparkles, Scale
+  Layers, Sparkles, Scale, Flame, Hammer, Clock, RotateCcw
 } from 'lucide-react';
-import { AppSettings, RepairPricingSettings, ScrapTransaction, QuoteTransaction, RingTierId } from '../types';
-import { ROUND_MELEE, FANCY_SHAPES, DEFAULT_RETAIL_REPAIR_PRICING, DEFAULT_WHOLESALE_REPAIR_PRICING, RING_TIERS, DEFAULT_RING_TIER_GRAMS } from '../constants';
+import { AppSettings, RepairPricingSettings, ScrapTransaction, QuoteTransaction, RingTierId, DepositCancellationPolicySettings } from '../types';
+import { ROUND_MELEE, FANCY_SHAPES, DEFAULT_RETAIL_REPAIR_PRICING, DEFAULT_WHOLESALE_REPAIR_PRICING, RING_TIERS, DEFAULT_RING_TIER_GRAMS, DEFAULT_CANCELLATION_POLICY } from '../constants';
 import { saveDocument } from '../firebase';
+import RefundPolicyModal from './RefundPolicyModal';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -49,8 +50,9 @@ export default function SettingsView({
 }: SettingsViewProps) {
   // Key state
   const [apiKey, setApiKey] = useState(goldApiKey);
-  const [subTab, setSubTab] = useState<'rates' | 'retail' | 'wholesale' | 'database' | 'rawCosts'>('rates');
+  const [subTab, setSubTab] = useState<'rates' | 'retail' | 'wholesale' | 'policy' | 'database' | 'rawCosts'>('rates');
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [showPolicyPreview, setShowPolicyPreview] = useState(false);
 
   // Manual spot rates state
   const [manualGold, setManualGold] = useState(spotPrices.gold.toString());
@@ -75,7 +77,11 @@ export default function SettingsView({
       { minWidth: 2.0, maxWidth: 4.0, multiplier: 1.4 }
     ],
     tennisDiamondPricePerCt: settings.tennisDiamondPricePerCt !== undefined ? settings.tennisDiamondPricePerCt : 600,
-    retailRepairPricing: settings.retailRepairPricing || DEFAULT_RETAIL_REPAIR_PRICING
+    retailRepairPricing: settings.retailRepairPricing || DEFAULT_RETAIL_REPAIR_PRICING,
+    cancellationPolicy: {
+      ...DEFAULT_CANCELLATION_POLICY,
+      ...(settings.cancellationPolicy || {})
+    }
   }));
 
   // Database Purge Options
@@ -95,6 +101,10 @@ export default function SettingsView({
       setLocalSettings({
         ...settings,
         wholesaleProfiles: settings.wholesaleProfiles || [],
+        cancellationPolicy: {
+          ...DEFAULT_CANCELLATION_POLICY,
+          ...(settings.cancellationPolicy || {})
+        }
       });
     }
   }, [settings]);
@@ -335,7 +345,7 @@ export default function SettingsView({
     const stringFields = [
       'id', 'name', 'storeName', 'storeSubName', 'storeAddress', 'storeContact', 
       'wixStoreUrl', 'wixCartSlug', 'wixIntegrationMode', 'wixAccessToken', 
-      'wixProductId', 'wixWebhookUrl'
+      'wixProductId', 'wixWebhookUrl', 'refundProcessingDays'
     ];
     if (key && stringFields.includes(key)) {
       return obj;
@@ -423,6 +433,24 @@ export default function SettingsView({
       }
       return prev;
     });
+  };
+
+  const handlePolicySetting = (field: keyof DepositCancellationPolicySettings, value: any) => {
+    setLocalSettings(prev => ({
+      ...prev,
+      cancellationPolicy: {
+        ...DEFAULT_CANCELLATION_POLICY,
+        ...(prev.cancellationPolicy || {}),
+        [field]: value
+      }
+    }));
+  };
+
+  const handleResetPolicyDefaults = () => {
+    setLocalSettings(prev => ({
+      ...prev,
+      cancellationPolicy: { ...DEFAULT_CANCELLATION_POLICY }
+    }));
   };
 
   const handleDoubleNestedSetting = (section: 'centerStoneRates' | 'centerStoneRawRates', stoneType: string, origin: 'Natural' | 'Lab', valueStr: any) => {
@@ -768,6 +796,22 @@ export default function SettingsView({
               <span>Wholesale Suite</span>
             </div>
             {subTab === 'wholesale' && <span className="w-1.5 h-1.5 rounded-full bg-slate-950"></span>}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSubTab('policy')}
+            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between group ${
+              subTab === 'policy'
+                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-lg shadow-amber-500/20 font-black'
+                : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck size={15} className={subTab === 'policy' ? 'text-slate-950' : 'text-amber-400 group-hover:scale-110 transition-transform'} />
+              <span>Deposit & Policy</span>
+            </div>
+            {subTab === 'policy' && <span className="w-1.5 h-1.5 rounded-full bg-slate-950"></span>}
           </button>
 
           <button
@@ -3129,8 +3173,408 @@ export default function SettingsView({
             </div>
           </div>
         )}
+
+        {/* SUBTAB: DEPOSIT & CANCELLATION POLICY PRICING */}
+        {subTab === 'policy' && (() => {
+          const policy = {
+            ...DEFAULT_CANCELLATION_POLICY,
+            ...(localSettings.cancellationPolicy || {})
+          };
+
+          const numVal = (v: any, fallback: number) => {
+            if (v === '' || v === undefined || v === null) return '';
+            return v;
+          };
+
+          const displayNum = (v: any, fallback: number) => {
+            const parsed = parseFloat(String(v));
+            return isNaN(parsed) ? fallback : parsed;
+          };
+
+          const pDeposit = displayNum(policy.depositPercent, DEFAULT_CANCELLATION_POLICY.depositPercent);
+          const pCad = displayNum(policy.cadDesignFee, DEFAULT_CANCELLATION_POLICY.cadDesignFee);
+          const pWax = displayNum(policy.waxMoldFee, DEFAULT_CANCELLATION_POLICY.waxMoldFee);
+          const pCast = displayNum(policy.castingFee, DEFAULT_CANCELLATION_POLICY.castingFee);
+          const pBench = displayNum(policy.benchLaborPerHour, DEFAULT_CANCELLATION_POLICY.benchLaborPerHour);
+          const pAlloy = displayNum(policy.alloyPerGram, DEFAULT_CANCELLATION_POLICY.alloyPerGram);
+
+          return (
+            <div className="space-y-6 animate-fadeIn">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 bg-brand-900 text-brand-gold rounded-2xl shadow-sm shrink-0">
+                    <ShieldCheck size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-serif italic font-bold text-xl text-brand-950">
+                      Deposit & Cancellation Policy Pricing
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Adjust your required deposit percentage, itemized cancellation deduction fees, and refund/warranty terms. Changes automatically update the policy modal, legal agreement, deduction estimator, copy text, and printed sheets.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleResetPolicyDefaults}
+                    className="px-3 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Restore standard studio policy rates"
+                  >
+                    <RotateCcw size={13} />
+                    Reset Defaults
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowPolicyPreview(true)}
+                    className="px-3.5 py-2 rounded-xl bg-brand-900 hover:bg-brand-950 text-brand-gold text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Eye size={14} />
+                    Preview Policy
+                  </button>
+                </div>
+              </div>
+
+              {/* Section 1: Production Deposit Percentage */}
+              <div className="bg-gradient-to-br from-amber-50/90 to-orange-50/60 border border-amber-200 p-5 rounded-2xl shadow-2xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-amber-500/15 text-amber-800 border border-amber-300/60">
+                      <DollarSign size={16} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-amber-950">
+                        Mandatory Production Deposit
+                      </h4>
+                      <p className="text-[11px] text-amber-900/75">
+                        Percentage required upfront to lock in spot rates, bench time, and CAD modeling.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-28">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        className="w-full bg-white border border-amber-300 p-2.5 pr-8 rounded-xl text-sm font-mono font-black text-amber-950 focus:border-amber-500 outline-none shadow-2xs"
+                        value={numVal(policy.depositPercent, DEFAULT_CANCELLATION_POLICY.depositPercent)}
+                        onChange={(e) => handlePolicySetting('depositPercent', e.target.value)}
+                      />
+                      <span className="absolute right-3 top-2.5 text-xs font-mono font-black text-amber-600">%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-amber-200/70">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-800/80 mr-1">
+                    Quick Presets:
+                  </span>
+                  {[25, 30, 50, 75, 100].map(pct => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => handlePolicySetting('depositPercent', pct)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold border transition-all cursor-pointer ${
+                        pDeposit === pct
+                          ? 'bg-brand-900 text-brand-gold border-brand-900 shadow-xs'
+                          : 'bg-white text-amber-900 border-amber-200 hover:border-amber-400'
+                      }`}
+                    >
+                      {pct}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Section 2: Itemized Cancellation Cost Recovery Schedule */}
+              <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-2xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-brand-900 flex items-center gap-1.5">
+                      <Layers size={14} className="text-brand-gold" />
+                      Itemized Cancellation Cost Recovery Schedule
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Standard fees deducted from the client deposit if a custom order is cancelled mid-production.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* 1. 3D CAD Modeling Fee */}
+                  <div className="bg-slate-50/70 border border-slate-200 p-4 rounded-2xl flex flex-col justify-between space-y-3 hover:border-blue-300 transition-colors">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="p-2 rounded-xl bg-blue-50 text-blue-700 border border-blue-100">
+                        <Sparkles size={16} />
+                      </div>
+                      <span className="text-[10px] font-mono font-bold bg-blue-100/70 text-blue-900 px-2 py-0.5 rounded-lg">
+                        From ${pCad.toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-900">3D CAD Modeling Fee</h5>
+                      <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                        Minimum starting charge for digital 3D sculpting & engineering.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">
+                        Starting Rate ($ / design)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-xs font-mono font-bold text-slate-400">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="5"
+                          className="w-full bg-white border border-slate-300 p-2 pl-7 rounded-xl text-xs font-mono font-bold text-slate-900 focus:border-blue-500 outline-none"
+                          value={numVal(policy.cadDesignFee, DEFAULT_CANCELLATION_POLICY.cadDesignFee)}
+                          onChange={(e) => handlePolicySetting('cadDesignFee', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. 3D Wax Prints & Molds */}
+                  <div className="bg-slate-50/70 border border-slate-200 p-4 rounded-2xl flex flex-col justify-between space-y-3 hover:border-purple-300 transition-colors">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="p-2 rounded-xl bg-purple-50 text-purple-700 border border-purple-100">
+                        <Layers size={16} />
+                      </div>
+                      <span className="text-[10px] font-mono font-bold bg-purple-100/70 text-purple-900 px-2 py-0.5 rounded-lg">
+                        ${pWax.toFixed(2)} / mold
+                      </span>
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-900">3D Wax Prints & Molds</h5>
+                      <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                        High-resolution resin printing, wax injection, & prototype molds.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">
+                        Rate per Mold ($)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-xs font-mono font-bold text-slate-400">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="5"
+                          className="w-full bg-white border border-slate-300 p-2 pl-7 rounded-xl text-xs font-mono font-bold text-slate-900 focus:border-purple-500 outline-none"
+                          value={numVal(policy.waxMoldFee, DEFAULT_CANCELLATION_POLICY.waxMoldFee)}
+                          onChange={(e) => handlePolicySetting('waxMoldFee', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Casting & Kiln Operations */}
+                  <div className="bg-slate-50/70 border border-slate-200 p-4 rounded-2xl flex flex-col justify-between space-y-3 hover:border-amber-300 transition-colors">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="p-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-100">
+                        <Flame size={16} />
+                      </div>
+                      <span className="text-[10px] font-mono font-bold bg-amber-100/70 text-amber-900 px-2 py-0.5 rounded-lg">
+                        From ${pCast.toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-900">Casting & Kiln Operations</h5>
+                      <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                        Investment plaster, overnight kiln burnout cycles, & casting pours.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">
+                        Starting Rate ($ / cast)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-xs font-mono font-bold text-slate-400">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="5"
+                          className="w-full bg-white border border-slate-300 p-2 pl-7 rounded-xl text-xs font-mono font-bold text-slate-900 focus:border-amber-500 outline-none"
+                          value={numVal(policy.castingFee, DEFAULT_CANCELLATION_POLICY.castingFee)}
+                          onChange={(e) => handlePolicySetting('castingFee', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 4. Master Bench Artisan Labor */}
+                  <div className="bg-slate-50/70 border border-slate-200 p-4 rounded-2xl flex flex-col justify-between space-y-3 hover:border-emerald-300 transition-colors">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="p-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
+                        <Hammer size={16} />
+                      </div>
+                      <span className="text-[10px] font-mono font-bold bg-emerald-100/70 text-emerald-900 px-2 py-0.5 rounded-lg">
+                        ${pBench.toFixed(2)} / hour
+                      </span>
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-900">Master Bench Artisan Labor</h5>
+                      <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                        Hourly bench rate for fabrication, soldering, setting, & prep.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">
+                        Hourly Rate ($ / hr)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-xs font-mono font-bold text-slate-400">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="5"
+                          className="w-full bg-white border border-slate-300 p-2 pl-7 rounded-xl text-xs font-mono font-bold text-slate-900 focus:border-emerald-500 outline-none"
+                          value={numVal(policy.benchLaborPerHour, DEFAULT_CANCELLATION_POLICY.benchLaborPerHour)}
+                          onChange={(e) => handlePolicySetting('benchLaborPerHour', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 5. Master Alloy Formulations */}
+                  <div className="bg-slate-50/70 border border-slate-200 p-4 rounded-2xl flex flex-col justify-between space-y-3 hover:border-rose-300 transition-colors">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="p-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-100">
+                        <Clock size={16} />
+                      </div>
+                      <span className="text-[10px] font-mono font-bold bg-rose-100/70 text-rose-900 px-2 py-0.5 rounded-lg">
+                        ${pAlloy.toFixed(2)} / gram
+                      </span>
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-900">Master Alloy Formulations</h5>
+                      <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                        Custom deoxidizers, grain refiners, and karat alloying blends.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">
+                        Rate per Gram ($ / g)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-xs font-mono font-bold text-slate-400">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className="w-full bg-white border border-slate-300 p-2 pl-7 rounded-xl text-xs font-mono font-bold text-slate-900 focus:border-rose-500 outline-none"
+                          value={numVal(policy.alloyPerGram, DEFAULT_CANCELLATION_POLICY.alloyPerGram)}
+                          onChange={(e) => handlePolicySetting('alloyPerGram', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fixed Reference Info Card */}
+                  <div className="bg-slate-900 text-white p-4 rounded-2xl flex flex-col justify-between space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-brand-gold">
+                        Variable Pass-Throughs
+                      </span>
+                      <Gem size={15} className="text-brand-gold" />
+                    </div>
+                    <div className="space-y-2 text-[11px] text-slate-300 leading-snug">
+                      <p>
+                        <strong className="text-white">Gold & Platinum Bullion:</strong> Automatically referenced as Market Spot Price on purchase/casting date.
+                      </p>
+                      <p>
+                        <strong className="text-white">Special-Order Stones:</strong> Listed as 100% Non-Returnable once sourced or cut.
+                      </p>
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-mono border-t border-white/10 pt-2">
+                      Synced automatically to cloud & printouts
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Settlement & Warranty Terms */}
+              <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-2xs space-y-4">
+                <div className="border-b border-slate-100 pb-3">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-brand-900 flex items-center gap-1.5">
+                    <Calendar size={14} className="text-brand-gold" />
+                    Settlement & Craftsmanship Warranty Terms
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Fine-tune processing timeframes and studio guarantee wording shown in the agreement and printable sheet.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">
+                      Refund Processing Window
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="7-10"
+                        className="w-full bg-slate-50 border border-slate-300 p-2.5 pr-24 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:border-brand-gold outline-none"
+                        value={policy.refundProcessingDays ?? '7-10'}
+                        onChange={(e) => handlePolicySetting('refundProcessingDays', e.target.value)}
+                      />
+                      <span className="absolute right-3 top-2.5 text-[10px] font-bold text-slate-400">business days</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">
+                      Craftsmanship Warranty
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        className="w-full bg-slate-50 border border-slate-300 p-2.5 pr-16 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:border-brand-gold outline-none"
+                        value={numVal(policy.warrantyMonths, DEFAULT_CANCELLATION_POLICY.warrantyMonths ?? 12)}
+                        onChange={(e) => handlePolicySetting('warrantyMonths', e.target.value)}
+                      />
+                      <span className="absolute right-3 top-2.5 text-[10px] font-bold text-slate-400">months</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">
+                      Complimentary Sizing Window
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        className="w-full bg-slate-50 border border-slate-300 p-2.5 pr-14 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:border-brand-gold outline-none"
+                        value={numVal(policy.complimentarySizingDays, DEFAULT_CANCELLATION_POLICY.complimentarySizingDays ?? 30)}
+                        onChange={(e) => handlePolicySetting('complimentarySizingDays', e.target.value)}
+                      />
+                      <span className="absolute right-3 top-2.5 text-[10px] font-bold text-slate-400">days</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
+
+    {/* Live Preview of Deposit & Cancellation Policy Modal */}
+    <RefundPolicyModal
+      isOpen={showPolicyPreview}
+      onClose={() => setShowPolicyPreview(false)}
+      settings={localSettings}
+    />
   </div>
   );
 }

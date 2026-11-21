@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { MaterialType, RingTierId } from './types';
+import { MaterialType, RingTierId, DepositCancellationPolicySettings } from './types';
 
 export const TROY_ONCE_GRAMS = 31.1034768;
 
@@ -300,6 +300,19 @@ export const DEFAULT_SETTINGS = {
   },
   ringTierPrices: {},
 
+  // Deposit & Cancellation Policy Pricing Defaults
+  cancellationPolicy: {
+    depositPercent: 50,
+    cadDesignFee: 100,
+    waxMoldFee: 30,
+    castingFee: 50,
+    benchLaborPerHour: 40,
+    alloyPerGram: 20,
+    refundProcessingDays: '7-10',
+    warrantyMonths: 12,
+    complimentarySizingDays: 30
+  },
+
   wholesale: {
     goldSpotPremium: 100,
     laborPerGram: 40,
@@ -360,3 +373,4 @@ export const DEFAULT_RING_TIER_GRAMS: Record<RingTierId, number> = {
 
 export const DEFAULT_WHOLESALE_REPAIR_PRICING = DEFAULT_SETTINGS.wholesale.repairPricing!;
 export const DEFAULT_RETAIL_REPAIR_PRICING = DEFAULT_SETTINGS.retailRepairPricing!;
+export const DEFAULT_CANCELLATION_POLICY: DepositCancellationPolicySettings = DEFAULT_SETTINGS.cancellationPolicy!;

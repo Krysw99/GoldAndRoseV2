@@ -5359,14 +5359,14 @@ export default function QuoteCalculator({
                   type="button"
                   onClick={() => setShowRefundPolicyModal(true)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/90 shadow-xs transition-all cursor-pointer"
-                  title="View 50% Deposit & Studio Cancellation Policy"
+                  title="View Deposit, Cancellation Policy & Client-Owned Stone Liability Waiver"
                 >
                   <ShieldCheck size={13} className="text-amber-600 shrink-0" />
-                  <span>Refund & Cancellation Policy</span>
+                  <span>Refund Policy & Stone Waiver</span>
                 </button>
               </div>
               <p className="text-[10px] text-brand-400 italic">
-                Please sign below to lock in estimates. Signatures instantly update the contract document. Custom pieces require a 50% non-refundable production deposit.
+                Please sign below to lock in estimates. Signatures instantly update the contract document. Custom pieces require a {settings.cancellationPolicy?.depositPercent ?? 50}% non-refundable production deposit; client-supplied stones are governed by our Stone Liability Waiver.
               </p>
               <SignaturePad
                 initialSignature={session.signatureImg}
