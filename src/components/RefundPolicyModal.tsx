@@ -300,6 +300,66 @@ All client-supplied loose or mounted gemstones and diamonds are accepted strictl
                 </div>
               </div>
 
+              {/* Client Walkthrough Bullet-Point Breakdown */}
+              <div className="bg-white border border-brand-200/90 rounded-2xl p-5 shadow-sm space-y-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-100 pb-2.5">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-brand-950 flex items-center gap-2">
+                    <CheckCircle2 size={15} className="text-brand-gold shrink-0" />
+                    Key Points to Review With Client
+                  </h4>
+                  <span className="text-[10px] font-bold text-brand-600 bg-brand-50 border border-brand-100 px-2.5 py-0.5 rounded-full">
+                    Quick Counter Summary
+                  </span>
+                </div>
+
+                <ul className="space-y-2.5 text-xs text-slate-700 leading-relaxed">
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-gold mt-1.5 shrink-0"></span>
+                    <span>
+                      <strong className="text-brand-950">{depositPercent}% Deposit to Begin:</strong> A {depositPercent}% deposit is required upfront to lock in precious metal market pricing, reserve bench time, and start 3D CAD design or stone sourcing.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-gold mt-1.5 shrink-0"></span>
+                    <span>
+                      <strong className="text-brand-950">Fair Cancellation Deductions:</strong> If you cancel mid-project, only completed work and committed materials are deducted from your deposit — CAD design (from ${cadDesignFee.toFixed(2)}), wax molds (${waxMoldFee.toFixed(2)}/ea), casting (from ${castingFee.toFixed(2)}), bench labor (${benchLaborPerHour.toFixed(2)}/hr), and alloy (${alloyPerGram.toFixed(2)}/g).
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-gold mt-1.5 shrink-0"></span>
+                    <span>
+                      <strong className="text-brand-950">Remaining Deposit Refunded:</strong> If total accrued work is less than your {depositPercent}% deposit, the unused balance is refunded within <strong>{refundProcessingDays} business days</strong>. If accrued costs exceed the deposit, the difference is due prior to releasing any materials.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-gold mt-1.5 shrink-0"></span>
+                    <span>
+                      <strong className="text-brand-950">Bullion & Special-Order Stones:</strong> Gold or platinum already purchased/cast is billed at purchase-date spot price. Special-order diamonds and gemstones are non-returnable to suppliers (you keep ownership once paid in full).
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0"></span>
+                    <span>
+                      <strong className="text-rose-950">Client-Owned Stones:</strong> Any loose or heirloom stones you supply are unset, mounted, or serviced at your own risk under our{' '}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('stoneWaiver')}
+                        className="underline font-bold text-rose-700 hover:text-rose-900 cursor-pointer"
+                      >
+                        Stone Liability Waiver
+                      </button>
+                      {' '}(personal jewelry insurance is strongly recommended).
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-gold mt-1.5 shrink-0"></span>
+                    <span>
+                      <strong className="text-brand-950">Final Sale & Studio Warranty:</strong> Completed custom pieces, engravings, and sizing are final sale, backed by a <strong>{warrantyMonths}-month craftsmanship warranty</strong> and one complimentary sizing within <strong>{complimentarySizingDays} days</strong> of delivery.
+                    </span>
+                  </li>
+                </ul>
+              </div>
+
               {/* Rates Matrix Cards */}
               <div>
                 <div className="flex items-center justify-between mb-3">
