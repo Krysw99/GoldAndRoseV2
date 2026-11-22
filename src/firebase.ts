@@ -1,13 +1,18 @@
 import { initializeApp } from "firebase/app";
-import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  setDoc, 
-  deleteDoc as firestoreDeleteDoc, 
-  onSnapshot, 
-  query, 
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  Firestore,
+  collection,
+  doc,
+  setDoc,
+  deleteDoc as firestoreDeleteDoc,
+  onSnapshot,
+  query,
   orderBy,
+  limit,
   writeBatch,
   getDocs,
   getDocFromServer
@@ -24,17 +29,50 @@ const firebaseConfig = {
   messagingSenderId: "554688163297"
 };
 
+const DATABASE_ID = "ai-studio-goldroseexecutiv-24ffabdd-e90e-4dd9-8e2b-4b1051c7eea0";
+
+export const FIREBASE_UPGRADE_URL = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/databases/${DATABASE_ID}/data?openUpgradeDialog=true`;
+
 const app = initializeApp(firebaseConfig);
 
-// Use the custom databaseId provided in the applet config
-const db = getFirestore(app, "ai-studio-goldroseexecutiv-24ffabdd-e90e-4dd9-8e2b-4b1051c7eea0");
+// Enable persistent multi-tab IndexedDB local cache so page reloads & extra tabs
+// serve unchanged Firestore documents locally instead of re-charging server reads.
+let db: Firestore;
+try {
+  db = initializeFirestore(
+    app,
+    {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager()
+      })
+    },
+    DATABASE_ID
+  );
+} catch {
+  db = getFirestore(app, DATABASE_ID);
+}
+
 const auth = getAuth(app);
+
+export function isQuotaError(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error || '')).toLowerCase();
+  const code = typeof error === 'object' && error !== null && 'code' in error ? String((error as any).code).toLowerCase() : '';
+  return (
+    code.includes('resource-exhausted') ||
+    message.includes('quota limit exceeded') ||
+    message.includes('resource_exhausted') ||
+    message.includes('resource-exhausted') ||
+    message.includes('quota')
+  );
+}
 
 async function testConnection() {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
+    if (isQuotaError(error)) {
+      console.warn("[Firestore Quota Notice] Daily cloud read quota reached. Running smoothly from local device cache.");
+    } else if (error instanceof Error && error.message.includes('the client is offline')) {
       console.error("Please check your Firebase configuration.");
     }
   }
@@ -85,8 +123,8 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     operationType,
     path
   };
-  
-  if (message.includes('Quota limit exceeded') || message.includes('RESOURCE_EXHAUSTED') || message.toLowerCase().includes('quota')) {
+
+  if (isQuotaError(error)) {
     console.warn(`[Firestore Quota Notice] Cloud daily quota reached for ${operationType} on ${path || 'database'}. Preserved in local device storage.`);
   } else {
     console.error('Firestore Error: ', JSON.stringify(errInfo));
@@ -95,12 +133,13 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 /**
- * Compresses heavy base64 image strings using browser canvas API to fit Firestore 1MB limits.
+ * Lightly compresses large base64 images for cloud sync while keeping them sharp and crisp.
+ * Full original images remain preserved locally; images already under ~45KB are left untouched.
  */
-async function compressBase64Image(dataUrl: string, maxWidth = 900, maxHeight = 900, quality = 0.68): Promise<string> {
+async function compressBase64Image(dataUrl: string, maxWidth = 800, maxHeight = 800, quality = 0.68): Promise<string> {
   if (!dataUrl || !dataUrl.startsWith('data:image/')) return dataUrl;
-  // If the dataUrl is already small (e.g. < 40KB), don't compress it
-  if (dataUrl.length < 40000) return dataUrl;
+  // Skip already-compact images (~45KB binary / ~60,000 base64 chars) so sketches & small photos stay untouched
+  if (dataUrl.length < 60000) return dataUrl;
 
   return new Promise((resolve) => {
     const img = new Image();
@@ -131,7 +170,8 @@ async function compressBase64Image(dataUrl: string, maxWidth = 900, maxHeight = 
           ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
           const compressed = canvas.toDataURL('image/jpeg', quality);
-          resolve(compressed);
+          // Only adopt the compressed version if it actually saves space
+          resolve(compressed.length < dataUrl.length ? compressed : dataUrl);
           return;
         }
       } catch (e) {
@@ -147,7 +187,7 @@ async function compressBase64Image(dataUrl: string, maxWidth = 900, maxHeight = 
 }
 
 /**
- * Recursively scans and compresses heavy base64 images inside any transaction payload.
+ * Recursively scans and lightly compresses heavy base64 images inside any cloud-bound payload.
  */
 export async function compressPayload(obj: any): Promise<any> {
   if (!obj) return obj;
@@ -234,18 +274,16 @@ export async function saveDocument(collectionName: string, id: string, data: any
     if (sanitized && typeof sanitized === 'object') {
       delete sanitized.syncPending;
     }
-    // Compress heavy base64 image attachments to avoid exceeding Firestore limits
+    // Lightly compress heavy base64 image attachments to keep cloud reads & storage lean
     const compressed = await compressPayload(sanitized);
     await setDoc(docRef, compressed, { merge: true });
     console.log(`Successfully synced document ${id} to collection ${collectionName}`);
     return { success: true, offline: false };
   } catch (error: any) {
     const message = error instanceof Error ? error.message : String(error);
-    const isQuotaOrLimit = 
-      message.includes('Quota limit exceeded') || 
-      message.includes('RESOURCE_EXHAUSTED') || 
-      message.includes('1 MiB') || 
-      message.toLowerCase().includes('quota') ||
+    const isQuotaOrLimit =
+      isQuotaError(error) ||
+      message.includes('1 MiB') ||
       message.includes('unavailable') ||
       message.includes('network');
 
@@ -279,30 +317,50 @@ export async function deleteDocument(collectionName: string, id: string) {
 
     console.log(`Successfully deleted document ${id} from collection ${collectionName}`);
   } catch (error) {
+    if (isQuotaError(error)) {
+      console.warn(`[Firestore Quota Notice] Daily cloud quota reached while deleting ${path}. Removed locally.`);
+      return;
+    }
     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
+export interface ListenCollectionOptions {
+  limitCount?: number;
+  orderByField?: string;
+}
+
 /**
- * Real-time listener for a Firestore collection.
+ * Real-time listener for a Firestore collection with optional recent-record windowing
+ * to avoid downloading unbounded historical records on every page load.
  */
 export function listenCollection(
-  collectionName: string, 
+  collectionName: string,
   onUpdate: (docs: any[]) => void,
-  onError?: (error: any) => void
+  onError?: (error: any) => void,
+  options?: ListenCollectionOptions
 ) {
   const colRef = collection(db, collectionName);
-  const q = query(colRef);
-  
+  let q;
+  if (options?.orderByField && options?.limitCount) {
+    q = query(colRef, orderBy(options.orderByField, 'desc'), limit(options.limitCount));
+  } else if (options?.limitCount) {
+    q = query(colRef, limit(options.limitCount));
+  } else if (options?.orderByField) {
+    q = query(colRef, orderBy(options.orderByField, 'desc'));
+  } else {
+    q = query(colRef);
+  }
+
   return onSnapshot(q, (snapshot) => {
-    const docs = snapshot.docs.map(doc => ({
-      ...doc.data(),
-      id: doc.id
+    const docs = snapshot.docs.map(d => ({
+      ...d.data(),
+      id: d.id
     }));
     onUpdate(docs);
   }, (error) => {
     const message = error instanceof Error ? error.message : String(error);
-    if (message.includes('Quota limit exceeded') || message.includes('RESOURCE_EXHAUSTED')) {
+    if (isQuotaError(error)) {
       console.warn(`[Firestore Quota Notice] Free daily read quota reached for collection "${collectionName}". Preserving current local cache.`);
     } else {
       console.warn(`Firestore onSnapshot warning for "${collectionName}":`, message);
@@ -314,44 +372,81 @@ export function listenCollection(
 }
 
 /**
- * Uploads local items that are created/edited offline and marked as pending sync to Firestore.
+ * On-demand one-time fetch of a full collection (used only when the user explicitly
+ * clicks "Load Older Cloud Records" in LedgerView).
  */
-export async function syncLocalToCloud(collectionName: string, localItems: any[]) {
-  if (!localItems || localItems.length === 0) return;
+export async function fetchCollectionOnce(collectionName: string): Promise<{ docs: any[]; quotaExceeded?: boolean }> {
   try {
     const colRef = collection(db, collectionName);
     const snapshot = await getDocs(colRef);
-    const cloudIds = new Set(snapshot.docs.map(d => d.id));
-    
-    const batch = writeBatch(db);
-    let count = 0;
-    
-    for (const item of localItems) {
-      if (item && item.id && item.id !== 'undefined') {
-        // Skip any item that was marked deleted locally
-        if (isDocumentDeleted(item.id)) {
-          continue;
-        }
-        // CRITICAL FIX: Only upload items if they are missing from cloud AND explicitly marked syncPending (offline creations).
-        // Items without syncPending that are missing from cloud were deleted on another device and MUST NOT be re-uploaded!
-        if (!cloudIds.has(item.id) && item.syncPending === true) {
-          const docRef = doc(db, collectionName, item.id);
-          const sanitized = JSON.parse(JSON.stringify(item));
-          if (sanitized && typeof sanitized === 'object') {
-            delete sanitized.syncPending;
-          }
-          const compressed = await compressPayload(sanitized);
-          batch.set(docRef, compressed);
-          count++;
-        }
-      }
-    }
-    
-    if (count > 0) {
-      await batch.commit();
-      console.log(`Uploaded ${count} offline items to collection ${collectionName}`);
-    }
+    const docs = snapshot.docs.map(d => ({
+      ...d.data(),
+      id: d.id
+    }));
+    return { docs };
   } catch (error) {
+    if (isQuotaError(error)) {
+      console.warn(`[Firestore Quota Notice] Cannot load older records for "${collectionName}" until daily cloud quota resets.`);
+      return { docs: [], quotaExceeded: true };
+    }
+    handleFirestoreError(error, OperationType.LIST, collectionName);
+    return { docs: [] };
+  }
+}
+
+/**
+ * Uploads ONLY local items explicitly marked `syncPending === true` directly to Firestore
+ * with ZERO cloud reads (no full-collection `getDocs` scan).
+ */
+export async function syncLocalToCloud(
+  collectionName: string,
+  localItems: any[]
+): Promise<{ uploadedCount: number; uploadedIds: string[]; quotaExceeded?: boolean }> {
+  if (!localItems || localItems.length === 0) {
+    return { uploadedCount: 0, uploadedIds: [] };
+  }
+
+  const pendingItems = localItems.filter(
+    item => item && item.id && item.id !== 'undefined' && !isDocumentDeleted(item.id) && item.syncPending === true
+  );
+
+  // Zero pending local writes => 0 Firestore reads & 0 writes!
+  if (pendingItems.length === 0) {
+    return { uploadedCount: 0, uploadedIds: [] };
+  }
+
+  try {
+    const uploadedIds: string[] = [];
+    const CHUNK_SIZE = 400;
+
+    for (let i = 0; i < pendingItems.length; i += CHUNK_SIZE) {
+      const chunk = pendingItems.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+
+      for (const item of chunk) {
+        const docRef = doc(db, collectionName, item.id);
+        const sanitized = JSON.parse(JSON.stringify(item));
+        if (sanitized && typeof sanitized === 'object') {
+          delete sanitized.syncPending;
+        }
+        const compressed = await compressPayload(sanitized);
+        batch.set(docRef, compressed, { merge: true });
+        uploadedIds.push(item.id);
+      }
+
+      await batch.commit();
+    }
+
+    if (uploadedIds.length > 0) {
+      console.log(`Uploaded ${uploadedIds.length} pending item(s) to collection ${collectionName}`);
+    }
+    return { uploadedCount: uploadedIds.length, uploadedIds };
+  } catch (error) {
+    if (isQuotaError(error)) {
+      console.warn(`[Firestore Quota Notice] Daily cloud quota reached while syncing "${collectionName}". Pending records remain safely stored locally.`);
+      return { uploadedCount: 0, uploadedIds: [], quotaExceeded: true };
+    }
     handleFirestoreError(error, OperationType.WRITE, collectionName);
+    return { uploadedCount: 0, uploadedIds: [] };
   }
 }

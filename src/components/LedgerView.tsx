@@ -34,6 +34,9 @@ interface LedgerViewProps {
   isIframe?: boolean;
   onRefreshLedger?: () => Promise<void>;
   isSyncingLedger?: boolean;
+  onLoadOlderRecords?: (type: 'retail' | 'wholesale' | 'scrap') => Promise<void>;
+  loadedFullCloudHistory?: { retail: boolean; wholesale: boolean; scrap: boolean };
+  loadingOlderCloud?: { retail: boolean; wholesale: boolean; scrap: boolean };
 }
 
 function getQuoteTransactionScore(tx: QuoteTransaction, queryWords: string[], fullSearchStr: string): number {
@@ -187,7 +190,10 @@ export default function LedgerView({
   onTriggerPrint,
   isIframe,
   onRefreshLedger,
-  isSyncingLedger
+  isSyncingLedger,
+  onLoadOlderRecords,
+  loadedFullCloudHistory,
+  loadingOlderCloud
 }: LedgerViewProps) {
   const [activeLedger, setActiveLedger] = useState<'scrap' | 'retail' | 'wholesale'>('retail');
   const [search, setSearch] = useState('');
@@ -699,6 +705,25 @@ export default function LedgerView({
                 </div>
               ))
             )
+          )}
+          {onLoadOlderRecords && (
+            <div className="pt-2 pb-1">
+              {loadedFullCloudHistory?.[activeLedger] ? (
+                <p className="text-center text-[10px] font-bold uppercase tracking-wider text-brand-400 py-2">
+                  All cloud records loaded for this ledger
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onLoadOlderRecords(activeLedger)}
+                  disabled={loadingOlderCloud?.[activeLedger]}
+                  className="w-full py-2.5 px-3 rounded-xl border border-brand-200 bg-white hover:bg-brand-50 text-brand-700 hover:text-brand-900 text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer disabled:opacity-60"
+                >
+                  <RefreshCw size={13} className={loadingOlderCloud?.[activeLedger] ? 'animate-spin text-brand-gold' : 'text-brand-gold'} />
+                  {loadingOlderCloud?.[activeLedger] ? 'Loading Older Cloud Records...' : 'Load Older Cloud Records'}
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

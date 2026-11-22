@@ -8,11 +8,11 @@ import {
   Save, Download, Trash2, Calendar, Settings, ShieldAlert, ShieldCheck, Key, 
   DollarSign, Wrench, Gem, HardDrive, EyeOff, Eye, Upload, FileJson,
   Building, ShoppingBag, Globe, Plus, Edit, RefreshCw, Check, Cloud, Coins,
-  Layers, Sparkles, Scale, Flame, Hammer, Clock, RotateCcw
+  Layers, Sparkles, Scale, Flame, Hammer, Clock, RotateCcw, ExternalLink
 } from 'lucide-react';
 import { AppSettings, RepairPricingSettings, ScrapTransaction, QuoteTransaction, RingTierId, DepositCancellationPolicySettings } from '../types';
 import { ROUND_MELEE, FANCY_SHAPES, DEFAULT_RETAIL_REPAIR_PRICING, DEFAULT_WHOLESALE_REPAIR_PRICING, RING_TIERS, DEFAULT_RING_TIER_GRAMS, DEFAULT_CANCELLATION_POLICY } from '../constants';
-import { saveDocument } from '../firebase';
+import { saveDocument, FIREBASE_UPGRADE_URL } from '../firebase';
 import RefundPolicyModal from './RefundPolicyModal';
 
 interface SettingsViewProps {
@@ -3122,6 +3122,28 @@ export default function SettingsView({
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Cloud Sync Optimization & Firebase Quota Plan */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Cloud size={16} className="text-amber-500" />
+                  Cloud Sync & Firebase Quota
+                </h4>
+                <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">
+                  Cloud sync uses persistent local caching and loads your <strong>30 most recent records</strong> per ledger on startup (use <strong>Load Older Cloud Records</strong> inside Ledger Histories anytime). If your daily usage outgrows the free Firestore tier, you can upgrade your Firebase project to the pay-as-you-go Blaze plan directly in the Firebase Console.
+                </p>
+              </div>
+              <a
+                href={FIREBASE_UPGRADE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-slate-900 hover:bg-black text-amber-400 font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-sm shrink-0"
+              >
+                <ExternalLink size={14} />
+                Manage / Upgrade Cloud Plan
+              </a>
             </div>
 
             {/* Database Purge */}

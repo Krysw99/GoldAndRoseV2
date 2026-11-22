@@ -30,7 +30,16 @@ import WholesaleRepairView from './components/WholesaleRepairView';
 import JumpRingEstimator from './components/JumpRingEstimator';
 
 // Firebase cloud sync helpers
-import { listenCollection, saveDocument, deleteDocument, syncLocalToCloud, isDocumentDeleted, markDocumentDeleted } from './firebase';
+import {
+  listenCollection,
+  saveDocument,
+  deleteDocument,
+  syncLocalToCloud,
+  fetchCollectionOnce,
+  isDocumentDeleted,
+  markDocumentDeleted,
+  isQuotaError
+} from './firebase';
 
 // Tactile Click Audio Feedback Utility
 import { playClickSound } from './utils/audio';
@@ -199,6 +208,18 @@ export default function App() {
   const [isPersistenceLoaded, setIsPersistenceLoaded] = useState(true);
   const [isCloudSynced, setIsCloudSynced] = useState(false);
   const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [loadedFullCloudHistory, setLoadedFullCloudHistory] = useState<{ retail: boolean; wholesale: boolean; scrap: boolean }>({
+    retail: false,
+    wholesale: false,
+    scrap: false
+  });
+  const [loadingOlderCloud, setLoadingOlderCloud] = useState<{ retail: boolean; wholesale: boolean; scrap: boolean }>({
+    retail: false,
+    wholesale: false,
+    scrap: false
+  });
+  const quotaNoticeShownRef = useRef(false);
+  const prevWholesaleProfilesMapRef = useRef<Map<string, string>>(new Map());
 
   // Request persistent storage on load (Safari/Chrome/iOS support to prevent auto-eviction)
   useEffect(() => {
@@ -366,17 +387,23 @@ export default function App() {
       console.warn("Could not sync app_settings to cloud, saved locally:", err?.message || err);
     });
 
-    // 3. ALSO sync each wholesale profile individually to dedicated cloud collection
-    // This guarantees each client profile is permanently saved as its own document,
-    // protecting it from ever being lost or overwritten across devices!
+    // 3. Sync ONLY new or modified wholesale profiles to the dedicated cloud collection
+    // (avoids redundant writes & listener echoes when saving unrelated settings)
     if (Array.isArray(newSettings.wholesaleProfiles)) {
+      const prevMap = prevWholesaleProfilesMapRef.current;
+      const nextMap = new Map<string, string>();
       for (const profile of newSettings.wholesaleProfiles) {
         if (profile && profile.id) {
-          saveDocument('wholesale_profiles', profile.id, profile).catch(err => {
-            console.warn(`Could not sync profile ${profile.name} to cloud:`, err?.message || err);
-          });
+          const serialized = JSON.stringify(profile);
+          nextMap.set(profile.id, serialized);
+          if (prevMap.get(profile.id) !== serialized) {
+            saveDocument('wholesale_profiles', profile.id, profile).catch(err => {
+              console.warn(`Could not sync profile ${profile.name} to cloud:`, err?.message || err);
+            });
+          }
         }
       }
+      prevWholesaleProfilesMapRef.current = nextMap;
     }
   };
 
@@ -406,27 +433,104 @@ export default function App() {
 
         if (!active) return;
 
-        // 0. Set up real-time listener for deleted document tombstones
-        unsubDeletedDocs = listenCollection('deleted_doc_ids', (docs) => {
-          if (!active) return;
-          let changed = false;
-          docs.forEach(d => {
-            if (d && d.id) {
-              if (!isDocumentDeleted(d.id)) {
-                markDocumentDeleted(d.id);
-                changed = true;
-              }
-            }
-          });
-          if (changed) {
-            setScrapTransactions(prev => prev.filter(t => !isDocumentDeleted(t.id)));
-            setRingQuoteTransactions(prev => prev.filter(t => !isDocumentDeleted(t.id)));
-            setWholesaleTransactions(prev => prev.filter(t => !isDocumentDeleted(t.id)));
-            setCubanEstimates(prev => prev.filter(t => !isDocumentDeleted(t.id)));
+        const notifyQuotaOnce = (err: unknown) => {
+          if (isQuotaError(err) && !quotaNoticeShownRef.current) {
+            quotaNoticeShownRef.current = true;
+            showToast("Daily free cloud limit reached — using your saved local records.", "info");
           }
-        });
+        };
 
-        // Sync any offline local items to cloud on boot
+        // Helper: safely merge a bounded recent cloud snapshot WITH existing locally cached
+        // or previously loaded older records without ever erasing older local history.
+        const mergeRecentCloudWithLocal = <T extends { id: string; syncPending?: boolean; timestamp?: any; date?: string }>(
+          cloudDocs: any[],
+          storageKey: string,
+          isCuban = false
+        ): T[] => {
+          const localItems: T[] = (() => {
+            try {
+              const raw = localStorage.getItem(storageKey);
+              return raw ? JSON.parse(raw) : [];
+            } catch {
+              return [];
+            }
+          })();
+
+          const byId = new Map<string, T>();
+          // 1. Preserve existing non-deleted local records (including older history beyond top 30)
+          for (const localItem of localItems) {
+            if (localItem && localItem.id && !isDocumentDeleted(localItem.id)) {
+              byId.set(localItem.id, localItem);
+            }
+          }
+
+          // 2. Overlay fresh cloud records from the live recent-30 snapshot
+          for (const cloudDoc of cloudDocs) {
+            if (!cloudDoc || !cloudDoc.id || isDocumentDeleted(cloudDoc.id)) continue;
+            const existing = byId.get(cloudDoc.id);
+            // If a local edit is actively pending upload, keep it until sync completes
+            if (existing && existing.syncPending) continue;
+            byId.set(cloudDoc.id, cloudDoc as T);
+          }
+
+          const merged = Array.from(byId.values());
+          const sorted = merged.sort((a, b) => {
+            if (isCuban) {
+              const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+              const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+              return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
+            }
+            const tA = a.timestamp || (a.date ? safeParseDate(a.date) : 0);
+            const tB = b.timestamp || (b.date ? safeParseDate(b.date) : 0);
+            return tB - tA; // Newest first
+          });
+
+          safeSetLocalStorage(storageKey, sorted);
+          return sorted;
+        };
+
+        // 0. Set up bounded real-time listener for recent deleted document tombstones
+        unsubDeletedDocs = listenCollection(
+          'deleted_doc_ids',
+          (docs) => {
+            if (!active) return;
+            let changed = false;
+            docs.forEach(d => {
+              if (d && d.id) {
+                if (!isDocumentDeleted(d.id)) {
+                  markDocumentDeleted(d.id);
+                  changed = true;
+                }
+              }
+            });
+            if (changed) {
+              setScrapTransactions(prev => {
+                const next = prev.filter(t => !isDocumentDeleted(t.id));
+                safeSetLocalStorage('gr_scrap_ledger', next);
+                return next;
+              });
+              setRingQuoteTransactions(prev => {
+                const next = prev.filter(t => !isDocumentDeleted(t.id));
+                safeSetLocalStorage('gr_quote_ledger', next);
+                return next;
+              });
+              setWholesaleTransactions(prev => {
+                const next = prev.filter(t => !isDocumentDeleted(t.id));
+                safeSetLocalStorage('gr_wholesale_ledger', next);
+                return next;
+              });
+              setCubanEstimates(prev => {
+                const next = prev.filter(t => !isDocumentDeleted(t.id));
+                safeSetLocalStorage('gr_cuban_estimates', next);
+                return next;
+              });
+            }
+          },
+          notifyQuotaOnce,
+          { orderByField: 'deletedAt', limitCount: 100 }
+        );
+
+        // Upload ONLY offline pending items (0 cloud reads when nothing is pending!)
         const localScrap = (() => {
           try {
             const raw = localStorage.getItem('gr_scrap_ledger');
@@ -458,7 +562,7 @@ export default function App() {
           } catch { return []; }
         })();
 
-        await Promise.all([
+        const syncResults = await Promise.all([
           syncLocalToCloud('scrap_ledger', localScrap),
           syncLocalToCloud('retail_ledger', localRetail),
           syncLocalToCloud('wholesale_ledger', localWholesale),
@@ -466,192 +570,158 @@ export default function App() {
           syncLocalToCloud('wholesale_profiles', localProfiles)
         ]).catch(err => {
           console.warn("Offline local-to-cloud sync warning:", err);
+          return null;
         });
 
-        // 1. Set up real-time listener for Scrap Buyback Ledger
-        unsubScrap = listenCollection('scrap_ledger', (docs) => {
-          if (!active) return;
-          const validDocs = docs.filter(d => d && d.id && !isDocumentDeleted(d.id));
-          const cloudIds = new Set(validDocs.map(d => d.id));
-          const localItems = (() => {
-            try {
-              const raw = localStorage.getItem('gr_scrap_ledger');
-              return raw ? JSON.parse(raw) : [];
-            } catch { return []; }
-          })();
-          
-          const merged = [...validDocs];
-          for (const localItem of localItems) {
-            if (localItem && localItem.id && !cloudIds.has(localItem.id) && !isDocumentDeleted(localItem.id)) {
-              if (localItem.syncPending) {
-                merged.push(localItem);
+        // Clear syncPending flags locally for any items successfully uploaded on boot
+        if (active && syncResults) {
+          const [scrapRes, retailRes, wholesaleRes, cubanRes] = syncResults;
+          if (scrapRes?.uploadedIds?.length) {
+            const uploadedSet = new Set(scrapRes.uploadedIds);
+            setScrapTransactions(prev => {
+              const next = prev.map(t => uploadedSet.has(t.id) ? { ...t, syncPending: false } : t);
+              safeSetLocalStorage('gr_scrap_ledger', next);
+              return next;
+            });
+          }
+          if (retailRes?.uploadedIds?.length) {
+            const uploadedSet = new Set(retailRes.uploadedIds);
+            setRingQuoteTransactions(prev => {
+              const next = prev.map(t => uploadedSet.has(t.id) ? { ...t, syncPending: false } : t);
+              safeSetLocalStorage('gr_quote_ledger', next);
+              return next;
+            });
+          }
+          if (wholesaleRes?.uploadedIds?.length) {
+            const uploadedSet = new Set(wholesaleRes.uploadedIds);
+            setWholesaleTransactions(prev => {
+              const next = prev.map(t => uploadedSet.has(t.id) ? { ...t, syncPending: false } : t);
+              safeSetLocalStorage('gr_wholesale_ledger', next);
+              return next;
+            });
+          }
+          if (cubanRes?.uploadedIds?.length) {
+            const uploadedSet = new Set(cubanRes.uploadedIds);
+            setCubanEstimates(prev => {
+              const next = prev.map(t => uploadedSet.has(t.id) ? { ...t, syncPending: false } : t);
+              safeSetLocalStorage('gr_cuban_estimates', next);
+              return next;
+            });
+          }
+        }
+
+        // 1. Set up recent-30 real-time listener for Scrap Buyback Ledger
+        unsubScrap = listenCollection(
+          'scrap_ledger',
+          (docs) => {
+            if (!active) return;
+            const sorted = mergeRecentCloudWithLocal<ScrapTransaction>(docs, 'gr_scrap_ledger');
+            setScrapTransactions(sorted);
+          },
+          notifyQuotaOnce,
+          { orderByField: 'timestamp', limitCount: 30 }
+        );
+
+        // 2. Set up recent-30 real-time listener for Retail Quote Ledger
+        unsubRetail = listenCollection(
+          'retail_ledger',
+          (docs) => {
+            if (!active) return;
+            const sorted = mergeRecentCloudWithLocal<QuoteTransaction>(docs, 'gr_quote_ledger');
+            setRingQuoteTransactions(sorted);
+          },
+          notifyQuotaOnce,
+          { orderByField: 'timestamp', limitCount: 30 }
+        );
+
+        // 3. Set up recent-30 real-time listener for Wholesale Ledger
+        unsubWholesale = listenCollection(
+          'wholesale_ledger',
+          (docs) => {
+            if (!active) return;
+            const sorted = mergeRecentCloudWithLocal<QuoteTransaction>(docs, 'gr_wholesale_ledger');
+            setWholesaleTransactions(sorted);
+          },
+          notifyQuotaOnce,
+          { orderByField: 'timestamp', limitCount: 30 }
+        );
+
+        // 4. Set up bounded real-time listener for Cuban Estimates
+        unsubCuban = listenCollection(
+          'cuban_estimates',
+          (docs) => {
+            if (!active) return;
+            const sorted = mergeRecentCloudWithLocal<any>(docs, 'gr_cuban_estimates', true);
+            setCubanEstimates(sorted);
+          },
+          notifyQuotaOnce,
+          { limitCount: 30 }
+        );
+
+        // 5. Set up real-time listener for Master App Settings (cached locally via persistentLocalCache)
+        unsubSettings = listenCollection(
+          'app_settings',
+          (docs) => {
+            if (!active) return;
+
+            const masterDoc = docs.find(d => d.id === 'master');
+            if (masterDoc) {
+              const cleanMasterDoc = { ...masterDoc };
+              delete cleanMasterDoc.id; // remove Firestore id prop
+
+              // Protect active edits from being overwritten by incoming cloud sync
+              const timeSinceLocalChange = Date.now() - lastLocalChangeTimeRef.current;
+              if (timeSinceLocalChange < 2500) {
+                console.log("Ignoring cloud settings sync to protect recent local edits. Storing in pending...");
+                pendingCloudSettingsRef.current = cleanMasterDoc;
+              } else {
+                pendingCloudSettingsRef.current = null;
+                applyCloudSettings(cleanMasterDoc);
               }
             }
-          }
 
-          const sorted = merged.sort((a, b) => {
-            const tA = a.timestamp || (a.date ? safeParseDate(a.date) : 0);
-            const tB = b.timestamp || (b.date ? safeParseDate(b.date) : 0);
-            return tB - tA; // Newest first
-          });
-          setScrapTransactions(sorted);
-          safeSetLocalStorage('gr_scrap_ledger', sorted);
-        });
+            const apiKeyDoc = docs.find(d => d.id === 'gold_api_key');
+            if (apiKeyDoc) {
+              setGoldApiKey(apiKeyDoc.key || '');
+            }
 
-        // 2. Set up real-time listener for Retail Quote Ledger
-        unsubRetail = listenCollection('retail_ledger', (docs) => {
-          if (!active) return;
-          const validDocs = docs.filter(d => d && d.id && !isDocumentDeleted(d.id));
-          const cloudIds = new Set(validDocs.map(d => d.id));
-          const localItems = (() => {
-            try {
-              const raw = localStorage.getItem('gr_quote_ledger');
-              return raw ? JSON.parse(raw) : [];
-            } catch { return []; }
-          })();
-
-          const merged = [...validDocs];
-          for (const localItem of localItems) {
-            if (localItem && localItem.id && !cloudIds.has(localItem.id) && !isDocumentDeleted(localItem.id)) {
-              if (localItem.syncPending) {
-                merged.push(localItem);
+            const wholesaleDoc = docs.find(d => d.id === 'active_wholesale_session');
+            if (wholesaleDoc) {
+              const cleanWholesale = { ...wholesaleDoc };
+              delete cleanWholesale.id;
+              const timeSinceLocalChange = Date.now() - lastWholesaleLocalChangeTimeRef.current;
+              if (timeSinceLocalChange >= 2500) {
+                setWholesaleSession(cleanWholesale as QuoteSession);
+                safeSetLocalStorage('gr_active_wholesale_session', cleanWholesale as QuoteSession);
               }
             }
-          }
+          },
+          notifyQuotaOnce
+        );
 
-          const sorted = merged.sort((a, b) => {
-            const tA = a.timestamp || (a.date ? safeParseDate(a.date) : 0);
-            const tB = b.timestamp || (b.date ? safeParseDate(b.date) : 0);
-            return tB - tA; // Newest first
-          });
-          setRingQuoteTransactions(sorted);
-          safeSetLocalStorage('gr_quote_ledger', sorted);
-        });
+        // 5b. Set up real-time listener for dedicated Wholesale Client Profiles
+        unsubProfiles = listenCollection(
+          'wholesale_profiles',
+          (docs) => {
+            if (!active) return;
+            const validDocs = docs.filter(d => d && d.id && !isDocumentDeleted(d.id));
+            if (validDocs.length === 0) return;
 
-        // 3. Set up real-time listener for Wholesale Ledger
-        unsubWholesale = listenCollection('wholesale_ledger', (docs) => {
-          if (!active) return;
-          const validDocs = docs.filter(d => d && d.id && !isDocumentDeleted(d.id));
-          const cloudIds = new Set(validDocs.map(d => d.id));
-          const localItems = (() => {
-            try {
-              const raw = localStorage.getItem('gr_wholesale_ledger');
-              return raw ? JSON.parse(raw) : [];
-            } catch { return []; }
-          })();
+            setSettings(prev => {
+              const merged = mergeWholesaleProfiles(prev.wholesaleProfiles || [], validDocs as any);
+              const nextMap = new Map<string, string>();
+              merged.forEach(p => { if (p && p.id) nextMap.set(p.id, JSON.stringify(p)); });
+              prevWholesaleProfilesMapRef.current = nextMap;
+              safeSetLocalStorage('gr_wholesale_profiles', merged);
+              const updatedSettings = { ...prev, wholesaleProfiles: merged };
+              safeSetLocalStorage('gr_app_settings', updatedSettings);
+              return updatedSettings;
+            });
+          },
+          notifyQuotaOnce
+        );
 
-          const merged = [...validDocs];
-          for (const localItem of localItems) {
-            if (localItem && localItem.id && !cloudIds.has(localItem.id) && !isDocumentDeleted(localItem.id)) {
-              if (localItem.syncPending) {
-                merged.push(localItem);
-              }
-            }
-          }
-
-          const sorted = merged.sort((a, b) => {
-            const tA = a.timestamp || (a.date ? safeParseDate(a.date) : 0);
-            const tB = b.timestamp || (b.date ? safeParseDate(b.date) : 0);
-            return tB - tA; // Newest first
-          });
-          setWholesaleTransactions(sorted);
-          safeSetLocalStorage('gr_wholesale_ledger', sorted);
-        });
-
-        // 4. Set up real-time listener for Cuban Estimates
-        unsubCuban = listenCollection('cuban_estimates', (docs) => {
-          if (!active) return;
-          const validDocs = docs.filter(d => d && d.id && !isDocumentDeleted(d.id));
-          const cloudIds = new Set(validDocs.map(d => d.id));
-          const localItems = (() => {
-            try {
-              const raw = localStorage.getItem('gr_cuban_estimates');
-              return raw ? JSON.parse(raw) : [];
-            } catch { return []; }
-          })();
-
-          const merged = [...validDocs];
-          for (const localItem of localItems) {
-            if (localItem && localItem.id && !cloudIds.has(localItem.id) && !isDocumentDeleted(localItem.id)) {
-              if (localItem.syncPending) {
-                merged.push(localItem);
-              }
-            }
-          }
-
-          const sorted = merged.sort((a, b) => {
-            const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-            const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-            return tB - tA;
-          });
-          setCubanEstimates(sorted);
-          safeSetLocalStorage('gr_cuban_estimates', sorted);
-        });
-
-                  // 5. Set up real-time listener for Master App Settings (including Wholesale Client Profiles and Google API key)
-         unsubSettings = listenCollection('app_settings', (docs) => {
-           if (!active) return;
-
-           const masterDoc = docs.find(d => d.id === 'master');
-           if (masterDoc) {
-             const cleanMasterDoc = { ...masterDoc };
-             delete cleanMasterDoc.id; // remove Firestore id prop
-             
-             // Protect active edits from being overwritten by incoming cloud sync
-             const timeSinceLocalChange = Date.now() - lastLocalChangeTimeRef.current;
-             if (timeSinceLocalChange < 2500) {
-               console.log("Ignoring cloud settings sync to protect recent local edits. Storing in pending...");
-               pendingCloudSettingsRef.current = cleanMasterDoc;
-             } else {
-               pendingCloudSettingsRef.current = null;
-               applyCloudSettings(cleanMasterDoc);
-             }
-           }
-
-           const apiKeyDoc = docs.find(d => d.id === 'gold_api_key');
-           if (apiKeyDoc) {
-             setGoldApiKey(apiKeyDoc.key || '');
-           }
-
-           const retailDoc = null;
-           if (retailDoc) {
-             const cleanRetail = { ...retailDoc };
-             delete cleanRetail.id;
-             const timeSinceLocalChange = Date.now() - lastRetailLocalChangeTimeRef.current;
-             if (timeSinceLocalChange >= 2500) {
-               setRetailSession(cleanRetail as QuoteSession);
-               safeSetLocalStorage('gr_active_retail_session', cleanRetail as QuoteSession);
-             }
-           }
-
-           const wholesaleDoc = docs.find(d => d.id === 'active_wholesale_session');
-           if (wholesaleDoc) {
-             const cleanWholesale = { ...wholesaleDoc };
-             delete cleanWholesale.id;
-             const timeSinceLocalChange = Date.now() - lastWholesaleLocalChangeTimeRef.current;
-             if (timeSinceLocalChange >= 2500) {
-               setWholesaleSession(cleanWholesale as QuoteSession);
-               safeSetLocalStorage('gr_active_wholesale_session', cleanWholesale as QuoteSession);
-             }
-           }
-         });
-
-         // 5b. Set up real-time listener for dedicated Wholesale Client Profiles
-         unsubProfiles = listenCollection('wholesale_profiles', (docs) => {
-           if (!active) return;
-           const validDocs = docs.filter(d => d && d.id && !isDocumentDeleted(d.id));
-           if (validDocs.length === 0) return;
-
-           setSettings(prev => {
-             const merged = mergeWholesaleProfiles(prev.wholesaleProfiles || [], validDocs as any);
-             safeSetLocalStorage('gr_wholesale_profiles', merged);
-             const updatedSettings = { ...prev, wholesaleProfiles: merged };
-             safeSetLocalStorage('gr_app_settings', updatedSettings);
-             return updatedSettings;
-           });
-         });
-
-         setIsCloudSynced(true);
+        setIsCloudSynced(true);
         console.log("Server synchronization initialized successfully.");
       } catch (err) {
         console.error("Error setting up server synchronization:", err);
@@ -835,9 +905,19 @@ export default function App() {
 
       // Sync to cloud Firestore with callbacks
       saveDocument('scrap_ledger', existingId, updatedTx)
-        .then(() => {
-          playClickSound('success');
-          showToast("Scrap payout adjusted and synced to cloud ledger!", "success");
+        .then((syncRes) => {
+          if (syncRes && !syncRes.offline && !syncRes.quotaExceeded) {
+            setScrapTransactions(prev => {
+              const next = prev.map(t => t.id === existingId ? { ...t, syncPending: false } : t);
+              safeSetLocalStorage('gr_scrap_ledger', next);
+              return next;
+            });
+            playClickSound('success');
+            showToast("Scrap payout adjusted and synced to cloud ledger!", "success");
+          } else {
+            playClickSound('success');
+            showToast("Scrap payout adjusted locally (cloud sync queued)!", "info");
+          }
         })
         .catch(err => {
           console.error("Cloud sync failed on scrap edit:", err);
@@ -875,9 +955,19 @@ export default function App() {
 
       // Sync to cloud Firestore with callbacks
       saveDocument('scrap_ledger', newTx.id, newTx)
-        .then(() => {
-          playClickSound('success');
-          showToast("Scrap payout logged and synced to cloud ledger!", "success");
+        .then((syncRes) => {
+          if (syncRes && !syncRes.offline && !syncRes.quotaExceeded) {
+            setScrapTransactions(prev => {
+              const next = prev.map(t => t.id === newTx.id ? { ...t, syncPending: false } : t);
+              safeSetLocalStorage('gr_scrap_ledger', next);
+              return next;
+            });
+            playClickSound('success');
+            showToast("Scrap payout logged and synced to cloud ledger!", "success");
+          } else {
+            playClickSound('success');
+            showToast("Scrap payout logged locally (cloud sync queued)!", "info");
+          }
         })
         .catch(err => {
           console.error("Cloud sync failed on scrap save:", err);
@@ -978,6 +1068,13 @@ export default function App() {
 
       try {
         const syncRes = await saveDocument('wholesale_ledger', newTx.id, newTx);
+        if (syncRes && !syncRes.offline && !syncRes.quotaExceeded) {
+          setWholesaleTransactions(prev => {
+            const next = prev.map(t => t.id === newTx.id ? { ...t, syncPending: false } : t);
+            safeSetLocalStorage('gr_wholesale_ledger', next);
+            return next;
+          });
+        }
         if (resetSessionAfterSave) {
           updateWholesaleSessionLocal(getEmptyQuoteSession(), true);
         }
@@ -1015,6 +1112,13 @@ export default function App() {
 
       try {
         const syncRes = await saveDocument('retail_ledger', newTx.id, newTx);
+        if (syncRes && !syncRes.offline && !syncRes.quotaExceeded) {
+          setRingQuoteTransactions(prev => {
+            const next = prev.map(t => t.id === newTx.id ? { ...t, syncPending: false } : t);
+            safeSetLocalStorage('gr_quote_ledger', next);
+            return next;
+          });
+        }
         if (resetSessionAfterSave) {
           updateRetailSessionLocal(getEmptyQuoteSession(), true);
         }
@@ -1342,7 +1446,7 @@ export default function App() {
   const handleManualSync = async () => {
     if (isManualSyncing) return;
     setIsManualSyncing(true);
-    showToast("Starting cloud synchronization update...", "info");
+    showToast("Checking pending records for cloud sync...", "info");
     try {
       const localScrap = (() => {
         try {
@@ -1369,20 +1473,133 @@ export default function App() {
         } catch { return []; }
       })();
 
-      await Promise.all([
+      const [scrapRes, retailRes, wholesaleRes, cubanRes] = await Promise.all([
         syncLocalToCloud('scrap_ledger', localScrap),
         syncLocalToCloud('retail_ledger', localRetail),
         syncLocalToCloud('wholesale_ledger', localWholesale),
         syncLocalToCloud('cuban_estimates', localCuban)
       ]);
 
-      showToast("Cloud database synchronization completed successfully!", "success");
+      if (scrapRes.uploadedIds.length > 0) {
+        const uploadedSet = new Set(scrapRes.uploadedIds);
+        setScrapTransactions(prev => {
+          const next = prev.map(t => uploadedSet.has(t.id) ? { ...t, syncPending: false } : t);
+          safeSetLocalStorage('gr_scrap_ledger', next);
+          return next;
+        });
+      }
+      if (retailRes.uploadedIds.length > 0) {
+        const uploadedSet = new Set(retailRes.uploadedIds);
+        setRingQuoteTransactions(prev => {
+          const next = prev.map(t => uploadedSet.has(t.id) ? { ...t, syncPending: false } : t);
+          safeSetLocalStorage('gr_quote_ledger', next);
+          return next;
+        });
+      }
+      if (wholesaleRes.uploadedIds.length > 0) {
+        const uploadedSet = new Set(wholesaleRes.uploadedIds);
+        setWholesaleTransactions(prev => {
+          const next = prev.map(t => uploadedSet.has(t.id) ? { ...t, syncPending: false } : t);
+          safeSetLocalStorage('gr_wholesale_ledger', next);
+          return next;
+        });
+      }
+      if (cubanRes.uploadedIds.length > 0) {
+        const uploadedSet = new Set(cubanRes.uploadedIds);
+        setCubanEstimates(prev => {
+          const next = prev.map(t => uploadedSet.has(t.id) ? { ...t, syncPending: false } : t);
+          safeSetLocalStorage('gr_cuban_estimates', next);
+          return next;
+        });
+      }
+
+      const anyQuota = scrapRes.quotaExceeded || retailRes.quotaExceeded || wholesaleRes.quotaExceeded || cubanRes.quotaExceeded;
+      const totalUploaded = scrapRes.uploadedCount + retailRes.uploadedCount + wholesaleRes.uploadedCount + cubanRes.uploadedCount;
+
+      if (anyQuota) {
+        showToast("Daily free cloud limit reached — your records are safely saved locally.", "info");
+      } else if (totalUploaded === 0) {
+        showToast("All records are already synced with the cloud!", "success");
+      } else {
+        showToast(`Synced ${totalUploaded} pending record${totalUploaded === 1 ? '' : 's'} to the cloud!`, "success");
+      }
     } catch (err: any) {
       console.error("Manual sync failed:", err);
-      const errMsg = err?.message || String(err);
-      showToast(`Sync failed: ${errMsg.substring(0, 60)}`, "error");
+      if (isQuotaError(err)) {
+        showToast("Daily free cloud limit reached — your records are safely saved locally.", "info");
+      } else {
+        const errMsg = err?.message || String(err);
+        showToast(`Sync failed: ${errMsg.substring(0, 60)}`, "error");
+      }
     } finally {
       setIsManualSyncing(false);
+    }
+  };
+
+  // On-demand loader for older historical records beyond the default last-30 window
+  const handleLoadOlderCloudRecords = async (type: 'retail' | 'wholesale' | 'scrap') => {
+    if (loadingOlderCloud[type]) return;
+    setLoadingOlderCloud(prev => ({ ...prev, [type]: true }));
+
+    const collectionName = type === 'retail' ? 'retail_ledger' : type === 'wholesale' ? 'wholesale_ledger' : 'scrap_ledger';
+    const storageKey = type === 'retail' ? 'gr_quote_ledger' : type === 'wholesale' ? 'gr_wholesale_ledger' : 'gr_scrap_ledger';
+
+    try {
+      const res = await fetchCollectionOnce(collectionName);
+      if (res.quotaExceeded) {
+        showToast("Daily free cloud read limit reached — older cloud history can be loaded once quota resets or plan is upgraded.", "info");
+        return;
+      }
+
+      const validCloudDocs = res.docs.filter(d => d && d.id && !isDocumentDeleted(d.id));
+      let addedCount = 0;
+
+      const mergeAndSort = <T extends { id: string; syncPending?: boolean; timestamp?: any; date?: string }>(prev: T[]): T[] => {
+        const byId = new Map<string, T>();
+        for (const item of prev) {
+          if (item && item.id && !isDocumentDeleted(item.id)) {
+            byId.set(item.id, item);
+          }
+        }
+        const beforeSize = byId.size;
+        for (const cloudDoc of validCloudDocs) {
+          const existing = byId.get(cloudDoc.id);
+          if (existing && existing.syncPending) continue;
+          byId.set(cloudDoc.id, cloudDoc as T);
+        }
+        addedCount = Math.max(0, byId.size - beforeSize);
+        const sorted = Array.from(byId.values()).sort((a, b) => {
+          const tA = a.timestamp || (a.date ? safeParseDate(a.date) : 0);
+          const tB = b.timestamp || (b.date ? safeParseDate(b.date) : 0);
+          return tB - tA;
+        });
+        safeSetLocalStorage(storageKey, sorted);
+        return sorted;
+      };
+
+      if (type === 'retail') {
+        setRingQuoteTransactions(prev => mergeAndSort<QuoteTransaction>(prev));
+      } else if (type === 'wholesale') {
+        setWholesaleTransactions(prev => mergeAndSort<QuoteTransaction>(prev));
+      } else {
+        setScrapTransactions(prev => mergeAndSort<ScrapTransaction>(prev));
+      }
+
+      setLoadedFullCloudHistory(prev => ({ ...prev, [type]: true }));
+      if (addedCount > 0) {
+        showToast(`Loaded ${addedCount} older record${addedCount === 1 ? '' : 's'} from cloud history!`, "success");
+      } else {
+        showToast("All cloud records for this ledger are already loaded.", "success");
+      }
+    } catch (err: any) {
+      console.error("Failed loading older cloud records:", err);
+      if (isQuotaError(err)) {
+        showToast("Daily free cloud read limit reached — showing your local records.", "info");
+      } else {
+        showToast("Could not load older cloud records right now.", "error");
+      }
+    } finally {
+      setLoadingOlderCloud(prev => ({ ...prev, [type]: false }));
     }
   };
 
@@ -1690,9 +1907,19 @@ export default function App() {
                 setCubanEstimates(updated);
                 safeSetLocalStorage('gr_cuban_estimates', updated);
                 try {
-                  await saveDocument('cuban_estimates', estWithSync.id, estWithSync);
-                  playClickSound('success');
-                  showToast("Cuban estimate saved and synced to cloud ledger!", "success");
+                  const syncRes = await saveDocument('cuban_estimates', estWithSync.id, estWithSync);
+                  if (syncRes && !syncRes.offline && !syncRes.quotaExceeded) {
+                    setCubanEstimates(prev => {
+                      const next = prev.map(e => e.id === estWithSync.id ? { ...e, syncPending: false } : e);
+                      safeSetLocalStorage('gr_cuban_estimates', next);
+                      return next;
+                    });
+                    playClickSound('success');
+                    showToast("Cuban estimate saved and synced to cloud ledger!", "success");
+                  } else {
+                    playClickSound('success');
+                    showToast("Cuban estimate saved locally (cloud sync queued)!", "info");
+                  }
                 } catch (err) {
                   console.error("Cloud sync failed on Cuban save:", err);
                   showToast("Cuban estimate saved locally (sync pending)!", "info");
@@ -1771,6 +1998,9 @@ export default function App() {
               isIframe={isIframe}
               onRefreshLedger={handleManualSync}
               isSyncingLedger={isManualSyncing}
+              onLoadOlderRecords={handleLoadOlderCloudRecords}
+              loadedFullCloudHistory={loadedFullCloudHistory}
+              loadingOlderCloud={loadingOlderCloud}
             />
           </div>
 
