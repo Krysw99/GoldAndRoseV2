@@ -281,15 +281,19 @@ export async function saveDocument(collectionName: string, id: string, data: any
     return { success: true, offline: false };
   } catch (error: any) {
     const message = error instanceof Error ? error.message : String(error);
-    const isQuotaOrLimit =
-      isQuotaError(error) ||
+    if (isQuotaError(error)) {
+      console.warn(`[Firestore Quota Notice] Cloud quota limit reached for ${path}: ${message}. Document safely preserved in local device storage.`);
+      return { success: true, offline: true, quotaExceeded: true };
+    }
+
+    const isSizeOrNetwork =
       message.includes('1 MiB') ||
       message.includes('unavailable') ||
       message.includes('network');
 
-    if (isQuotaOrLimit) {
-      console.warn(`[Firestore Quota Notice] Cloud quota/network limit reached for ${path}. Document safely preserved in local device storage.`);
-      return { success: true, offline: true, quotaExceeded: true };
+    if (isSizeOrNetwork) {
+      console.warn(`[Firestore Sync Notice] Temporary network or 1 MiB document size limit for ${path}: ${message}. Document safely preserved locally.`);
+      return { success: true, offline: true, quotaExceeded: false };
     }
 
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -318,7 +322,8 @@ export async function deleteDocument(collectionName: string, id: string) {
     console.log(`Successfully deleted document ${id} from collection ${collectionName}`);
   } catch (error) {
     if (isQuotaError(error)) {
-      console.warn(`[Firestore Quota Notice] Daily cloud quota reached while deleting ${path}. Removed locally.`);
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[Firestore Quota Notice] Cloud quota reached while deleting ${path}: ${message}. Removed locally.`);
       return;
     }
     handleFirestoreError(error, OperationType.DELETE, path);
@@ -361,7 +366,7 @@ export function listenCollection(
   }, (error) => {
     const message = error instanceof Error ? error.message : String(error);
     if (isQuotaError(error)) {
-      console.warn(`[Firestore Quota Notice] Free daily read quota reached for collection "${collectionName}". Preserving current local cache.`);
+      console.warn(`[Firestore Quota Notice] Cloud read quota reached for collection "${collectionName}": ${message}. Preserving current local cache.`);
     } else {
       console.warn(`Firestore onSnapshot warning for "${collectionName}":`, message);
     }
