@@ -10,10 +10,11 @@ import {
   ShoppingBag, Check, ExternalLink, Cpu, Copy, Info, ChevronDown, ChevronUp,
   RefreshCw, Coins
 } from 'lucide-react';
-import { ScrapTransaction, QuoteTransaction, AppSettings, QuoteSession, JewelryItem } from '../types';
+import { ScrapTransaction, QuoteTransaction, AppSettings, QuoteSession, JewelryItem, StoneOrderStatus } from '../types';
 import { calculateRingCost, calculateScrapTotal, calculateScrapItemValue } from '../utils';
 import { FANCY_SHAPES, TROY_ONCE_GRAMS } from '../constants';
 import { printElement } from '../utils/printHelper';
+import { playClickSound } from '../utils/audio';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import ClientInvoicePrint from './ClientInvoicePrint';
@@ -37,6 +38,272 @@ interface LedgerViewProps {
   onLoadOlderRecords?: (type: 'retail' | 'wholesale' | 'scrap') => Promise<void>;
   loadedFullCloudHistory?: { retail: boolean; wholesale: boolean; scrap: boolean };
   loadingOlderCloud?: { retail: boolean; wholesale: boolean; scrap: boolean };
+  onUpdateRetailStoneOrder?: (
+    txId: string,
+    stoneKey: string,
+    patch: { status?: StoneOrderStatus; sourceTag?: string }
+  ) => void;
+}
+
+interface RetailCenterStoneEntry {
+  txId: string;
+  txName: string;
+  txDate: string;
+  stoneKey: string;
+  itemLabel: string;
+  caratsDisplay: string;
+  caratsNum: number;
+  shape: string;
+  stoneMeta: string;
+  status: StoneOrderStatus;
+  sourceTag: string;
+}
+
+const ITEM_CATEGORY_LABELS: Record<string, string> = {
+  customRing: 'Custom Ring',
+  weddingBand: 'Wedding Band',
+  mensBand: "Men's Band",
+  pendant: 'Pendant',
+  earrings: 'Earrings',
+  tennisBracelet: 'Tennis Bracelet',
+  repair: 'Repair'
+};
+
+/**
+ * Extracts ONLY studio-supplied center stones from a Retail quote (no melee, no fancy side stones,
+ * no tennis bracelet stones, and no customer-supplied stones).
+ */
+function extractRetailCenterStones(tx: QuoteTransaction): RetailCenterStoneEntry[] {
+  if (!tx || tx.isWholesale) return [];
+  const rings = tx.fullData?.rings || [];
+  const entries: RetailCenterStoneEntry[] = [];
+  const orderMap = tx.stoneOrders || {};
+
+  rings.forEach((r, ringIdx) => {
+    if (!r || r.stoneSource === 'customer') return;
+    if (r.category === 'repair' || r.category === 'tennisBracelet' || r.category === 'mensBand') return;
+
+    const ringId = r.id || `item_${ringIdx}`;
+    const itemLabel = r.customTitle?.trim() || ITEM_CATEGORY_LABELS[r.category] || 'Jewelry Piece';
+
+    const rawCenterList =
+      Array.isArray(r.centerStones) && r.centerStones.length > 0
+        ? r.centerStones
+        : [
+            ...(r.centerStone ? [r.centerStone] : []),
+            ...(r.category === 'earrings' && r.centerStone2 ? [r.centerStone2] : [])
+          ];
+
+    rawCenterList.forEach((cs, csIdx) => {
+      if (!cs) return;
+      const ctVal = parseFloat(String(cs.carats || '').trim());
+      if (isNaN(ctVal) || ctVal <= 0) return;
+
+      const stoneKey = `${ringId}__cs_${csIdx}`;
+      const rawOrder = orderMap[stoneKey] as any;
+      const status: StoneOrderStatus =
+        typeof rawOrder === 'string'
+          ? (rawOrder === 'ordered' ? 'ordered' : 'to_order')
+          : (rawOrder?.status === 'ordered' ? 'ordered' : 'to_order');
+      const sourceTag =
+        typeof rawOrder === 'object' && rawOrder?.sourceTag
+          ? String(rawOrder.sourceTag)
+          : '';
+
+      const shape = (cs.shape || 'Round').trim();
+      const origin = (cs.origin || '').trim();
+      const type = (cs.type || '').trim();
+      const stoneMeta = [origin, type].filter(Boolean).join(' ');
+
+      entries.push({
+        txId: tx.id,
+        txName: tx.name || 'Unnamed Client',
+        txDate: tx.date || '',
+        stoneKey,
+        itemLabel: rawCenterList.length > 1 ? `${itemLabel} (#${csIdx + 1})` : itemLabel,
+        caratsDisplay: `${ctVal.toFixed(2)} ct`,
+        caratsNum: ctVal,
+        shape,
+        stoneMeta,
+        status,
+        sourceTag
+      });
+    });
+  });
+
+  return entries;
+}
+
+function StoneShapeIcon({
+  shape,
+  ordered,
+  size = 15,
+  className = ''
+}: {
+  shape: string;
+  ordered: boolean;
+  size?: number;
+  className?: string;
+}) {
+  const normalized = (shape || 'round').trim().toLowerCase();
+  const colorClass = ordered ? 'text-emerald-600' : 'text-red-600';
+
+  const renderShape = () => {
+    if (normalized.includes('oval')) {
+      return (
+        <>
+          <ellipse cx="12" cy="12" rx="6.6" ry="9.5" fill="currentColor" fillOpacity="0.18" />
+          <ellipse cx="12" cy="12" rx="3.4" ry="5.6" strokeWidth="1.15" strokeOpacity="0.65" />
+        </>
+      );
+    }
+    if (normalized.includes('princess')) {
+      return (
+        <>
+          <rect x="4" y="4" width="16" height="16" rx="1" fill="currentColor" fillOpacity="0.18" />
+          <polygon points="12,6.5 17.5,12 12,17.5 6.5,12" strokeWidth="1.15" strokeOpacity="0.65" />
+        </>
+      );
+    }
+    if (normalized.includes('pear')) {
+      return (
+        <>
+          <path d="M12 2.5 C15.2 6.8 18.4 10.8 18.4 14.8 A6.4 6.4 0 0 1 5.6 14.8 C5.6 10.8 8.8 6.8 12 2.5 Z" fill="currentColor" fillOpacity="0.18" />
+          <path d="M12 7.2 C13.8 9.8 15.4 12 15.4 14.5 A3.4 3.4 0 0 1 8.6 14.5 C8.6 12 10.2 9.8 12 7.2 Z" strokeWidth="1.15" strokeOpacity="0.65" />
+        </>
+      );
+    }
+    if (normalized.includes('emerald')) {
+      return (
+        <>
+          <polygon points="7.5,3 16.5,3 19,5.5 19,18.5 16.5,21 7.5,21 5,18.5 5,5.5" fill="currentColor" fillOpacity="0.18" />
+          <polygon points="9,6.2 15,6.2 16.2,7.4 16.2,16.6 15,17.8 9,17.8 7.8,16.6 7.8,7.4" strokeWidth="1.15" strokeOpacity="0.65" />
+        </>
+      );
+    }
+    if (normalized.includes('radiant')) {
+      return (
+        <>
+          <polygon points="7.5,3 16.5,3 19,5.5 19,18.5 16.5,21 7.5,21 5,18.5 5,5.5" fill="currentColor" fillOpacity="0.18" />
+          <rect x="8.3" y="6.8" width="7.4" height="10.4" strokeWidth="1.15" strokeOpacity="0.65" />
+          <path d="M5.4 5.8 L8.3 6.8 M18.6 5.8 L15.7 6.8 M5.4 18.2 L8.3 17.2 M18.6 18.2 L15.7 17.2" strokeWidth="1.1" strokeOpacity="0.65" />
+        </>
+      );
+    }
+    if (normalized.includes('marquise')) {
+      return (
+        <>
+          <path d="M12 2.2 Q18.5 7.4 18.5 12 Q18.5 16.6 12 21.8 Q5.5 16.6 5.5 12 Q5.5 7.4 12 2.2 Z" fill="currentColor" fillOpacity="0.18" />
+          <path d="M12 6.6 Q15.3 9.4 15.3 12 Q15.3 14.6 12 17.4 Q8.7 14.6 8.7 12 Q8.7 9.4 12 6.6 Z" strokeWidth="1.15" strokeOpacity="0.65" />
+        </>
+      );
+    }
+    if (normalized.includes('cushion')) {
+      return (
+        <>
+          <rect x="4" y="4" width="16" height="16" rx="4.8" fill="currentColor" fillOpacity="0.18" />
+          <rect x="7.5" y="7.5" width="9" height="9" rx="2.4" strokeWidth="1.15" strokeOpacity="0.65" />
+        </>
+      );
+    }
+    if (normalized.includes('heart')) {
+      return (
+        <path d="M12 20.5 C12 20.5 4 14.8 4 9.2 A4.2 4.2 0 0 1 12 7 A4.2 4.2 0 0 1 20 9.2 C20 14.8 12 20.5 12 20.5 Z" fill="currentColor" fillOpacity="0.18" />
+      );
+    }
+    if (normalized.includes('asscher')) {
+      return (
+        <>
+          <polygon points="7,4 17,4 20,7 20,17 17,20 7,20 4,17 4,7" fill="currentColor" fillOpacity="0.18" />
+          <polygon points="9,7.5 15,7.5 16.5,9 16.5,15 15,16.5 9,16.5 7.5,15 7.5,9" strokeWidth="1.15" strokeOpacity="0.65" />
+        </>
+      );
+    }
+    if (normalized.includes('baguette')) {
+      return (
+        <>
+          <rect x="7" y="3" width="10" height="18" rx="0.8" fill="currentColor" fillOpacity="0.18" />
+          <rect x="9.5" y="6.2" width="5" height="11.6" strokeWidth="1.15" strokeOpacity="0.65" />
+        </>
+      );
+    }
+    if (normalized.includes('trillion') || normalized.includes('trilliant')) {
+      return (
+        <>
+          <path d="M12 3.2 Q17.6 11 20.5 19.2 Q12 20.8 3.5 19.2 Q6.4 11 12 3.2 Z" fill="currentColor" fillOpacity="0.18" />
+          <polygon points="12,8.4 16.2,16.2 7.8,16.2" strokeWidth="1.15" strokeOpacity="0.65" />
+        </>
+      );
+    }
+    // Default: Round brilliant
+    return (
+      <>
+        <circle cx="12" cy="12" r="9" fill="currentColor" fillOpacity="0.18" />
+        <polygon points="12,6.2 16.1,7.9 17.8,12 16.1,16.1 12,17.8 7.9,16.1 6.2,12 7.9,7.9" strokeWidth="1.15" strokeOpacity="0.65" />
+      </>
+    );
+  };
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={`shrink-0 ${colorClass} ${className}`}
+    >
+      {renderShape()}
+    </svg>
+  );
+}
+
+function SourceTagInput({
+  value,
+  onCommit
+}: {
+  value: string;
+  onCommit: (nextTag: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+
+  React.useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  const commitValue = () => {
+    const cleaned = draft.trim().replace(/\s+/g, ' ').slice(0, 20);
+    setDraft(cleaned);
+    if (cleaned !== value) {
+      onCommit(cleaned);
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      value={draft}
+      maxLength={20}
+      placeholder="From..."
+      title="Optional 1-word supplier tag (press Enter or click away to save)"
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commitValue}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.currentTarget.blur();
+        } else if (e.key === 'Escape') {
+          setDraft(value);
+          e.currentTarget.blur();
+        }
+      }}
+      className="w-24 bg-brand-50/50 hover:bg-white focus:bg-white border border-brand-200 focus:border-brand-gold rounded-lg px-2 py-1 text-[11px] font-medium text-brand-900 placeholder:text-brand-400 outline-none transition-colors"
+    />
+  );
 }
 
 function getQuoteTransactionScore(tx: QuoteTransaction, queryWords: string[], fullSearchStr: string): number {
@@ -193,9 +460,12 @@ export default function LedgerView({
   isSyncingLedger,
   onLoadOlderRecords,
   loadedFullCloudHistory,
-  loadingOlderCloud
+  loadingOlderCloud,
+  onUpdateRetailStoneOrder
 }: LedgerViewProps) {
   const [activeLedger, setActiveLedger] = useState<'scrap' | 'retail' | 'wholesale'>('retail');
+  const [retailView, setRetailView] = useState<'quotes' | 'stones'>('quotes');
+  const [stoneFilter, setStoneFilter] = useState<'to_order' | 'ordered' | 'all'>('to_order');
   const [search, setSearch] = useState('');
   const [selectedTx, setSelectedTx] = useState<{ type: 'scrap' | 'retail' | 'wholesale'; id: string } | null>(null);
   const [enlargeImage, setEnlargeImage] = useState<string | null>(null);
@@ -243,6 +513,47 @@ export default function LedgerView({
       .map(item => item.tx);
   }, [wholesaleTransactions, queryWords, fullSearchStr]);
 
+  // Retail-only studio center stones map & master queue
+  const retailCenterStonesByTx = React.useMemo(() => {
+    const map = new Map<string, RetailCenterStoneEntry[]>();
+    for (const tx of ringQuoteTransactions) {
+      const stones = extractRetailCenterStones(tx);
+      if (stones.length > 0) {
+        map.set(tx.id, stones);
+      }
+    }
+    return map;
+  }, [ringQuoteTransactions]);
+
+  const allRetailCenterStones = React.useMemo(() => {
+    const list: RetailCenterStoneEntry[] = [];
+    for (const tx of ringQuoteTransactions) {
+      const stones = retailCenterStonesByTx.get(tx.id);
+      if (stones) list.push(...stones);
+    }
+    return list;
+  }, [ringQuoteTransactions, retailCenterStonesByTx]);
+
+  const stoneCounts = React.useMemo(() => {
+    let toOrder = 0;
+    let ordered = 0;
+    for (const s of allRetailCenterStones) {
+      if (s.status === 'ordered') ordered++;
+      else toOrder++;
+    }
+    return { toOrder, ordered, all: allRetailCenterStones.length };
+  }, [allRetailCenterStones]);
+
+  const filteredRetailCenterStones = React.useMemo(() => {
+    return allRetailCenterStones.filter(stone => {
+      if (stoneFilter === 'to_order' && stone.status !== 'to_order') return false;
+      if (stoneFilter === 'ordered' && stone.status !== 'ordered') return false;
+      if (!fullSearchStr) return true;
+      const haystack = `${stone.txName} ${stone.itemLabel} ${stone.caratsDisplay} ${stone.caratsNum} ${stone.shape} ${stone.stoneMeta} ${stone.sourceTag}`.toLowerCase();
+      return queryWords.every(w => haystack.includes(w));
+    });
+  }, [allRetailCenterStones, stoneFilter, fullSearchStr, queryWords]);
+
   const currentTxData = () => {
     if (!selectedTx) return null;
     const { type, id } = selectedTx;
@@ -252,6 +563,17 @@ export default function LedgerView({
   };
 
   const activeTx = currentTxData();
+  const activeRetailCenterStones =
+    selectedTx?.type === 'retail' && activeTx
+      ? (retailCenterStonesByTx.get(activeTx.id) || [])
+      : [];
+
+  const handleToggleCenterStone = (txId: string, stoneKey: string, currentStatus: StoneOrderStatus) => {
+    if (!onUpdateRetailStoneOrder) return;
+    playClickSound('click');
+    const nextStatus: StoneOrderStatus = currentStatus === 'ordered' ? 'to_order' : 'ordered';
+    onUpdateRetailStoneOrder(txId, stoneKey, { status: nextStatus });
+  };
 
   const handleWixSync = async () => {
     if (!activeTx) return;
@@ -525,36 +847,57 @@ export default function LedgerView({
       {/* Search & Transaction Lists Column */}
       <div className="md:col-span-5 lg:col-span-4 bg-white p-5 rounded-2xl border border-brand-100 shadow-sm flex flex-col h-[650px] print:hidden">
         {/* Ledger Type Switchers */}
-        <div className="flex gap-1.5 p-1 bg-brand-50 rounded-xl border border-brand-200/60 mb-4 shadow-inner">
+        <div className="flex gap-1 p-1 bg-brand-50 rounded-xl border border-brand-200/60 mb-3 shadow-inner">
           <button
             type="button"
             onClick={() => { setActiveLedger('retail'); setSearch(''); }}
-            className={`flex-1 py-2 text-center rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${activeLedger === 'retail' ? 'bg-brand-900 text-white shadow-sm' : 'text-brand-500 hover:text-brand-800'}`}
+            className={`flex-1 py-2 px-2 text-center rounded-lg text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer ${activeLedger === 'retail' ? 'bg-brand-900 text-white shadow-sm' : 'text-brand-500 hover:text-brand-800'}`}
           >
             Retail
           </button>
           <button
             type="button"
             onClick={() => { setActiveLedger('wholesale'); setSearch(''); }}
-            className={`flex-1 py-2 text-center rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${activeLedger === 'wholesale' ? 'bg-brand-900 text-white shadow-sm' : 'text-brand-500 hover:text-brand-800'}`}
+            className={`flex-1 py-2 px-2 text-center rounded-lg text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer ${activeLedger === 'wholesale' ? 'bg-brand-900 text-white shadow-sm' : 'text-brand-500 hover:text-brand-800'}`}
           >
             Wholesale
           </button>
           <button
             type="button"
             onClick={() => { setActiveLedger('scrap'); setSearch(''); }}
-            className={`flex-1 py-2 text-center rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${activeLedger === 'scrap' ? 'bg-brand-900 text-white shadow-sm' : 'text-brand-500 hover:text-brand-800'}`}
+            className={`flex-1 py-2 px-2 text-center rounded-lg text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer ${activeLedger === 'scrap' ? 'bg-brand-900 text-white shadow-sm' : 'text-brand-500 hover:text-brand-800'}`}
           >
             Scrap
           </button>
         </div>
 
+        {/* Retail Sub-View Switcher (Quotes vs Stones) */}
+        {activeLedger === 'retail' && (
+          <div className="flex items-center gap-1 p-1 bg-brand-50/80 border border-brand-200/60 rounded-xl mb-3">
+            <button
+              type="button"
+              onClick={() => { setRetailView('quotes'); setSearch(''); }}
+              className={`flex-1 py-1.5 px-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer ${retailView === 'quotes' ? 'bg-white text-brand-900 shadow-xs' : 'text-brand-500 hover:text-brand-800'}`}
+            >
+              Quotes
+            </button>
+            <button
+              type="button"
+              onClick={() => { setRetailView('stones'); setSearch(''); }}
+              className={`flex-1 py-1.5 px-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer ${retailView === 'stones' ? 'bg-white text-brand-900 shadow-xs' : 'text-brand-500 hover:text-brand-800'}`}
+              title="Retail center stones to order"
+            >
+              Stones{stoneCounts.toOrder > 0 ? ` (${stoneCounts.toOrder})` : ''}
+            </button>
+          </div>
+        )}
+
         {/* Search controls & Sync/Refresh button */}
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-3">
           <div className="relative flex-1">
             <input
               type="text"
-              placeholder="Search by client, job #, or specs..."
+              placeholder={activeLedger === 'retail' && retailView === 'stones' ? "Search client, ct, shape, or tag..." : "Search by client, job #, or specs..."}
               className="w-full bg-brand-50/50 border border-brand-200 pl-9 pr-4 py-2.5 rounded-xl text-xs font-bold focus:bg-white focus:ring-1 focus:ring-brand-gold outline-none"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -575,9 +918,36 @@ export default function LedgerView({
           )}
         </div>
 
+        {/* Retail Center Stone Filter Bar */}
+        {activeLedger === 'retail' && retailView === 'stones' && (
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg mb-3">
+            <button
+              type="button"
+              onClick={() => setStoneFilter('to_order')}
+              className={`flex-1 py-1.5 px-2 rounded-md text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer ${stoneFilter === 'to_order' ? 'bg-white text-red-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              To Order ({stoneCounts.toOrder})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStoneFilter('ordered')}
+              className={`flex-1 py-1.5 px-2 rounded-md text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer ${stoneFilter === 'ordered' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              Ordered ({stoneCounts.ordered})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStoneFilter('all')}
+              className={`flex-1 py-1.5 px-2 rounded-md text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer ${stoneFilter === 'all' ? 'bg-white text-brand-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              All ({stoneCounts.all})
+            </button>
+          </div>
+        )}
+
         {/* Transactions list queue */}
         <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 hide-scrollbar">
-          {activeLedger === 'retail' && (
+          {activeLedger === 'retail' && retailView === 'quotes' && (
             <>
               {onAddDemoTransaction && (
                 <div className="mb-2">
@@ -594,38 +964,157 @@ export default function LedgerView({
               {filteredRetail.length === 0 ? (
                 <p className="text-center text-xs text-brand-400 py-10 italic">No retail ledger lines found</p>
               ) : (
-                filteredRetail.map(tx => (
-                <div
-                  key={tx.id}
-                  onClick={() => setSelectedTx({ type: 'retail', id: tx.id })}
-                  className={`p-3.5 rounded-xl border transition-all cursor-pointer shadow-sm flex items-center justify-between ${selectedTx?.id === tx.id ? 'bg-brand-50 border-brand-gold' : 'bg-white border-brand-100 hover:border-brand-300'}`}
-                >
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-xs text-brand-900 flex items-center flex-wrap gap-1.5">
-                      <span>{tx.name || 'Unnamed Client'}</span>
-                      {(tx.employeeId || tx.fullData?.employeeId) && (
-                        <span className="bg-brand-100 text-brand-700 text-[8.5px] font-bold px-1.5 py-0.2 rounded font-mono">
-                          Emp: {tx.employeeId || tx.fullData?.employeeId}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-[9px] text-brand-400 font-mono">{tx.date}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-black text-xs text-brand-800">{tx.total}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); onDeleteTransaction('retail', tx.id); if(selectedTx?.id===tx.id)setSelectedTx(null); }}
-                      className="text-brand-300 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete record"
+                filteredRetail.map(tx => {
+                  const txStones = retailCenterStonesByTx.get(tx.id) || [];
+                  return (
+                    <div
+                      key={tx.id}
+                      onClick={() => setSelectedTx({ type: 'retail', id: tx.id })}
+                      className={`p-3.5 rounded-xl border transition-all cursor-pointer shadow-sm flex items-center justify-between ${selectedTx?.id === tx.id ? 'bg-brand-50 border-brand-gold' : 'bg-white border-brand-100 hover:border-brand-300'}`}
                     >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
+                      <div className="space-y-0.5 min-w-0 pr-2">
+                        <p className="font-bold text-xs text-brand-900 flex items-center flex-wrap gap-1.5">
+                          <span className="truncate">{tx.name || 'Unnamed Client'}</span>
+                          {(tx.employeeId || tx.fullData?.employeeId) && (
+                            <span className="bg-brand-100 text-brand-700 text-[8.5px] font-bold px-1.5 py-0.2 rounded font-mono">
+                              Emp: {tx.employeeId || tx.fullData?.employeeId}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[9px] text-brand-400 font-mono">{tx.date}</p>
+                        {txStones.length > 0 && (
+                          <div className="flex flex-col gap-0.5 pt-0.5">
+                            {txStones.map(stone => {
+                              const isOrdered = stone.status === 'ordered';
+                              return (
+                                <div
+                                  key={stone.stoneKey}
+                                  className="inline-flex items-center gap-1.5 min-w-0 text-[10.5px] leading-tight"
+                                  title={`${stone.shape} ${stone.caratsDisplay} — ${isOrdered ? 'Ordered' : 'To Order'}${stone.sourceTag ? ` (${stone.sourceTag})` : ''}`}
+                                >
+                                  <StoneShapeIcon shape={stone.shape} ordered={isOrdered} size={14} />
+                                  <span className={`font-semibold shrink-0 ${isOrdered ? 'text-emerald-800' : 'text-red-700'}`}>
+                                    {stone.shape}
+                                  </span>
+                                  <span className="font-mono tabular-nums font-bold text-brand-800 shrink-0">
+                                    {stone.caratsDisplay}
+                                  </span>
+                                  {stone.sourceTag && (
+                                    <>
+                                      <span aria-hidden="true" className="text-brand-300 shrink-0">·</span>
+                                      <span className={`font-semibold truncate ${isOrdered ? 'text-emerald-700' : 'text-red-600'}`}>
+                                        {stone.sourceTag}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="font-black text-xs text-brand-800 font-mono tabular-nums">{tx.total}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onDeleteTransaction('retail', tx.id); if(selectedTx?.id===tx.id)setSelectedTx(null); }}
+                          className="text-brand-300 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete record"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </>
+          )}
+
+          {activeLedger === 'retail' && retailView === 'stones' && (
+            filteredRetailCenterStones.length === 0 ? (
+              <div className="text-center py-10 px-4 space-y-2.5">
+                <p className="text-xs font-semibold text-brand-700">
+                  {stoneFilter === 'to_order'
+                    ? (stoneCounts.all === 0
+                        ? 'No Retail center stones found'
+                        : 'All Retail center stones are ordered')
+                    : stoneFilter === 'ordered'
+                    ? 'No center stones marked as ordered yet'
+                    : 'No matching Retail center stones'}
+                </p>
+                <p className="text-[11px] text-brand-400">
+                  Only studio-supplied center stones from Retail quotes appear here.
+                </p>
+                {stoneFilter === 'to_order' && stoneCounts.ordered > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setStoneFilter('ordered')}
+                    className="text-[11px] font-bold text-brand-800 hover:text-brand-950 underline cursor-pointer"
+                  >
+                    View {stoneCounts.ordered} ordered {stoneCounts.ordered === 1 ? 'stone' : 'stones'}
+                  </button>
+                )}
+              </div>
+            ) : (
+              filteredRetailCenterStones.map(stone => {
+                const isSelected = selectedTx?.type === 'retail' && selectedTx.id === stone.txId;
+                const isOrdered = stone.status === 'ordered';
+                return (
+                  <div
+                    key={`${stone.txId}_${stone.stoneKey}`}
+                    onClick={() => setSelectedTx({ type: 'retail', id: stone.txId })}
+                    className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-2.5 ${isSelected ? 'bg-brand-50 border-brand-gold' : 'bg-white border-brand-100 hover:border-brand-300'}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <StoneShapeIcon shape={stone.shape} ordered={isOrdered} size={19} />
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-brand-950 flex items-baseline gap-1.5 flex-wrap leading-tight">
+                            <span className="font-mono tabular-nums font-black">{stone.caratsDisplay}</span>
+                            <span aria-hidden="true" className="text-brand-300">·</span>
+                            <span>{stone.shape}</span>
+                          </p>
+                          {stone.stoneMeta && (
+                            <p className="text-[11px] text-slate-500 mt-0.5">{stone.stoneMeta}</p>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleCenterStone(stone.txId, stone.stoneKey, stone.status);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                          isOrdered
+                            ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                            : 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200'
+                        }`}
+                      >
+                        {isOrdered ? <Check size={12} /> : <StoneShapeIcon shape={stone.shape} ordered={false} size={12} />}
+                        {isOrdered ? 'Ordered' : 'To Order'}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-brand-100/80">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-brand-900 truncate">{stone.txName}</p>
+                        <p className="text-[10px] text-brand-400 truncate">
+                          {stone.itemLabel} · {stone.txDate}
+                        </p>
+                      </div>
+                      {onUpdateRetailStoneOrder && (
+                        <SourceTagInput
+                          value={stone.sourceTag}
+                          onCommit={(nextTag) => onUpdateRetailStoneOrder(stone.txId, stone.stoneKey, { sourceTag: nextTag })}
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )
           )}
 
           {activeLedger === 'wholesale' && (
@@ -813,6 +1302,61 @@ export default function LedgerView({
                 </button>
               </div>
             </div>
+
+            {/* Retail Center Stone Order Bar (Retail only, hidden when printing) */}
+            {selectedTx.type === 'retail' && activeRetailCenterStones.length > 0 && onUpdateRetailStoneOrder && (
+              <div className="mb-4 pb-3 border-b border-brand-100 space-y-2 print:hidden">
+                <div className="flex items-center justify-between text-[11px] text-brand-500">
+                  <span className="font-bold text-brand-800">Center Stone Order Status</span>
+                  <span>
+                    {activeRetailCenterStones.filter(s => s.status === 'ordered').length}/{activeRetailCenterStones.length} ordered
+                  </span>
+                </div>
+                <div className="divide-y divide-brand-100/80 border border-brand-100 rounded-xl bg-brand-50/30">
+                  {activeRetailCenterStones.map(stone => {
+                    const isOrdered = stone.status === 'ordered';
+                    return (
+                      <div
+                        key={stone.stoneKey}
+                        className="px-3 py-2 flex flex-wrap items-center justify-between gap-2"
+                      >
+                        <div className="flex items-center gap-2 min-w-0 text-xs">
+                          <StoneShapeIcon shape={stone.shape} ordered={isOrdered} size={16} />
+                          <span className="font-mono tabular-nums font-black text-brand-950">{stone.caratsDisplay}</span>
+                          <span aria-hidden="true" className="text-brand-300">·</span>
+                          <span className="font-semibold text-brand-900">{stone.shape}</span>
+                          {stone.stoneMeta && (
+                            <>
+                              <span aria-hidden="true" className="text-brand-300">·</span>
+                              <span className="text-slate-500 text-[11px]">{stone.stoneMeta}</span>
+                            </>
+                          )}
+                          <span className="text-[10px] text-brand-400 truncate">({stone.itemLabel})</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <SourceTagInput
+                            value={stone.sourceTag}
+                            onCommit={(nextTag) => onUpdateRetailStoneOrder(stone.txId, stone.stoneKey, { sourceTag: nextTag })}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCenterStone(stone.txId, stone.stoneKey, stone.status)}
+                            className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                              isOrdered
+                                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                                : 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200'
+                            }`}
+                          >
+                            {isOrdered ? <Check size={12} /> : <StoneShapeIcon shape={stone.shape} ordered={false} size={12} />}
+                            {isOrdered ? 'Ordered' : 'To Order'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Document sheet contents */}
             <div className="flex-1 overflow-y-auto max-h-[500px] pr-1 hide-scrollbar print:overflow-visible print:max-h-none print:p-0">

@@ -77,6 +77,9 @@ export default function RefundPolicyModal({
   const castingFee = resolveNum(policy.castingFee, DEFAULT_CANCELLATION_POLICY.castingFee);
   const benchLaborPerHour = resolveNum(policy.benchLaborPerHour, DEFAULT_CANCELLATION_POLICY.benchLaborPerHour);
   const alloyPerGram = resolveNum(policy.alloyPerGram, DEFAULT_CANCELLATION_POLICY.alloyPerGram);
+  const refundPolicyMode = policy.refundPolicyMode || 'no_refund_final_sale';
+  const isNoRefundPolicy = refundPolicyMode === 'no_refund_final_sale';
+  const isStoreCreditOnly = refundPolicyMode === 'store_credit';
   const refundProcessingDays = (policy.refundProcessingDays && String(policy.refundProcessingDays).trim()) || '7-10';
   const warrantyMonths = resolveNum(policy.warrantyMonths, DEFAULT_CANCELLATION_POLICY.warrantyMonths ?? 24);
   const freeResizingYears = resolveNum(policy.freeResizingYears, DEFAULT_CANCELLATION_POLICY.freeResizingYears ?? 2);
@@ -159,10 +162,14 @@ In the event of a client-initiated cancellation, the ${depositPercent}% deposit 
 - Precious Metals (Gold/Platinum): Billed at purchase-date market spot price
 - Special Gemstone/Diamond Orders: Strictly Non-Refundable (cannot be returned to wholesale cutters)
 
-3. SETTLEMENT OF BALANCE & STUDIO WARRANTY
-- If accumulated costs are less than the ${depositPercent}% deposit, the remaining balance will be returned within ${refundProcessingDays} business days.
+3. NO-REFUND / FINAL SALE POLICY & STUDIO WARRANTY
+${isNoRefundPolicy
+  ? `- Strictly No Refunds — All Pieces Are Final Sale: All deposits, custom commissions, repairs, and finished jewelry pieces are strictly final sale with no monetary refunds.`
+  : isStoreCreditOnly
+  ? `- Store Credit Only (No Cash Refunds): If accumulated costs are less than the ${depositPercent}% deposit, any remaining unexpended balance is issued strictly as store credit (no cash/card refunds).`
+  : `- If accumulated costs are less than the ${depositPercent}% deposit, the remaining balance will be returned within ${refundProcessingDays} business days.`}
 - If accumulated costs exceed the ${depositPercent}% deposit, the client is responsible for settling the outstanding balance before any materials are released.
-- Completed custom pieces, alterations, and engraved items are final sale, backed by a ${warrantyLabel} manufacturer warranty, ${resizingLabel} free resizing, melee lab-grown stone replacement, lifetime cleaning & polishing, and free lifetime inspection.
+- All jewelry pieces, completed custom commissions, alterations, and engraved items are strictly final sale, backed by a ${warrantyLabel} manufacturer warranty, ${resizingLabel} free resizing, melee lab-grown stone replacement, lifetime cleaning & polishing, and free lifetime inspection.
 
 4. CLIENT-OWNED STONE LIABILITY WAIVER
 All client-supplied loose or mounted gemstones and diamonds are accepted strictly at the client's sole risk. ${storeName} assumes no liability for chipping, cracking, cleaving, treatment loss, or breakage of client-owned stones during unsetting, setting, soldering, cleaning, or repair.`;
@@ -332,7 +339,19 @@ All client-supplied loose or mounted gemstones and diamonds are accepted strictl
                   <li className="flex items-start gap-2.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-brand-gold mt-1.5 shrink-0"></span>
                     <span>
-                      <strong className="text-brand-950">Remaining Deposit Refunded:</strong> If total accrued work is less than your {depositPercent}% deposit, the unused balance is refunded within <strong>{refundProcessingDays} business days</strong>. If accrued costs exceed the deposit, the difference is due prior to releasing any materials.
+                      {isNoRefundPolicy ? (
+                        <>
+                          <strong className="text-brand-950">No Refunds — All Pieces Final Sale:</strong> All pieces, custom orders, and deposits are strictly <strong>final sale with no refunds</strong>. If accrued costs exceed your {depositPercent}% deposit upon cancellation, the difference is due prior to releasing any materials.
+                        </>
+                      ) : isStoreCreditOnly ? (
+                        <>
+                          <strong className="text-brand-950">Store Credit Only (No Cash Refunds):</strong> If total accrued work is less than your {depositPercent}% deposit, the unused balance is issued strictly as <strong>store credit</strong> (no cash/card refunds). If accrued costs exceed the deposit, the difference is due prior to releasing any materials.
+                        </>
+                      ) : (
+                        <>
+                          <strong className="text-brand-950">Remaining Deposit Refunded:</strong> If total accrued work is less than your {depositPercent}% deposit, the unused balance is refunded within <strong>{refundProcessingDays} business days</strong>. If accrued costs exceed the deposit, the difference is due prior to releasing any materials.
+                        </>
+                      )}
                     </span>
                   </li>
                   <li className="flex items-start gap-2.5">
@@ -509,23 +528,49 @@ All client-supplied loose or mounted gemstones and diamonds are accepted strictl
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                 <div className="bg-brand-50/50 p-4 rounded-2xl border border-brand-100 space-y-1.5">
                   <h5 className="font-bold text-xs text-brand-900 flex items-center gap-1.5">
-                    <CheckCircle2 size={14} className="text-green-600" />
-                    Remaining Deposit Balance Refund
+                    {isNoRefundPolicy ? (
+                      <>
+                        <AlertCircle size={14} className="text-red-600" />
+                        No-Refund Policy — All Pieces Final Sale
+                      </>
+                    ) : isStoreCreditOnly ? (
+                      <>
+                        <AlertCircle size={14} className="text-amber-600" />
+                        Store Credit Only (No Cash Refunds)
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={14} className="text-green-600" />
+                        Remaining Deposit Balance Refund
+                      </>
+                    )}
                   </h5>
                   <p className="text-[11px] text-slate-600 leading-relaxed">
-                    If the total accrued expenses (as calculated above) are less than the {depositPercent}% deposit paid, 
-                    the unexpended funds will be refunded to the client within {refundProcessingDays} business days.
+                    {isNoRefundPolicy ? (
+                      <>
+                        All pieces, custom commissions, repairs, and deposits are strictly <strong>final sale with no refunds</strong>. In the event of cancellation, the {depositPercent}% deposit is applied toward accrued work and materials; any costs exceeding the deposit remain due prior to releasing materials.
+                      </>
+                    ) : isStoreCreditOnly ? (
+                      <>
+                        No cash or card refunds are issued. If total accrued expenses are less than the {depositPercent}% deposit paid, any unexpended balance is issued strictly as <strong>store credit</strong> toward a future commission or purchase.
+                      </>
+                    ) : (
+                      <>
+                        If the total accrued expenses (as calculated above) are less than the {depositPercent}% deposit paid, 
+                        the unexpended funds will be refunded to the client within {refundProcessingDays} business days.
+                      </>
+                    )}
                   </p>
                 </div>
 
                 <div className="bg-brand-50/50 p-4 rounded-2xl border border-brand-100 space-y-1.5">
                   <h5 className="font-bold text-xs text-brand-900 flex items-center gap-1.5">
                     <AlertCircle size={14} className="text-amber-600" />
-                    Completed Custom Work & Deliverables
+                    All Pieces Final Sale &amp; Deliverables
                   </h5>
                   <p className="text-[11px] text-slate-600 leading-relaxed">
-                    Completed custom jewelry, personalized engravings, and finalized sizing jobs are strictly 
-                    <strong> final sale</strong> and not eligible for return once casting and final assembly are concluded.
+                    All finished jewelry pieces, custom commissions, personalized engravings, and finalized sizing jobs are strictly 
+                    <strong> final sale</strong> and non-refundable.
                   </p>
                 </div>
               </div>
@@ -607,10 +652,22 @@ All client-supplied loose or mounted gemstones and diamonds are accepted strictl
 
                 <section className="space-y-1">
                   <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px]">
-                    4. Reconciliation of Balance
+                    4. {isNoRefundPolicy ? 'No-Refund Policy & Reconciliation of Balance' : 'Reconciliation of Balance'}
                   </h4>
                   <p>
-                    In the event that total incurred charges under Section 3 are less than the {depositPercent}% deposit paid, the excess balance shall be remitted to the client within {refundProcessingDays} business days. Should accrued costs exceed the deposit, the client shall remain obligated to satisfy the net outstanding balance prior to the release of any physical materials.
+                    {isNoRefundPolicy ? (
+                      <>
+                        {storeName} operates under a strict <strong>No-Refund Policy — All Pieces Are Final Sale</strong>. No monetary refunds are issued on deposits, custom orders, alterations, or finished jewelry pieces. In the event of cancellation, the {depositPercent}% deposit is applied against all incurred charges under Section 3. Should accrued costs exceed the deposit paid, the client shall remain obligated to satisfy the net outstanding balance prior to the release of any physical materials or unmounted stones.
+                      </>
+                    ) : isStoreCreditOnly ? (
+                      <>
+                        No cash or card refunds are issued. In the event that total incurred charges under Section 3 are less than the {depositPercent}% deposit paid, the excess balance shall be issued strictly as non-transferable store credit. Should accrued costs exceed the deposit, the client shall remain obligated to satisfy the net outstanding balance prior to the release of any physical materials.
+                      </>
+                    ) : (
+                      <>
+                        In the event that total incurred charges under Section 3 are less than the {depositPercent}% deposit paid, the excess balance shall be remitted to the client within {refundProcessingDays} business days. Should accrued costs exceed the deposit, the client shall remain obligated to satisfy the net outstanding balance prior to the release of any physical materials.
+                      </>
+                    )}
                   </p>
                 </section>
 
@@ -619,7 +676,7 @@ All client-supplied loose or mounted gemstones and diamonds are accepted strictl
                     5. Final Sale &amp; Studio Warranty
                   </h4>
                   <p>
-                    Completed custom jewelry, sized pieces, and completed repair jobs are strictly final sale. Every custom commission is backed by our <strong>{warrantyLabel} manufacturer warranty</strong> against structural and manufacturing defects under normal wear, <strong>{resizingLabel} free resizing</strong>, complimentary <strong>melee lab-grown stone replacement</strong> (for lost accent melee under normal wear), <strong>lifetime complimentary cleaning and polishing</strong>, and <strong>free lifetime stone &amp; prong inspection</strong>.
+                    All jewelry pieces, completed custom commissions, sized pieces, and completed repair jobs are strictly <strong>final sale and non-refundable</strong>. Every custom commission is backed by our <strong>{warrantyLabel} manufacturer warranty</strong> against structural and manufacturing defects under normal wear, <strong>{resizingLabel} free resizing</strong>, complimentary <strong>melee lab-grown stone replacement</strong> (for lost accent melee under normal wear), <strong>lifetime complimentary cleaning and polishing</strong>, and <strong>free lifetime stone &amp; prong inspection</strong>.
                   </p>
                 </section>
 
@@ -1001,18 +1058,30 @@ All client-supplied loose or mounted gemstones and diamonds are accepted strictl
 
                   <div className={`p-4 rounded-xl border ${
                     netDifference >= 0 
-                      ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-200' 
+                      ? (isNoRefundPolicy ? 'bg-amber-950/60 border-amber-500/40 text-amber-200' : 'bg-emerald-950/60 border-emerald-500/40 text-emerald-200')
                       : 'bg-red-950/60 border-red-500/40 text-red-200'
                   }`}>
                     <div className="text-[10px] font-black uppercase tracking-wider text-white/80">
-                      {netDifference >= 0 ? 'Estimated Deposit Refund to Client' : 'Additional Balance Due from Client'}
+                      {netDifference >= 0
+                        ? (isNoRefundPolicy
+                            ? 'Deposit Covers Accrued Costs (No Cash Refund)'
+                            : isStoreCreditOnly
+                            ? 'Estimated Store Credit Balance'
+                            : 'Estimated Deposit Refund to Client')
+                        : 'Additional Balance Due from Client'}
                     </div>
                     <div className="text-2xl font-black font-mono mt-1">
-                      {netDifference >= 0 ? `+$${netDifference.toFixed(2)}` : `-$${Math.abs(netDifference).toFixed(2)}`}
+                      {netDifference >= 0
+                        ? (isNoRefundPolicy ? '$0.00 Refund' : `+$${netDifference.toFixed(2)}`)
+                        : `-$${Math.abs(netDifference).toFixed(2)}`}
                     </div>
                     <div className="text-[10px] text-white/70 mt-1">
                       {netDifference >= 0 
-                        ? 'Refundable to client after covering all incurred bench & material costs.' 
+                        ? (isNoRefundPolicy
+                            ? `All pieces and deposits are strictly final sale — no refunds issued ($${netDifference.toFixed(2)} unexpended deposit remaining).`
+                            : isStoreCreditOnly
+                            ? 'Available strictly as store credit after covering all incurred bench & material costs.'
+                            : 'Refundable to client after covering all incurred bench & material costs.')
                         : 'Total incurred costs exceed deposit paid; client settles balance before stone release.'}
                     </div>
                   </div>
@@ -1167,10 +1236,22 @@ All client-supplied loose or mounted gemstones and diamonds are accepted strictl
         {/* Settlement & Finality */}
         <div className="space-y-2 mb-6 text-[9.5px] text-gray-800 leading-normal">
           <p>
-            <strong>3. Settlement of Balances:</strong> If accrued labor and materials are less than the {depositPercent}% deposit, the remaining balance will be refunded within {refundProcessingDays} business days. If accrued costs exceed the deposit, the client is responsible for settling the outstanding balance before any materials or unmounted stones are released.
+            {isNoRefundPolicy ? (
+              <>
+                <strong>3. No-Refund Policy &amp; Settlement of Balances:</strong> All pieces, custom commissions, and deposits are strictly <strong>final sale with no refunds</strong>. In the event of cancellation, the {depositPercent}% deposit is applied against accrued labor and materials; no monetary refunds are issued. If accrued costs exceed the deposit, the client is responsible for settling the outstanding balance before any materials or unmounted stones are released.
+              </>
+            ) : isStoreCreditOnly ? (
+              <>
+                <strong>3. Store Credit &amp; Settlement of Balances:</strong> No cash or card refunds are issued. If accrued labor and materials are less than the {depositPercent}% deposit, the remaining balance is issued strictly as store credit. If accrued costs exceed the deposit, the client is responsible for settling the outstanding balance before any materials or unmounted stones are released.
+              </>
+            ) : (
+              <>
+                <strong>3. Settlement of Balances:</strong> If accrued labor and materials are less than the {depositPercent}% deposit, the remaining balance will be refunded within {refundProcessingDays} business days. If accrued costs exceed the deposit, the client is responsible for settling the outstanding balance before any materials or unmounted stones are released.
+              </>
+            )}
           </p>
           <p>
-            <strong>4. Completed Custom Work:</strong> Finished custom jewelry pieces, personalized engravings, and completed repair jobs are strictly final sale and non-refundable once casting and final assembly are concluded.
+            <strong>4. All Pieces Final Sale:</strong> All finished jewelry pieces, custom commissions, personalized engravings, and completed repair jobs are strictly final sale and non-refundable.
           </p>
           <p>
             <strong>5. Studio Warranty &amp; Lifetime Care:</strong> All custom commissions include a <strong>{warrantyLabel} manufacturer warranty</strong> against manufacturing and structural defects under normal wear, <strong>{resizingLabel} free resizing</strong>, complimentary <strong>melee lab-grown stone replacement</strong>, <strong>lifetime cleaning &amp; polishing</strong>, and <strong>free lifetime inspection</strong>.

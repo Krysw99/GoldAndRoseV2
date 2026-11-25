@@ -1050,6 +1050,7 @@ export default function App() {
       fullData: sanitizedSession,
       isWholesale,
       spotPrices: effectiveSpot,
+      ...(existingTx?.stoneOrders ? { stoneOrders: existingTx.stoneOrders } : {}),
       syncPending: true
     };
 
@@ -1603,6 +1604,73 @@ export default function App() {
     }
   };
 
+  // Update Retail center stone order status ('to_order' | 'ordered') and optional 1-word source tag
+  const handleUpdateRetailStoneOrder = (
+    txId: string,
+    stoneKey: string,
+    patch: { status?: 'to_order' | 'ordered'; sourceTag?: string }
+  ) => {
+    let nextStoneOrders: Record<string, { status: 'to_order' | 'ordered'; sourceTag?: string }> | null = null;
+
+    setRingQuoteTransactions(prev => {
+      const updated = prev.map(tx => {
+        if (tx.id !== txId) return tx;
+        const currentMap = tx.stoneOrders || {};
+        const rawExisting = currentMap[stoneKey] as any;
+        const existingStatus: 'to_order' | 'ordered' =
+          typeof rawExisting === 'string'
+            ? (rawExisting === 'ordered' ? 'ordered' : 'to_order')
+            : (rawExisting?.status === 'ordered' ? 'ordered' : 'to_order');
+        const existingTag: string =
+          typeof rawExisting === 'object' && rawExisting?.sourceTag
+            ? String(rawExisting.sourceTag)
+            : '';
+
+        const nextStatus = patch.status ?? existingStatus;
+        const nextTag = patch.sourceTag !== undefined ? patch.sourceTag.trim().slice(0, 24) : existingTag;
+
+        const updatedEntry: { status: 'to_order' | 'ordered'; sourceTag?: string } = {
+          status: nextStatus,
+          ...(nextTag ? { sourceTag: nextTag } : {})
+        };
+
+        nextStoneOrders = {
+          ...currentMap,
+          [stoneKey]: updatedEntry
+        };
+
+        return {
+          ...tx,
+          stoneOrders: nextStoneOrders
+        };
+      });
+      safeSetLocalStorage('gr_quote_ledger', updated);
+      return updated;
+    });
+
+    if (nextStoneOrders) {
+      // Lightweight merge write — sends only the tiny stoneOrders map instead of re-uploading quote photos
+      saveDocument('retail_ledger', txId, { stoneOrders: nextStoneOrders })
+        .then(res => {
+          if (res?.offline || res?.quotaExceeded) {
+            setRingQuoteTransactions(prev => {
+              const flagged = prev.map(tx => tx.id === txId ? { ...tx, syncPending: true } : tx);
+              safeSetLocalStorage('gr_quote_ledger', flagged);
+              return flagged;
+            });
+          }
+        })
+        .catch(err => {
+          console.warn("Retail stone order sync notice:", err);
+          setRingQuoteTransactions(prev => {
+            const flagged = prev.map(tx => tx.id === txId ? { ...tx, syncPending: true } : tx);
+            safeSetLocalStorage('gr_quote_ledger', flagged);
+            return flagged;
+          });
+        });
+    }
+  };
+
   // Sketchpad trigger handlers
   const handleSketchSave = (dataUrl: string) => {
     const isWholesale = activeTab === 'wholesale';
@@ -1801,62 +1869,62 @@ export default function App() {
         )}
 
         {/* Global tab rails */}
-        <div className="flex overflow-x-auto hide-scrollbar whitespace-nowrap gap-1.5 border-b border-brand-200 pb-2 print:hidden">
+        <div className="flex overflow-x-auto hide-scrollbar whitespace-nowrap gap-1 border-b border-brand-200 pb-2 print:hidden">
           <button
             type="button"
             onClick={() => setActiveTab('scrap')}
-            className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm border ${activeTab === 'scrap' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
+            className={`px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 shadow-sm border shrink-0 cursor-pointer ${activeTab === 'scrap' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
           >
-            <Coins size={14} />
+            <Coins size={13} className="shrink-0" />
             Scrap Buyback
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('quote')}
-            className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm border ${activeTab === 'quote' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
+            className={`px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 shadow-sm border shrink-0 cursor-pointer ${activeTab === 'quote' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
           >
-            <FileCheck size={14} />
+            <FileCheck size={13} className="shrink-0" />
             Retail Custom Quote
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('spot')}
-            className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm border ${activeTab === 'spot' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
+            className={`px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 shadow-sm border shrink-0 cursor-pointer ${activeTab === 'spot' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
           >
-            <Coins size={14} />
+            <Coins size={13} className="shrink-0" />
             Spot Price Desk
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('wholesale')}
-            className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm border ${activeTab === 'wholesale' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
+            className={`px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 shadow-sm border shrink-0 cursor-pointer ${activeTab === 'wholesale' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
           >
-            <Landmark size={14} />
+            <Landmark size={13} className="shrink-0" />
             Wholesale
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('cuban')}
-            className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm border ${activeTab === 'cuban' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
+            className={`px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 shadow-sm border shrink-0 cursor-pointer ${activeTab === 'cuban' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
           >
-            <Sparkles size={14} className="text-brand-gold shrink-0" />
+            <Sparkles size={13} className="text-brand-gold shrink-0" />
             Handmade Cubans
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('jumpring')}
-            className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm border ${activeTab === 'jumpring' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
+            className={`px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 shadow-sm border shrink-0 cursor-pointer ${activeTab === 'jumpring' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
           >
-            <CircleDot size={14} className="text-amber-500 shrink-0" />
+            <CircleDot size={13} className="text-amber-500 shrink-0" />
             Jump Ring Estimator
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('ledger')}
-            className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm border ${activeTab === 'ledger' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
+            className={`px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 shadow-sm border shrink-0 cursor-pointer ${activeTab === 'ledger' ? 'bg-brand-900 text-brand-gold border-brand-900' : 'bg-white text-brand-600 border-brand-100 hover:border-brand-300'}`}
           >
-            <Library size={14} />
-            Ledger histories
+            <Library size={13} className="shrink-0" />
+            Ledger Histories
           </button>
         </div>
 
@@ -2001,6 +2069,7 @@ export default function App() {
               onLoadOlderRecords={handleLoadOlderCloudRecords}
               loadedFullCloudHistory={loadedFullCloudHistory}
               loadingOlderCloud={loadingOlderCloud}
+              onUpdateRetailStoneOrder={handleUpdateRetailStoneOrder}
             />
           </div>
 

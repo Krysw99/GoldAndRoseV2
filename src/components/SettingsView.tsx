@@ -345,7 +345,7 @@ export default function SettingsView({
     const stringFields = [
       'id', 'name', 'storeName', 'storeSubName', 'storeAddress', 'storeContact', 
       'wixStoreUrl', 'wixCartSlug', 'wixIntegrationMode', 'wixAccessToken', 
-      'wixProductId', 'wixWebhookUrl', 'refundProcessingDays'
+      'wixProductId', 'wixWebhookUrl', 'refundProcessingDays', 'refundPolicyMode'
     ];
     if (key && stringFields.includes(key)) {
       return obj;
@@ -3529,25 +3529,36 @@ export default function SettingsView({
                     Settlement & Studio Warranty Terms
                   </h4>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Fine-tune refund processing timeframes, manufacturer warranty, and free resizing window shown across your policy documents.
+                    Configure your refund/final-sale policy, manufacturer warranty, and free resizing window shown across your policy documents.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
+                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">
-                      Refund Processing Window
+                      Refund &amp; Return Policy
                     </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="7-10"
-                        className="w-full bg-slate-50 border border-slate-300 p-2.5 pr-24 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:border-brand-gold outline-none"
-                        value={policy.refundProcessingDays ?? '7-10'}
-                        onChange={(e) => handlePolicySetting('refundProcessingDays', e.target.value)}
-                      />
-                      <span className="absolute right-3 top-2.5 text-[10px] font-bold text-slate-400">business days</span>
-                    </div>
+                    <select
+                      className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-brand-gold outline-none"
+                      value={policy.refundPolicyMode ?? 'no_refund_final_sale'}
+                      onChange={(e) => handlePolicySetting('refundPolicyMode', e.target.value)}
+                    >
+                      <option value="no_refund_final_sale">No Refunds — All Pieces Final Sale</option>
+                      <option value="store_credit">Store Credit Only (No Cash Refunds)</option>
+                      <option value="refund_window">Refund Processing Window (Days)</option>
+                    </select>
+                    {(policy.refundPolicyMode ?? 'no_refund_final_sale') === 'refund_window' && (
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="7-10"
+                          className="w-full bg-slate-50 border border-slate-300 p-2 pr-24 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:border-brand-gold outline-none"
+                          value={policy.refundProcessingDays ?? '7-10'}
+                          onChange={(e) => handlePolicySetting('refundProcessingDays', e.target.value)}
+                        />
+                        <span className="absolute right-3 top-2 text-[10px] font-bold text-slate-400">business days</span>
+                      </div>
+                    )}
                   </div>
 
                   <div>

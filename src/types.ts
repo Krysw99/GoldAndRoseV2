@@ -182,6 +182,13 @@ export interface ScrapTransaction {
   syncPending?: boolean;
 }
 
+export type StoneOrderStatus = 'to_order' | 'ordered';
+
+export interface StoneOrderRecord {
+  status: StoneOrderStatus;
+  sourceTag?: string;
+}
+
 export interface QuoteTransaction {
   id: string;
   date: string;
@@ -198,6 +205,7 @@ export interface QuoteTransaction {
     silver: number;
     platinum: number;
   };
+  stoneOrders?: Record<string, StoneOrderRecord>;
   syncPending?: boolean;
 }
 
@@ -338,6 +346,7 @@ export interface DepositCancellationPolicySettings {
   castingFee: number;
   benchLaborPerHour: number;
   alloyPerGram: number;
+  refundPolicyMode?: 'no_refund_final_sale' | 'store_credit' | 'refund_window';
   refundProcessingDays?: string;
   warrantyMonths?: number;
   freeResizingYears?: number;

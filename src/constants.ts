@@ -308,6 +308,7 @@ export const DEFAULT_SETTINGS = {
     castingFee: 50,
     benchLaborPerHour: 40,
     alloyPerGram: 20,
+    refundPolicyMode: 'no_refund_final_sale' as const,
     refundProcessingDays: '7-10',
     warrantyMonths: 24,
     freeResizingYears: 2
